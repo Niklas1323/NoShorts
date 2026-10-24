@@ -46,7 +46,6 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.fshorts.service.FuckShortsService
 import app.fshorts.service.TreeDumper
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -304,12 +303,10 @@ private fun openYouTube(context: Context) {
 private fun shareDumps(context: Context) {
     val files = TreeDumper.files(context)
     if (files.isEmpty()) return
-    val out = File(context.cacheDir, "fuckshorts-struktur.txt")
-    out.writeText(files.joinToString("\n\n==========\n\n") { it.readText() })
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", out)
-    val send = Intent(Intent.ACTION_SEND)
-        .setType("text/plain")
-        .putExtra(Intent.EXTRA_STREAM, uri)
+    val uris = ArrayList(files.map { FileProvider.getUriForFile(context, "${context.packageName}.files", it) })
+    val send = Intent(Intent.ACTION_SEND_MULTIPLE)
+        .setType("*/*")
+        .putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
         .putExtra(Intent.EXTRA_SUBJECT, "Fuck Shorts – Struktur")
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     context.startActivity(Intent.createChooser(send, "Struktur teilen"))

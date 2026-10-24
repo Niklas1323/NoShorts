@@ -14,11 +14,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -38,9 +40,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -50,17 +53,25 @@ import androidx.compose.material.icons.filled.Subscriptions as FilledSubscriptio
 import androidx.compose.material.icons.outlined.Home as OutlinedHome
 import androidx.compose.material.icons.outlined.Subscriptions as OutlinedSubscriptions
 
+/**
+ * Was unsere Leiste zeigt. Die Positionen (in Pixeln, ab Oberkante der Leiste) kommen von der echten
+ * YouTube-Leiste, damit Icons und Schrift genau gleich hoch sitzen.
+ */
 data class BarUiState(
     val selected: TabKind?,
     val labels: Map<TabKind, String>,
     val subscriptionsBadge: Boolean,
     val hasCreate: Boolean,
+    val barHeightPx: Int,
+    val iconCenterPx: Int?,
+    val labelTopPx: Int?,
     val style: BarStyle,
 )
 
 /**
- * Unsere eigene untere Leiste. Liegt als Fenster genau über der echten YouTube-Leiste
- * und hat keinen Shorts-Knopf.
+ * Unsere eigene untere Leiste. Liegt als Fenster über der echten YouTube-Leiste und hat keinen Shorts-Knopf.
+ * Das Fenster reicht immer bis zum unteren Bildschirmrand: Egal wo die echte Leiste gerade beim
+ * Ein- oder Ausfahren ist, alles unter unserer Oberkante ist abgedeckt.
  */
 class BottomBarOverlay(
     private val service: AccessibilityService,
@@ -84,6 +95,9 @@ class BottomBarOverlay(
     var isShowing = false
         private set
 
+    /** Oberkante unserer Leiste auf dem Bildschirm (nur gültig, wenn [isShowing]). */
+    val top: Int get() = target.top
+
     private val params = WindowManager.LayoutParams(
         0,
         0,
@@ -102,12 +116,18 @@ class BottomBarOverlay(
         }
     }
 
-    fun show(bounds: Rect, state: BarUiState) {
+    /**
+     * Zeigt die Leiste mit Oberkante bei [top]. [rest] ist die Lage der echten Leiste, wenn sie ganz
+     * eingefahren ist (Breite, Höhe), [screenBottom] der untere Bildschirmrand.
+     */
+    fun show(top: Int, rest: Rect, screenBottom: Int, state: BarUiState) {
         val keepOptimistic = optimistic != null &&
             SystemClock.uptimeMillis() - optimisticAt < OPTIMISTIC_MS &&
             state.selected != optimistic
-        uiState = if (keepOptimistic) state.copy(selected = optimistic) else state
-        target.set(bounds)
+        val next = if (keepOptimistic) state.copy(selected = optimistic) else state
+        if (next != uiState) uiState = next
+        val height = rest.height() + (screenBottom - rest.bottom).coerceAtLeast(0)
+        target.set(rest.left, top, rest.right, top + height)
 
         val v = view
         if (v == null) {
@@ -228,98 +248,112 @@ class BottomBarOverlay(
 @Composable
 private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: () -> Unit) {
     val style = state.style
-    Row(
+    val density = LocalDensity.current
+    val barHeight = with(density) { state.barHeightPx.toDp() }
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(style.background),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val homeSelected = state.selected == TabKind.HOME
-        val subsSelected = state.selected == TabKind.SUBSCRIPTIONS
-        TabSlot(
-            modifier = Modifier.weight(1f),
-            kind = TabKind.HOME,
-            label = state.labels[TabKind.HOME] ?: "Startseite",
-            color = style.content,
-            onTap = onTap,
-            onLongPress = onLongPress,
-        ) {
-            TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content)
-        }
-        TabSlot(
-            modifier = Modifier.weight(1f),
-            kind = TabKind.SUBSCRIPTIONS,
-            label = state.labels[TabKind.SUBSCRIPTIONS] ?: "Abos",
-            color = style.content,
-            onTap = onTap,
-            onLongPress = onLongPress,
-        ) {
-            Box {
-                TabIcon(
-                    if (subsSelected) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
-                    style.content,
-                )
-                if (state.subscriptionsBadge) {
-                    Box(
+        Row(modifier = Modifier.fillMaxWidth().height(barHeight)) {
+            val homeSelected = state.selected == TabKind.HOME
+            val subsSelected = state.selected == TabKind.SUBSCRIPTIONS
+            TabSlot(
+                modifier = Modifier.weight(1f),
+                kind = TabKind.HOME,
+                label = state.labels[TabKind.HOME] ?: "Startseite",
+                state = state,
+                onTap = onTap,
+                onLongPress = onLongPress,
+            ) {
+                TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content)
+            }
+            TabSlot(
+                modifier = Modifier.weight(1f),
+                kind = TabKind.SUBSCRIPTIONS,
+                label = state.labels[TabKind.SUBSCRIPTIONS] ?: "Abos",
+                state = state,
+                onTap = onTap,
+                onLongPress = onLongPress,
+            ) {
+                Box {
+                    TabIcon(
+                        if (subsSelected) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
+                        style.content,
+                    )
+                    if (state.subscriptionsBadge) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 3.dp, y = (-3).dp)
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(style.background)
+                                .border(2.dp, style.background, CircleShape),
+                        ) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.Center)
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFFF0033)),
+                            )
+                        }
+                    }
+                }
+            }
+            TabSlot(
+                modifier = Modifier.weight(1f),
+                kind = TabKind.YOU,
+                label = state.labels[TabKind.YOU] ?: "Mein YouTube",
+                state = state,
+                onTap = onTap,
+                onLongPress = onLongPress,
+            ) {
+                val avatar = style.avatar
+                if (avatar != null) {
+                    // Genau der Ausschnitt aus der echten Leiste, in Originalgrösse.
+                    val size = with(density) { avatar.width.toDp() }
+                    val ring = if (state.selected == TabKind.YOU) {
+                        Modifier.border(1.5.dp, style.content, CircleShape)
+                    } else {
                         Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 2.dp, y = (-1).dp)
-                            .size(7.dp)
+                    }
+                    Image(
+                        bitmap = avatar,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(size)
                             .clip(CircleShape)
-                            .background(Color(0xFFFF0033)),
+                            .then(ring),
                     )
-                }
-            }
-        }
-        TabSlot(
-            modifier = Modifier.weight(1f),
-            kind = TabKind.YOU,
-            label = state.labels[TabKind.YOU] ?: "Mein YouTube",
-            color = style.content,
-            onTap = onTap,
-            onLongPress = onLongPress,
-        ) {
-            val avatar = style.avatar
-            if (avatar != null) {
-                val ring = if (state.selected == TabKind.YOU) {
-                    Modifier.border(1.5.dp, style.content, CircleShape)
                 } else {
-                    Modifier
+                    TabIcon(Icons.Filled.AccountCircle, style.content)
                 }
-                Image(
-                    bitmap = avatar,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .then(ring),
-                )
-            } else {
-                TabIcon(Icons.Filled.AccountCircle, style.content)
             }
-        }
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .tapTarget(TabKind.CREATE, onTap, onLongPress),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (state.hasCreate) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(style.plusBackground),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = state.labels[TabKind.CREATE] ?: "Erstellen",
-                        tint = style.content,
-                        modifier = Modifier.size(26.dp),
-                    )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .tapTarget(TabKind.CREATE, onTap, onLongPress),
+            ) {
+                if (state.hasCreate) {
+                    IconArea(state) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(style.plusBackground),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = state.labels[TabKind.CREATE] ?: "Erstellen",
+                                tint = style.content,
+                                modifier = Modifier.size(30.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -331,29 +365,68 @@ private fun TabSlot(
     modifier: Modifier,
     kind: TabKind,
     label: String,
-    color: Color,
+    state: BarUiState,
     onTap: (TabKind) -> Unit,
     onLongPress: () -> Unit,
     icon: @Composable () -> Unit,
 ) {
-    Column(
+    val labelTop = state.labelTopPx
+    Box(
         modifier = modifier
             .fillMaxHeight()
             .tapTarget(kind, onTap, onLongPress),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        icon()
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = label,
-            color = color,
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (state.iconCenterPx != null && labelTop != null) {
+            // Gleiche Höhe wie bei YouTube: Icon-Mitte und Schrift-Oberkante aus der echten Leiste.
+            IconArea(state) { icon() }
+            Label(
+                text = label,
+                color = state.style.content,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset { IntOffset(0, labelTop) },
+            )
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                icon()
+                Spacer(Modifier.height(2.dp))
+                Label(text = label, color = state.style.content)
+            }
+        }
     }
+}
+
+/** Box, deren Mitte genau auf der Höhe der Icon-Mitte der echten Leiste liegt. */
+@Composable
+private fun BoxScope.IconArea(state: BarUiState, content: @Composable () -> Unit) {
+    val center = state.iconCenterPx
+    val density = LocalDensity.current
+    val modifier = if (center != null) {
+        Modifier
+            .align(Alignment.TopCenter)
+            .fillMaxWidth()
+            .height(with(density) { (center * 2).toDp() })
+    } else {
+        Modifier.align(Alignment.Center)
+    }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) { content() }
+}
+
+@Composable
+private fun Label(text: String, color: Color, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        color = color,
+        fontSize = 10.sp,
+        lineHeight = 12.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
 }
 
 @Composable

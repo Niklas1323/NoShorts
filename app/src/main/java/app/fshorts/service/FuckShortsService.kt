@@ -43,13 +43,27 @@ class FuckShortsService : AccessibilityService() {
     private val recentBacks = ArrayDeque<Long>()
     private var lastHintAt = 0L
     private var youTubeSince = 0L
+    private var youTubeActive = false
     private var barSeenOnce = false
     private var lastAutoDumpAt = 0L
     private var lastDebugDumpAt = 0L
     private var debugDumpWanted = false
     private var nightMode = 0
+    private var screen = Rect()
 
-    // Automatisches "Nicht interessiert" auf dem Shorts-Regal.
+    // Leiste: YouTube schiebt seine Leiste beim Runterscrollen raus und beim Hochscrollen wieder rein.
+    private var restBounds: Rect? = null
+    private var lastBar: FoundBar? = null
+    private var lastUiState: BarUiState? = null
+    private var hiddenByScroll = false
+    private var lastScrollUpAt = 0L
+    private var lastScrollDownAt = 0L
+    private var lastObservedTop = -1
+    private var pollUntil = 0L
+    private var polling = false
+
+    // Shorts-Regale und automatisches "Nicht interessiert".
+    private var shelves: List<Shelf> = emptyList()
     private var shelfMenuOpenedAt = 0L
     private var lastShelfHideAt = 0L
     private var shelfHideBroken = false
@@ -60,8 +74,25 @@ class FuckShortsService : AccessibilityService() {
         scan()
     }
 
-    // Sicherheitsnetz: Solange unsere Leiste sichtbar ist, prüfen wir regelmässig, ob YouTube noch vorne ist.
+    // Sicherheitsnetz: Solange etwas von uns sichtbar ist, prüfen wir regelmässig, ob YouTube noch vorne ist.
     private val watchdog = Runnable { scheduleScan() }
+
+    // Während gescrollt wird: jede 16 ms die Lage von Leiste und Regal nachführen.
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            if (!connected || !youTubeActive || SystemClock.uptimeMillis() > pollUntil) {
+                polling = false
+                return
+            }
+            try {
+                updateBar(SystemClock.uptimeMillis(), null)
+                updateShelfPositions()
+            } catch (e: Exception) {
+                Log.w(TAG, "Nachführen fehlgeschlagen", e)
+            }
+            handler.postDelayed(this, POLL_MS)
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -83,12 +114,19 @@ class FuckShortsService : AccessibilityService() {
         if (pkg == packageName) return
         when {
             pkg == selectors.youtubePackage -> {
-                if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) debugDumpWanted = true
+                when (event.eventType) {
+                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                        debugDumpWanted = true
+                        hiddenByScroll = false
+                    }
+                    AccessibilityEvent.TYPE_VIEW_CLICKED -> hiddenByScroll = false
+                    AccessibilityEvent.TYPE_VIEW_SCROLLED -> onScrolled(event.scrollDeltaY)
+                }
                 scheduleScan()
             }
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED -> scheduleScan()
-            overlay.isShowing || shelfMenuOpenedAt != 0L -> scheduleScan()
+            overlay.isShowing || covers.anyVisible || shelfMenuOpenedAt != 0L -> scheduleScan()
         }
     }
 
@@ -102,6 +140,7 @@ class FuckShortsService : AccessibilityService() {
             nightMode = night
             sampler.reset()
         }
+        restBounds = null
         hideAll()
         scheduleScan()
     }
@@ -120,6 +159,29 @@ class FuckShortsService : AccessibilityService() {
         scanPending = true
         val delay = (lastScanAt + MIN_SCAN_INTERVAL_MS - SystemClock.uptimeMillis()).coerceAtLeast(0)
         handler.postDelayed(scanRunnable, delay)
+    }
+
+    private fun startPolling() {
+        pollUntil = SystemClock.uptimeMillis() + POLL_DURATION_MS
+        if (!polling) {
+            polling = true
+            handler.post(pollRunnable)
+        }
+    }
+
+    /**
+     * YouTube zeigt seine Leiste wieder, sobald man hochscrollt. Damit die echte Leiste (mit Shorts-Knopf)
+     * nie zuerst auftaucht, ist unsere in diesem Moment sofort ganz da.
+     */
+    private fun onScrolled(deltaY: Int) {
+        val now = SystemClock.uptimeMillis()
+        if (deltaY < -SCROLL_THRESHOLD_PX) {
+            lastScrollUpAt = now
+            if (hiddenByScroll && youTubeActive) updateBar(now, null)
+        } else if (deltaY > SCROLL_THRESHOLD_PX) {
+            lastScrollDownAt = now
+        }
+        startPolling()
     }
 
     private fun scan() {
@@ -147,12 +209,18 @@ class FuckShortsService : AccessibilityService() {
         }
         val root = rootInActiveWindow
         if (root == null || root.packageName?.toString() != selectors.youtubePackage || isKeyboardOpen()) {
+            youTubeActive = false
             youTubeSince = 0L
             hideAll()
             return
         }
+        youTubeActive = true
         if (youTubeSince == 0L) youTubeSince = now
-        val screen = screenBounds()
+        val newScreen = screenBounds()
+        if (newScreen != screen) {
+            screen = newScreen
+            restBounds = null
+        }
         val bar = scanner.findBar(root, screen)
 
         if (debugDumpWanted) {
@@ -169,13 +237,33 @@ class FuckShortsService : AccessibilityService() {
             return
         }
 
-        val currentStyle = sampler.style ?: BarStyle.default(nightMode == Configuration.UI_MODE_NIGHT_YES)
-        val shelves = scanner.findShelves(root, screen, bar?.bounds?.top ?: screen.bottom)
-        covers.show(shelves.map { it.bounds }, currentStyle)
-        if (shelves.isNotEmpty()) tryHideShelf(shelves, now)
-
-        if (bar == null) {
-            overlay.hide()
+        if (bar != null) {
+            barSeenOnce = true
+            lastBar = bar
+            rememberRestPosition(bar)
+            if (scanner.isBarCovered(root, bar)) {
+                hideAll()
+                return
+            }
+            // Farbe und Profilbild abschauen: nur wenn die echte Leiste ganz da ist und unsere noch nicht.
+            val firstSample = sampler.style == null && !sampler.attempted
+            val atRest = bar.bounds == restBounds
+            if (atRest && !overlay.isShowing && (firstSample || sampler.wantsAvatarRetry())) {
+                sampler.sample(bar) { scheduleScan() }
+                return
+            }
+            // Positionen nur von der ganz eingefahrenen Leiste übernehmen, sonst nur Auswahl und roten Punkt.
+            val previous = lastUiState
+            lastUiState = if (atRest || previous == null) {
+                buildUiState(bar)
+            } else {
+                previous.copy(
+                    selected = bar.tabs.values.firstOrNull { it.selected }?.kind ?: previous.selected,
+                    subscriptionsBadge = bar.tabs[TabKind.SUBSCRIPTIONS]?.badge ?: previous.subscriptionsBadge,
+                )
+            }
+        } else if (lastBar == null) {
+            hideAll()
             val stuck = !barSeenOnce && now - youTubeSince > AUTO_DUMP_AFTER_MS
             if (stuck && now - lastAutoDumpAt > AUTO_DUMP_INTERVAL_MS) {
                 lastAutoDumpAt = now
@@ -183,30 +271,89 @@ class FuckShortsService : AccessibilityService() {
             }
             return
         }
-        barSeenOnce = true
 
-        if (bar.bounds.top >= screen.bottom - 4 || scanner.isBarCovered(root, bar)) {
+        updateBar(now, bar)
+
+        shelves = scanner.findShelves(root, screen, coverLimit())
+        covers.show(shelves.map { it.bounds }, currentStyle())
+        if (shelves.isNotEmpty()) tryHideShelf(shelves, now)
+    }
+
+    /** Merkt sich, wo die echte Leiste sitzt, wenn sie ganz eingefahren ist (höchste Lage, volle Höhe). */
+    private fun rememberRestPosition(bar: FoundBar) {
+        val rest = restBounds
+        val b = bar.bounds
+        if (rest == null || b.height() > rest.height() + 2 || (b.height() >= rest.height() - 2 && b.top < rest.top)) {
+            restBounds = Rect(b)
+        }
+    }
+
+    /**
+     * Setzt unsere Leiste auf die richtige Höhe.
+     * Regel: Unsere Oberkante ist nie tiefer als die der echten Leiste. Beim Rausfahren folgen wir ihr,
+     * beim Reinfahren nach Hochscrollen sind wir sofort ganz da.
+     */
+    private fun updateBar(now: Long, fresh: FoundBar?) {
+        val rest = restBounds
+        val state = lastUiState
+        if (rest == null || state == null) {
             overlay.hide()
             return
         }
-
-        // Beim allerersten Mal Farbe und Profilbild von der echten Leiste abschauen.
-        val firstSample = sampler.style == null && !sampler.attempted
-        if (firstSample || (!overlay.isShowing && sampler.wantsAvatarRetry(bar))) {
+        val observedTop = when {
+            fresh != null -> fresh.bounds.top
+            else -> lastBar?.let { scanner.liveTop(it.container, screen) }
+        }
+        if (observedTop == null) {
+            // Die Leiste gibt es nicht mehr (anderer Bildschirm).
+            lastBar = null
             overlay.hide()
-            sampler.sample(bar) { scheduleScan() }
             return
         }
+        if (observedTop <= rest.top + 2) {
+            hiddenByScroll = false
+        } else if (now - lastScrollDownAt < SCROLL_LINK_MS) {
+            hiddenByScroll = true
+        }
+        // Fährt die echte Leiste gerade wieder hoch, sind wir sofort ganz da (falls das Hochscrollen nicht gemeldet wurde).
+        if (hiddenByScroll && lastObservedTop >= 0 && observedTop < lastObservedTop - 1) lastScrollUpAt = now
+        lastObservedTop = observedTop
+        val forcedShow = hiddenByScroll && now - lastScrollUpAt < FORCE_SHOW_MS
+        val top = if (forcedShow) rest.top else observedTop.coerceAtLeast(rest.top)
+        if (top >= screen.bottom - 2) {
+            overlay.hide()
+        } else {
+            overlay.show(top, rest, screen.bottom, state.copy(style = currentStyle()))
+        }
+    }
 
-        val style = sampler.style ?: BarStyle.default(nightMode == Configuration.UI_MODE_NIGHT_YES)
-        val state = BarUiState(
+    private fun updateShelfPositions() {
+        if (shelves.isEmpty()) return
+        val limit = coverLimit()
+        covers.show(shelves.mapNotNull { scanner.refreshShelf(it, limit) }, currentStyle())
+    }
+
+    private fun coverLimit(): Int = if (overlay.isShowing) overlay.top else screen.bottom
+
+    private fun currentStyle(): BarStyle =
+        sampler.style ?: BarStyle.default(nightMode == Configuration.UI_MODE_NIGHT_YES, sampler.savedAvatar)
+
+    private fun buildUiState(bar: FoundBar): BarUiState {
+        // Höhen von Icon und Schrift aus der echten Leiste (Startseite-Tab als Vorlage).
+        val reference = bar.tabs[TabKind.HOME] ?: bar.tabs.values.first()
+        val iconCenter = reference.iconBounds?.centerY()?.minus(bar.bounds.top)
+        val labelTop = reference.labelBounds?.top?.minus(bar.bounds.top)
+        val rest = restBounds ?: bar.bounds
+        return BarUiState(
             selected = bar.tabs.values.firstOrNull { it.selected }?.kind,
             labels = bar.tabs.mapNotNull { (kind, tab) -> tab.label?.let { kind to it } }.toMap(),
             subscriptionsBadge = bar.tabs[TabKind.SUBSCRIPTIONS]?.badge == true,
             hasCreate = TabKind.CREATE in bar.tabs,
-            style = style,
+            barHeightPx = rest.height(),
+            iconCenterPx = iconCenter?.takeIf { it > 0 && it < rest.height() },
+            labelTopPx = labelTop?.takeIf { it > 0 && it < rest.height() },
+            style = currentStyle(),
         )
-        overlay.show(bar.bounds, state)
     }
 
     /** Tippt auf ⋮ beim Shorts-Regal. Den Menüpunkt "Nicht interessiert" wählt [handleShelfMenu]. */
@@ -264,10 +411,11 @@ class FuckShortsService : AccessibilityService() {
     private fun onTabTapped(kind: TabKind) {
         val root = rootInActiveWindow ?: return
         if (root.packageName?.toString() != selectors.youtubePackage) return
-        val bar = scanner.findBar(root, screenBounds())
+        // Ist die echte Leiste gerade weggescrollt, nehmen wir die zuletzt gefundene: Klicks gehen trotzdem.
+        val bar = scanner.findBar(root, screenBounds()) ?: lastBar
         val node = bar?.nodes?.get(kind)
         val bounds = bar?.tabs?.get(kind)?.bounds
-        if (node == null || bounds == null) {
+        if (node == null || bounds == null || !node.refresh()) {
             Log.w(TAG, "Tab $kind nicht gefunden")
             dumper.dump(root, windows, "tab-$kind-nicht-gefunden")
             return
@@ -331,7 +479,12 @@ class FuckShortsService : AccessibilityService() {
 
     companion object {
         private const val TAG = "FuckShorts"
-        private const val MIN_SCAN_INTERVAL_MS = 16L
+        private const val MIN_SCAN_INTERVAL_MS = 40L
+        private const val POLL_MS = 16L
+        private const val POLL_DURATION_MS = 500L
+        private const val SCROLL_THRESHOLD_PX = 4
+        private const val SCROLL_LINK_MS = 800L
+        private const val FORCE_SHOW_MS = 700L
         private const val WATCHDOG_MS = 400L
         private const val BACK_COOLDOWN_MS = 700L
         private const val HINT_WINDOW_MS = 10_000L

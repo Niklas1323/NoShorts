@@ -7,12 +7,14 @@ class TabInfo(
     val kind: TabKind,
     val bounds: Rect,
     val label: String?,
+    val labelBounds: Rect?,
+    val iconBounds: Rect?,
     val selected: Boolean,
     val badge: Boolean,
-    val avatarBounds: Rect?,
 )
 
 class FoundBar(
+    val container: AccessibilityNodeInfo,
     val bounds: Rect,
     val tabs: Map<TabKind, TabInfo>,
     val nodes: Map<TabKind, AccessibilityNodeInfo>,
@@ -21,6 +23,8 @@ class FoundBar(
 class Shelf(
     val bounds: Rect,
     val menuButton: AccessibilityNodeInfo?,
+    val parts: List<AccessibilityNodeInfo>,
+    val feed: AccessibilityNodeInfo,
 )
 
 /**
@@ -111,18 +115,47 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
 
         val feed = path[feedIdx]
         val item = path[feedIdx - 1]
+        val parts = mutableListOf(item)
         val bounds = item.bounds()
         if (bounds.height() < 160 * density) {
             // Überschrift und Karten sind getrennte Einträge in der Liste: den nächsten Eintrag dazunehmen.
             val index = (0 until feed.childCount).firstOrNull { feed.getChild(it) == item }
-            index?.let { feed.getChild(it + 1) }?.let { bounds.union(it.bounds()) }
+            index?.let { feed.getChild(it + 1) }?.let {
+                bounds.union(it.bounds())
+                parts += it
+            }
         }
         if (bounds.height() > screen.height() * 0.8) return null
         if (!bounds.intersect(feed.bounds())) return null
         if (bounds.bottom > limitBottom) bounds.bottom = limitBottom
         if (bounds.height() <= 0) return null
 
-        return Shelf(bounds, findMenuButton(item, headerBounds, screen, 0))
+        return Shelf(bounds, findMenuButton(item, headerBounds, screen, 0), parts, feed)
+    }
+
+    /** Neue Position eines bekannten Regals, ohne den ganzen Bildschirm neu zu durchsuchen (fürs Scrollen). */
+    fun refreshShelf(shelf: Shelf, limitBottom: Int): Rect? {
+        if (!shelf.feed.refresh()) return null
+        val bounds = Rect()
+        for (part in shelf.parts) {
+            if (!part.refresh()) return null
+            if (part.isVisibleToUser) bounds.union(part.bounds())
+        }
+        if (bounds.isEmpty || !bounds.intersect(shelf.feed.bounds())) return null
+        if (bounds.bottom > limitBottom) bounds.bottom = limitBottom
+        return if (bounds.height() > 0) bounds else null
+    }
+
+    /**
+     * Wo die Oberkante der echten Leiste gerade ist. YouTube schiebt die Leiste beim Runterscrollen nach unten.
+     * null = Leiste gibt es nicht mehr, Bildschirmunterkante = komplett versteckt.
+     */
+    fun liveTop(container: AccessibilityNodeInfo, screen: Rect): Int? {
+        if (!container.refresh()) return null
+        if (!container.isVisibleToUser) return screen.bottom
+        val r = container.bounds()
+        if (r.isEmpty || r.top >= screen.bottom) return screen.bottom
+        return r.top
     }
 
     /** Der ⋮-Knopf rechts neben der Überschrift "Shorts". */
@@ -186,7 +219,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         collectTabs(container, 0, b, tabs, nodes)
         if (tabs.size < 2) return null
         if (TabKind.HOME !in tabs && TabKind.SUBSCRIPTIONS !in tabs) return null
-        return FoundBar(Rect(b), tabs, nodes)
+        return FoundBar(container, Rect(b), tabs, nodes)
     }
 
     private fun collectTabs(
@@ -204,13 +237,15 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
             if (tabSized && (child.isClickable || ownLabel(child) != null)) {
                 val kind = classify(deepLabel(child, 0))
                 if (kind != null && kind !in tabs) {
+                    val textNode = deepTextNode(child, 0)
                     tabs[kind] = TabInfo(
                         kind = kind,
                         bounds = Rect(r),
-                        label = deepText(child, 0),
+                        label = textNode?.text?.toString()?.trim(),
+                        labelBounds = textNode?.let { Rect().also(it::getBoundsInScreen) },
+                        iconBounds = findIcon(child, 0),
                         selected = isSelectedDeep(child, 0),
                         badge = hasBadge(child),
-                        avatarBounds = if (kind == TabKind.YOU) findAvatar(child, 0) else null,
                     )
                     nodes[kind] = child
                 }
@@ -246,11 +281,11 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
     }
 
     /** Sichtbarer Text unter dem Icon, z. B. "Abos" (ohne Zusatz wie "neue Inhalte"). */
-    private fun deepText(node: AccessibilityNodeInfo, depth: Int): String? {
-        node.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    private fun deepTextNode(node: AccessibilityNodeInfo, depth: Int): AccessibilityNodeInfo? {
+        if (!node.text?.toString()?.trim().isNullOrEmpty()) return node
         if (depth >= 4) return null
         for (i in 0 until node.childCount) {
-            node.getChild(i)?.let { child -> deepText(child, depth + 1)?.let { return it } }
+            node.getChild(i)?.let { child -> deepTextNode(child, depth + 1)?.let { return it } }
         }
         return null
     }
@@ -282,7 +317,8 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         return false
     }
 
-    private fun findAvatar(node: AccessibilityNodeInfo, depth: Int): Rect? {
+    /** Das Bild im Tab (Haus-Icon, Profilbild ...). */
+    private fun findIcon(node: AccessibilityNodeInfo, depth: Int): Rect? {
         val r = Rect()
         node.getBoundsInScreen(r)
         val isImage = node.className?.contains("Image") == true
@@ -290,7 +326,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         if (isImage && roughlySquare && r.width() <= 48 * density && node.isVisibleToUser) return r
         if (depth >= 4) return null
         for (i in 0 until node.childCount) {
-            node.getChild(i)?.let { child -> findAvatar(child, depth + 1)?.let { return it } }
+            node.getChild(i)?.let { child -> findIcon(child, depth + 1)?.let { return it } }
         }
         return null
     }

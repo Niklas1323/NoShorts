@@ -88,19 +88,19 @@ class TreeDumper(private val context: Context) {
     }
 
     private fun prune(dir: File) {
-        val files = dir.listFiles()?.sortedByDescending { it.name } ?: return
+        val files = dir.listFiles()?.sortedByDescending { it.lastModified() } ?: return
         files.drop(MAX_FILES).forEach { it.delete() }
     }
 
     companion object {
         private const val TAG = "FuckShorts"
         private const val MAX_NODES = 4000
-        private const val MAX_FILES = 8
+        private const val MAX_FILES = 12
 
-        private fun dumpDir(context: Context) = File(context.filesDir, "dumps")
+        fun dumpDir(context: Context) = File(context.filesDir, "dumps")
 
         fun files(context: Context): List<File> =
-            dumpDir(context).listFiles()?.sortedByDescending { it.name }.orEmpty()
+            dumpDir(context).listFiles()?.sortedByDescending { it.lastModified() }.orEmpty()
 
         fun clear(context: Context) {
             dumpDir(context).listFiles()?.forEach { it.delete() }
