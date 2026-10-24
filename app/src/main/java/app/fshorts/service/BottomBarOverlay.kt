@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,11 +24,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
@@ -345,20 +348,22 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                     } else {
                         null
                     }
-                    IconArea(plusCenter) {
+                    IconArea(plusCenter, Alignment.CenterEnd) {
+                        // Runder Knopf rechts aussen (wie im Vorlagenbild), Plus mit dünnen Linien.
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .padding(end = 18.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
                                 .background(style.plusBackground),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = state.labels[TabKind.CREATE] ?: "Erstellen",
-                                tint = style.content,
-                                modifier = Modifier.size(30.dp),
-                            )
+                            val color = style.content
+                            Canvas(Modifier.size(18.dp)) {
+                                val stroke = 2.dp.toPx()
+                                drawLine(color, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), stroke, StrokeCap.Round)
+                                drawLine(color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), stroke, StrokeCap.Round)
+                            }
                         }
                     }
                 }
@@ -409,7 +414,11 @@ private fun TabSlot(
 
 /** Box, deren Mitte genau auf der Höhe der Icon-Mitte der echten Leiste liegt. */
 @Composable
-private fun BoxScope.IconArea(center: Int?, content: @Composable () -> Unit) {
+private fun BoxScope.IconArea(
+    center: Int?,
+    alignment: Alignment = Alignment.Center,
+    content: @Composable () -> Unit,
+) {
     val density = LocalDensity.current
     val modifier = if (center != null) {
         Modifier
@@ -417,9 +426,9 @@ private fun BoxScope.IconArea(center: Int?, content: @Composable () -> Unit) {
             .fillMaxWidth()
             .height(with(density) { (center * 2).toDp() })
     } else {
-        Modifier.align(Alignment.Center)
+        Modifier.align(Alignment.Center).fillMaxWidth()
     }
-    Box(modifier = modifier, contentAlignment = Alignment.Center) { content() }
+    Box(modifier = modifier, contentAlignment = alignment) { content() }
 }
 
 @Composable

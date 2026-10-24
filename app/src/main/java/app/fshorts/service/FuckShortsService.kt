@@ -56,7 +56,8 @@ class FuckShortsService : AccessibilityService() {
     private var lastBar: FoundBar? = null
     private var lastUiState: BarUiState? = null
     private var hiddenByScroll = false
-    private var lastScrollAt = 0L
+    private var lastNavAt = 0L
+    private var restSince = 0L
     private var pollUntil = 0L
     private var polling = false
 
@@ -115,9 +116,9 @@ class FuckShortsService : AccessibilityService() {
                 when (event.eventType) {
                     AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                         debugDumpWanted = true
-                        hiddenByScroll = false
+                        onNavigation()
                     }
-                    AccessibilityEvent.TYPE_VIEW_CLICKED -> hiddenByScroll = false
+                    AccessibilityEvent.TYPE_VIEW_CLICKED -> onNavigation()
                     AccessibilityEvent.TYPE_VIEW_SCROLLED -> onScrolled()
                 }
                 scheduleScan()
@@ -169,9 +170,13 @@ class FuckShortsService : AccessibilityService() {
 
     /** Beim Scrollen fährt YouTube seine Leiste raus/rein. Wir prüfen ab jetzt jedes Bild, damit unsere stehen bleibt. */
     private fun onScrolled() {
-        lastScrollAt = SystemClock.uptimeMillis()
-        if (youTubeActive) updateBar(lastScrollAt, null)
+        if (youTubeActive) updateBar(SystemClock.uptimeMillis(), null)
         startPolling()
+    }
+
+    private fun onNavigation() {
+        lastNavAt = SystemClock.uptimeMillis()
+        hiddenByScroll = false
     }
 
     private fun scan() {
@@ -238,7 +243,13 @@ class FuckShortsService : AccessibilityService() {
             // Farbe und Profilbild abschauen: nur wenn die echte Leiste ganz da ist und unsere noch nicht.
             val firstSample = sampler.style == null && !sampler.attempted
             val atRest = bar.bounds == restBounds
+            if (!atRest) restSince = 0L else if (restSince == 0L) restSince = now
             if (atRest && !overlay.isShowing && (firstSample || sampler.wantsAvatarRetry())) {
+                // Erst abschauen, wenn die echte Leiste ganz still steht (nicht mitten im Reinfahren).
+                if (now - restSince < REST_STABLE_MS) {
+                    handler.postDelayed({ scheduleScan() }, REST_STABLE_MS)
+                    return
+                }
                 sampler.sample(bar) { scheduleScan() }
                 return
             }
@@ -295,18 +306,21 @@ class FuckShortsService : AccessibilityService() {
             fresh != null -> fresh.bounds.top
             else -> lastBar?.let { scanner.liveTop(it.container, screen) }
         }
-        if (observedTop == null) {
+        // Ohne Antippen verschwindet die echte Leiste nur durchs Scrollen: dann bleibt unsere einfach stehen.
+        // Nach einem Tipp (Video öffnen, anderer Bildschirm) verschwindet unsere mit.
+        val navigatedRecently = now - lastNavAt < NAV_LINK_MS
+        if (observedTop != null && observedTop <= rest.top + 2) {
+            hiddenByScroll = false
+        } else if (!navigatedRecently && overlay.isShowing) {
+            hiddenByScroll = true
+        }
+        if (observedTop == null && !hiddenByScroll) {
             // Die Leiste gibt es nicht mehr (anderer Bildschirm).
             lastBar = null
             overlay.hide()
             return
         }
-        if (observedTop <= rest.top + 2) {
-            hiddenByScroll = false
-        } else if (now - lastScrollAt < SCROLL_LINK_MS) {
-            hiddenByScroll = true
-        }
-        val top = if (hiddenByScroll) rest.top else observedTop.coerceAtLeast(rest.top)
+        val top = if (hiddenByScroll || observedTop == null) rest.top else observedTop.coerceAtLeast(rest.top)
         if (top >= screen.bottom - 2) {
             overlay.hide()
         } else {
@@ -469,7 +483,8 @@ class FuckShortsService : AccessibilityService() {
         private const val MIN_SCAN_INTERVAL_MS = 40L
         private const val POLL_MS = 16L
         private const val POLL_DURATION_MS = 500L
-        private const val SCROLL_LINK_MS = 800L
+        private const val NAV_LINK_MS = 1_500L
+        private const val REST_STABLE_MS = 300L
         private const val WATCHDOG_MS = 400L
         private const val BACK_COOLDOWN_MS = 700L
         private const val HINT_WINDOW_MS = 10_000L

@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
 import java.io.File
 import kotlin.math.abs
-import kotlin.math.max
+import kotlin.math.roundToInt
 
 data class BarStyle(
     val background: Color,
@@ -49,9 +49,14 @@ class BarStyleSampler(private val service: AccessibilityService) {
         private set
     private var attempts = 0
     private var lastAttemptAt = 0L
-    private val avatarFile = File(service.filesDir, "avatar.png")
+    private val avatarFile = File(service.filesDir, "avatar_v2.png")
     var savedAvatar: ImageBitmap? = loadSavedAvatar()
         private set
+
+    init {
+        // Alte, falsch ausgeschnittene Version wegwerfen.
+        File(service.filesDir, "avatar.png").delete()
+    }
 
     fun reset() {
         style = null
@@ -123,51 +128,21 @@ class BarStyleSampler(private val service: AccessibilityService) {
     }
 
     /**
-     * Schneidet das Profilbild aus. Bereich: der "Mein YouTube"-Tab oberhalb der Beschriftung.
-     * Darin suchen wir das Bild (alles, was sich deutlich vom Hintergrund abhebt).
+     * Schneidet das Profilbild aus: ein Quadrat von 24 dp (so gross zeigt YouTube es), mittig im
+     * "Mein YouTube"-Tab und auf derselben Höhe wie die anderen Icons.
      */
     private fun cropAvatar(bitmap: Bitmap, bar: FoundBar): Bitmap? {
         val tab = bar.tabs[TabKind.YOU] ?: return null
-        val area = Rect(tab.bounds)
-        tab.labelBounds?.let { area.bottom = it.top }
-        if (!area.intersect(0, 0, bitmap.width, bitmap.height) || area.width() < 8 || area.height() < 8) return null
-
-        val box = tab.iconBounds?.takeIf { area.contains(it) && it.width() >= 8 } ?: findContentBox(bitmap, area)
-        ?: return null
-        // Quadrat um die Mitte, so gross wie das Bild.
-        val size = max(box.width(), box.height())
-        val square = Rect(
-            box.centerX() - size / 2,
-            box.centerY() - size / 2,
-            box.centerX() - size / 2 + size,
-            box.centerY() - size / 2 + size,
-        )
-        if (!square.intersect(0, 0, bitmap.width, bitmap.height)) return null
-        val cut = Bitmap.createBitmap(bitmap, square.left, square.top, square.width(), square.height())
-        val reference = bitmap.getPixel(area.left + 1, area.top + 1)
+        val centerY = bar.tabs[TabKind.HOME]?.iconBounds?.centerY()
+            ?: tab.iconBounds?.centerY()
+            ?: return null
+        val size = (AVATAR_DP * service.resources.displayMetrics.density).roundToInt()
+        val left = tab.bounds.centerX() - size / 2
+        val top = centerY - size / 2
+        if (left < 0 || top < 0 || left + size > bitmap.width || top + size > bitmap.height) return null
+        val cut = Bitmap.createBitmap(bitmap, left, top, size, size)
+        val reference = bitmap.getPixel(tab.bounds.left + 2, top)
         return if (looksLikePicture(cut, reference)) cut else null
-    }
-
-    private fun findContentBox(bitmap: Bitmap, area: Rect): Rect? {
-        val reference = bitmap.getPixel(area.left + 1, area.top + 1)
-        val pixels = IntArray(area.width() * area.height())
-        bitmap.getPixels(pixels, 0, area.width(), area.left, area.top, area.width(), area.height())
-        var minX = Int.MAX_VALUE
-        var minY = Int.MAX_VALUE
-        var maxX = -1
-        var maxY = -1
-        for (yy in 0 until area.height()) {
-            for (xx in 0 until area.width()) {
-                if (distance(pixels[yy * area.width() + xx], reference) > 90) {
-                    if (xx < minX) minX = xx
-                    if (yy < minY) minY = yy
-                    if (xx > maxX) maxX = xx
-                    if (yy > maxY) maxY = yy
-                }
-            }
-        }
-        if (maxX < 0 || maxX - minX < 8 || maxY - minY < 8) return null
-        return Rect(area.left + minX, area.top + minY, area.left + maxX + 1, area.top + maxY + 1)
     }
 
     /** Ein Profilbild hat Inhalt. Ist der Ausschnitt fast nur Hintergrund, ist das Bild noch nicht geladen. */
@@ -210,5 +185,6 @@ class BarStyleSampler(private val service: AccessibilityService) {
         const val TAG = "FuckShorts"
         const val MAX_ATTEMPTS = 6
         const val RETRY_MS = 4_000L
+        const val AVATAR_DP = 24f
     }
 }
