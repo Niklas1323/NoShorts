@@ -69,6 +69,25 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         return false
     }
 
+    /**
+     * True, wenn ein Video gross offen ist (Wiedergabe-Seite): oben ein Player über die ganze Breite.
+     * Der kleine Mini-Player unten zählt nicht.
+     */
+    fun isWatchPageOpen(root: AccessibilityNodeInfo, screen: Rect): Boolean {
+        val r = Rect()
+        for (id in sel.watchIds) {
+            for (node in root.findAccessibilityNodeInfosByViewId(sel.fullId(id))) {
+                if (!node.isVisibleToUser) continue
+                node.getBoundsInScreen(r)
+                val wide = r.width() >= screen.width() * 0.9
+                val nearTop = r.top < screen.height() * 0.35
+                val playerSized = r.height() >= 150 * density && r.height() <= screen.height() * 0.7
+                if (wide && nearTop && playerSized) return true
+            }
+        }
+        return false
+    }
+
     /** True, wenn z. B. der grosse Video-Player über der Leiste liegt. */
     fun isBarCovered(root: AccessibilityNodeInfo, bar: FoundBar): Boolean {
         val r = Rect()

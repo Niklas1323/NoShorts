@@ -2,6 +2,7 @@ package app.fshorts.service
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.PixelFormat
+import android.graphics.Typeface
 import android.graphics.Rect
 import android.os.Build
 import android.util.TypedValue
@@ -10,10 +11,11 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 
 /**
- * Deckt Shorts-Regale mit einer ruhigen Fläche ab.
+ * Deckt Shorts-Regale mit einer etwas dunkleren grauen Fläche und einem Zitat ab.
  * Die Fläche lässt alle Berührungen durch, damit man die Startseite ganz normal scrollen kann.
  */
 class ShelfCovers(private val service: AccessibilityService) {
@@ -33,8 +35,9 @@ class ShelfCovers(private val service: AccessibilityService) {
                 setVisible(cover, false)
                 return@forEachIndexed
             }
-            cover.view.setBackgroundColor(style.background.toArgb())
-            cover.label.setTextColor(style.content.copy(alpha = 0.45f).toArgb())
+            val dark = style.content.luminance() > 0.5f
+            cover.view.setBackgroundColor(if (dark) COVER_DARK else COVER_LIGHT)
+            cover.label.setTextColor(style.content.copy(alpha = 0.6f).toArgb())
             val p = cover.params
             val changed = p.x != area.left || p.y != area.top || p.width != area.width() || p.height != area.height()
             p.x = area.left
@@ -42,6 +45,7 @@ class ShelfCovers(private val service: AccessibilityService) {
             p.width = area.width()
             p.height = area.height()
             if (!cover.visible) {
+                cover.label.text = QUOTES.random()
                 cover.visible = true
                 cover.view.visibility = View.VISIBLE
                 windowManager.updateViewLayout(cover.view, p)
@@ -68,12 +72,16 @@ class ShelfCovers(private val service: AccessibilityService) {
 
     private fun create(): Cover {
         val label = TextView(service).apply {
-            text = "Shorts ausgeblendet"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            text = QUOTES.random()
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTypeface(typeface, Typeface.ITALIC)
+            gravity = Gravity.CENTER
+            val pad = (32 * service.resources.displayMetrics.density).toInt()
+            setPadding(pad, 0, pad, 0)
         }
         val view = FrameLayout(service).apply {
             addView(label, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER,
             ))
@@ -105,5 +113,17 @@ class ShelfCovers(private val service: AccessibilityService) {
 
     private companion object {
         const val MAX_COVERS = 3
+        const val COVER_DARK = 0xFF1A1A1A.toInt()
+        const val COVER_LIGHT = 0xFFEDEDED.toInt()
+
+        val QUOTES = listOf(
+            "„Deine Zeit ist mehr wert als 60 Sekunden.“",
+            "„Tiefe statt Tempo.“",
+            "„Lange Videos, lange Gedanken.“",
+            "„Fokus ist eine Superkraft.“",
+            "„Wer nicht wischt, gewinnt Zeit.“",
+            "„Weniger Reize, mehr Leben.“",
+            "„Du bist nicht hier, um zu scrollen.“",
+        )
     }
 }

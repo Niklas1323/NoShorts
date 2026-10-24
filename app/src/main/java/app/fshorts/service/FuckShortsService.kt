@@ -18,6 +18,7 @@ import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Toast
 import app.fshorts.Prefs
 import app.fshorts.R
+import kotlin.math.roundToInt
 
 /**
  * Das Herz der App. Läuft im Hintergrund, sobald du Fuck Shorts in den Bedienungshilfen einschaltest.
@@ -56,6 +57,8 @@ class FuckShortsService : AccessibilityService() {
     private var lastBar: FoundBar? = null
     private var lastUiState: BarUiState? = null
     private var hiddenByScroll = false
+    private var navFromRest = false
+    private var watchPageOpen = false
     private var lastNavAt = 0L
     private var restSince = 0L
     private var lastObservedTop = -1
@@ -177,9 +180,13 @@ class FuckShortsService : AccessibilityService() {
         startPolling()
     }
 
+    /**
+     * Ein Tipp in YouTube. Nur wenn die echte Leiste dabei ganz da war, darf unsere danach mit ihr verschwinden
+     * (z. B. Video geöffnet). War sie weggescrollt (z. B. Tipp auf ⋮), bleibt unsere stehen.
+     */
     private fun onNavigation() {
         lastNavAt = SystemClock.uptimeMillis()
-        hiddenByScroll = false
+        navFromRest = !hiddenByScroll
     }
 
     private fun scan() {
@@ -220,6 +227,7 @@ class FuckShortsService : AccessibilityService() {
             restBounds = null
         }
         val bar = scanner.findBar(root, screen)
+        watchPageOpen = scanner.isWatchPageOpen(root, screen)
 
         if (debugDumpWanted) {
             debugDumpWanted = false
@@ -310,12 +318,16 @@ class FuckShortsService : AccessibilityService() {
             fresh != null -> fresh.bounds.top
             else -> lastBar?.let { scanner.liveTop(it.container, screen) }
         }
-        // Ohne Antippen verschwindet die echte Leiste nur durchs Scrollen: dann bleibt unsere einfach stehen.
-        // Nach einem Tipp (Video öffnen, anderer Bildschirm) verschwindet unsere mit.
-        val navigatedRecently = now - lastNavAt < NAV_LINK_MS
+        if (watchPageOpen) {
+            overlay.hide()
+            return
+        }
+        // Grundregel: Unsere Leiste bleibt stehen, egal was die echte macht (Scrollen, Menüs ...).
+        // Ausnahme: Kurz nach einem Tipp fährt die ganz sichtbare echte Leiste raus (Video geöffnet): dann mit.
+        val followAfterTap = now - lastNavAt < NAV_LINK_MS && navFromRest
         if (observedTop != null && observedTop <= rest.top + 2) {
             hiddenByScroll = false
-        } else if (!navigatedRecently && overlay.isShowing) {
+        } else if (!followAfterTap && overlay.isShowing) {
             hiddenByScroll = true
         }
         if (observedTop == null && !hiddenByScroll) {
@@ -333,7 +345,7 @@ class FuckShortsService : AccessibilityService() {
         if (top >= screen.bottom - 2) {
             overlay.hide()
         } else {
-            overlay.show(top, rest, screen.bottom, state.copy(style = currentStyle()))
+            overlay.show(top, rest, state.copy(style = currentStyle()))
         }
     }
 
@@ -351,10 +363,8 @@ class FuckShortsService : AccessibilityService() {
         windows.firstOrNull { it.id == windowId }?.let { w -> Rect().also { w.getBoundsInScreen(it) } } ?: Rect(screen)
 
     private fun buildUiState(bar: FoundBar): BarUiState {
-        // Höhen von Icon und Schrift aus der echten Leiste (Startseite-Tab als Vorlage).
-        val reference = bar.tabs[TabKind.HOME] ?: bar.tabs.values.first()
-        val iconCenter = reference.iconBounds?.centerY()?.minus(bar.bounds.top)
-        val labelTop = reference.labelBounds?.top?.minus(bar.bounds.top)
+        // Feste Abstände wie im Vorlagenbild (ab Oberkante der Leiste).
+        val density = resources.displayMetrics.density
         val rest = restBounds ?: bar.bounds
         return BarUiState(
             selected = bar.tabs.values.firstOrNull { it.selected }?.kind,
@@ -362,8 +372,9 @@ class FuckShortsService : AccessibilityService() {
             subscriptionsBadge = bar.tabs[TabKind.SUBSCRIPTIONS]?.badge == true,
             hasCreate = TabKind.CREATE in bar.tabs,
             barHeightPx = rest.height(),
-            iconCenterPx = iconCenter?.takeIf { it > 0 && it < rest.height() },
-            labelTopPx = labelTop?.takeIf { it > 0 && it < rest.height() },
+            iconCenterPx = (ICON_CENTER_DP * density).roundToInt(),
+            labelTopPx = (LABEL_TOP_DP * density).roundToInt(),
+            showHandle = rest.bottom >= screen.bottom - 2,
             style = currentStyle(),
         )
     }
@@ -495,6 +506,8 @@ class FuckShortsService : AccessibilityService() {
         private const val POLL_MS = 16L
         private const val POLL_DURATION_MS = 500L
         private const val NAV_LINK_MS = 1_500L
+        private const val ICON_CENTER_DP = 20f
+        private const val LABEL_TOP_DP = 32.5f
         private const val REST_STABLE_MS = 300L
         private const val WATCHDOG_MS = 400L
         private const val BACK_COOLDOWN_MS = 700L

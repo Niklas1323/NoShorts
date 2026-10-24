@@ -67,5 +67,8 @@
     "Nicht interessiert",
     "Not interested",
     "Kein Interesse"
+  ],
+  "watchIds": [
+    "watch_player"
   ]
 }

@@ -21,18 +21,20 @@ data class BarStyle(
     val background: Color,
     val content: Color,
     val plusBackground: Color,
+    val handle: Color,
     val avatar: ImageBitmap?,
     /** Echte YouTube-Icons als weisse Masken, Schlüssel siehe [iconKey]. */
     val icons: Map<String, ImageBitmap>,
 ) {
     companion object {
-        // Feste, deckende Farben: Die echte Leiste ist durchsichtig, über dunklen Seiten aber praktisch #0F0F0F.
-        // Unsere muss deckend sein, sonst scheint der Shorts-Knopf durch.
+        // Feste, deckende Farben wie im Vorlagenbild. Unsere Leiste muss deckend sein, sonst scheint der
+        // Shorts-Knopf der echten (durchsichtigen) Leiste durch.
         fun default(dark: Boolean, avatar: ImageBitmap? = null, icons: Map<String, ImageBitmap> = emptyMap()) =
             BarStyle(
-                background = if (dark) Color(0xFF0F0F0F) else Color.White,
+                background = if (dark) Color(0xFF1C1C1C) else Color.White,
                 content = if (dark) Color(0xFFF1F1F1) else Color(0xFF0F0F0F),
-                plusBackground = if (dark) Color(0xFF272727) else Color(0xFFF2F2F2),
+                plusBackground = if (dark) Color(0xFF2B2B2B) else Color(0xFFF2F2F2),
+                handle = if (dark) Color(0xFFEBEBEB) else Color(0xFF1F1F1F),
                 avatar = avatar,
                 icons = icons,
             )

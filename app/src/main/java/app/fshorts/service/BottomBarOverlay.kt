@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Icon
@@ -70,13 +71,13 @@ data class BarUiState(
     val barHeightPx: Int,
     val iconCenterPx: Int?,
     val labelTopPx: Int?,
+    /** Unsere Leiste reicht bis ganz unten (Gestensteuerung): Gestenstrich selbst zeichnen. */
+    val showHandle: Boolean,
     val style: BarStyle,
 )
 
 /**
- * Unsere eigene untere Leiste. Liegt als Fenster über der echten YouTube-Leiste und hat keinen Shorts-Knopf.
- * Das Fenster reicht immer bis zum unteren Bildschirmrand: Egal wo die echte Leiste gerade beim
- * Ein- oder Ausfahren ist, alles unter unserer Oberkante ist abgedeckt.
+ * Unsere eigene untere Leiste. Liegt als Fenster genau über der echten YouTube-Leiste und hat keinen Shorts-Knopf.
  */
 class BottomBarOverlay(
     private val service: AccessibilityService,
@@ -123,16 +124,16 @@ class BottomBarOverlay(
 
     /**
      * Zeigt die Leiste mit Oberkante bei [top]. [rest] ist die Lage der echten Leiste, wenn sie ganz
-     * eingefahren ist (Breite, Höhe), [screenBottom] der untere Bildschirmrand.
+     * eingefahren ist (Breite, Höhe).
      */
-    fun show(top: Int, rest: Rect, screenBottom: Int, state: BarUiState) {
+    fun show(top: Int, rest: Rect, state: BarUiState) {
         val keepOptimistic = optimistic != null &&
             SystemClock.uptimeMillis() - optimisticAt < OPTIMISTIC_MS &&
             state.selected != optimistic
         val next = if (keepOptimistic) state.copy(selected = optimistic) else state
         if (next != uiState) uiState = next
-        val height = rest.height() + (screenBottom - rest.bottom).coerceAtLeast(0)
-        target.set(rest.left, top, rest.right, top + height)
+        // Nur so hoch wie die echte Leiste: Bei Navigation mit 3 Knöpfen bleiben die Knöpfe frei.
+        target.set(rest.left, top, rest.right, top + rest.height())
 
         val v = view
         if (v == null) {
@@ -260,6 +261,16 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
             .fillMaxSize()
             .background(style.background),
     ) {
+        if (state.showHandle) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 10.dp)
+                    .size(width = 108.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(style.handle),
+            )
+        }
         Row(modifier = Modifier.fillMaxWidth().height(barHeight)) {
             val homeSelected = state.selected == TabKind.HOME
             val subsSelected = state.selected == TabKind.SUBSCRIPTIONS
@@ -355,13 +366,8 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                     .tapTarget(TabKind.CREATE, onTap, onLongPress),
             ) {
                 if (state.hasCreate) {
-                    // Wie im Vorlagenbild: Plus-Kreis mittig zwischen Icon-Reihe und Schrift-Reihe.
-                    val labelCenter = state.labelTopPx?.let { it + with(density) { 6.dp.roundToPx() } }
-                    val plusCenter = if (state.iconCenterPx != null && labelCenter != null) {
-                        (state.iconCenterPx + labelCenter) / 2
-                    } else {
-                        null
-                    }
+                    // Wie im Vorlagenbild: Plus-Kreis etwas unter der Icon-Reihe (Mitte 25,5 dp ab Oberkante).
+                    val plusCenter = with(density) { 25.5.dp.roundToPx() }
                     IconArea(plusCenter, Alignment.CenterEnd) {
                         // Runder Knopf rechts aussen (wie im Vorlagenbild), Plus mit dünnen Linien.
                         Box(
