@@ -12,7 +12,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -43,7 +42,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -204,6 +202,20 @@ class BottomBarOverlay(
         return ComposeView(service).apply {
             setViewTreeLifecycleOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
+            // Berührungen selbst auswerten statt über Compose: einfacher und zuverlässiger in einem Overlay.
+            // Die Leiste hat vier gleich breite Spalten: Startseite, Abos, Mein YouTube, Plus.
+            setOnTouchListener(TapHandler(onTap = { x, width ->
+                val column = (x / width * 4).toInt().coerceIn(0, 3)
+                val kind = COLUMNS[column]
+                if (kind != TabKind.CREATE || uiState?.hasCreate == true) {
+                    if (kind != TabKind.CREATE) {
+                        optimistic = kind
+                        optimisticAt = SystemClock.uptimeMillis()
+                        uiState = uiState?.copy(selected = kind)
+                    }
+                    onTap(kind)
+                }
+            }, onLongPress = onLongPress))
             setContent {
                 uiState?.let { state ->
                     BottomBar(
@@ -229,6 +241,50 @@ class BottomBarOverlay(
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         const val OPTIMISTIC_MS = 600L
+        val COLUMNS = listOf(TabKind.HOME, TabKind.SUBSCRIPTIONS, TabKind.YOU, TabKind.CREATE)
+    }
+
+    /** Erkennt einen kurzen Tipp (Finger kaum bewegt) und langes Drücken. */
+    private class TapHandler(
+        private val onTap: (x: Float, width: Float) -> Unit,
+        private val onLongPress: () -> Unit,
+    ) : View.OnTouchListener {
+        private var downX = 0f
+        private var downY = 0f
+        private var downAt = 0L
+        private var cancelled = false
+        private val longPress = Runnable {
+            cancelled = true
+            onLongPress()
+        }
+
+        override fun onTouch(v: View, event: android.view.MotionEvent): Boolean {
+            val slop = 12 * v.resources.displayMetrics.density
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    downX = event.x
+                    downY = event.y
+                    downAt = SystemClock.uptimeMillis()
+                    cancelled = false
+                    v.postDelayed(longPress, 600)
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (kotlin.math.abs(event.x - downX) > slop || kotlin.math.abs(event.y - downY) > slop) {
+                        cancelled = true
+                        v.removeCallbacks(longPress)
+                    }
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    v.removeCallbacks(longPress)
+                    if (!cancelled) onTap(event.x, v.width.toFloat())
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    cancelled = true
+                    v.removeCallbacks(longPress)
+                }
+            }
+            return true
+        }
     }
 }
 
@@ -332,8 +388,7 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .tapTarget(TabKind.CREATE, onTap, onLongPress),
+                    .fillMaxHeight(),
             ) {
                 if (state.hasCreate) {
                     // Wie im Vorlagenbild: Plus-Kreis etwas unter der Icon-Reihe (Mitte 25,5 dp ab Oberkante).
@@ -374,8 +429,7 @@ private fun TabSlot(
     val labelTop = state.labelTopPx
     Box(
         modifier = modifier
-            .fillMaxHeight()
-            .tapTarget(kind, onTap, onLongPress),
+            .fillMaxHeight(),
     ) {
         if (state.iconCenterPx != null && labelTop != null) {
             // Gleiche Höhe wie bei YouTube: Icon-Mitte und Schrift-Oberkante aus der echten Leiste.
@@ -437,11 +491,3 @@ private fun Label(text: String, color: Color, modifier: Modifier = Modifier) {
 private fun TabIcon(icon: ImageVector, tint: Color) {
     Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
 }
-
-private fun Modifier.tapTarget(kind: TabKind, onTap: (TabKind) -> Unit, onLongPress: () -> Unit) =
-    pointerInput(kind) {
-        detectTapGestures(
-            onTap = { onTap(kind) },
-            onLongPress = { onLongPress() },
-        )
-    }

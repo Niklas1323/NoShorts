@@ -340,12 +340,17 @@ class FuckShortsService : AccessibilityService() {
         // Ausnahme: Kurz nach einem Tipp fährt die ganz sichtbare echte Leiste raus (Video geöffnet): dann mit.
         // Mit Mini-Player fahren wir immer mit der echten Leiste mit: YouTube setzt den Mini-Player direkt
         // über seine Leiste. Bliebe unsere stehen, läge der Mini-Player darunter.
-        val followAfterTap = (now - lastNavAt < NAV_LINK_MS && navFromRest) || miniPlayerOpen
+        // Auf der Startseite bleibt unsere Leiste immer stehen. Einzige Ausnahme: Ein Video wird geöffnet
+        // (Tipp bei ganz sichtbarer Leiste, danach fährt die echte raus). Dann fahren wir mit der echten
+        // nach unten; weil wir immer etwas hinterher sind, liegt unsere dabei über der echten.
+        val onHome = state.selected == TabKind.HOME
+        val videoOpening = now - lastNavAt < NAV_LINK_MS && navFromRest
+        val followAfterTap = videoOpening || (miniPlayerOpen && !onHome)
         if (observedTop != null && observedTop <= rest.top + 2) {
             hiddenByScroll = false
-        } else if (!followAfterTap && overlay.isShowing) {
+        } else if (!followAfterTap && (overlay.isShowing || onHome)) {
             hiddenByScroll = true
-        } else if (miniPlayerOpen) {
+        } else if (followAfterTap) {
             hiddenByScroll = false
         }
         if (observedTop == null && !hiddenByScroll) {
@@ -449,13 +454,25 @@ class FuckShortsService : AccessibilityService() {
         scheduleScan()
     }
 
+    /**
+     * Tipp auf unsere Leiste. Am zuverlässigsten ist ein echter Finger-Tipp auf den echten Knopf darunter
+     * (wie wenn du selbst tippst). Das geht, wenn die echte Leiste ganz da ist. Ist sie weggescrollt,
+     * klicken wir den Knopf über die Bedienungshilfen und prüfen danach, ob es geklappt hat.
+     */
     private fun onTabTapped(kind: TabKind) {
         val root = youTubeMainRoot() ?: run {
             tapLog("$kind: kein YouTube-Fenster gefunden")
             return
         }
-        // Ist die echte Leiste gerade weggescrollt, nehmen wir die zuletzt gefundene: Klicks gehen trotzdem.
         val fresh = scanner.findBar(root, screenBounds())
+        val freshBounds = fresh?.tabs?.get(kind)?.bounds
+        if (fresh != null && freshBounds != null && fresh.bounds == restBounds) {
+            tapLog("$kind: Finger-Tipp auf echten Knopf")
+            tapThrough(freshBounds)
+            scheduleScan()
+            return
+        }
+        // Ist die echte Leiste gerade weggescrollt, nehmen wir die zuletzt gefundene: Klicks gehen trotzdem.
         val bar = fresh ?: lastBar
         val node = bar?.nodes?.get(kind)
         if (node == null) {
@@ -466,12 +483,7 @@ class FuckShortsService : AccessibilityService() {
         node.refresh()
         val clicked = click(node)
         tapLog("$kind: Klick ${if (clicked) "ok" else "fehlgeschlagen"}")
-        if (!clicked) {
-            tapThroughIfVisible(kind)
-        } else if (kind != TabKind.CREATE) {
-            // Nachprüfen: Ist der Tab jetzt wirklich ausgewählt? Sonst echter Finger-Tipp.
-            handler.postDelayed({ verifyTab(kind) }, VERIFY_MS)
-        }
+        if (kind != TabKind.CREATE) handler.postDelayed({ verifyTab(kind) }, VERIFY_MS)
         scheduleScan()
     }
 
