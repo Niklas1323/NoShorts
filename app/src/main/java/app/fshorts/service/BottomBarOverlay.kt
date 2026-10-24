@@ -41,8 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -93,9 +91,6 @@ class BottomBarOverlay(
     private var optimisticAt = 0L
 
     private val target = Rect()
-    private var offsetX = 0
-    private var offsetY = 0
-    private var calibrations = 0
     private var passThrough = false
 
     var isShowing = false
@@ -189,8 +184,8 @@ class BottomBarOverlay(
         if (!isShowing || passThrough) BASE_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else BASE_FLAGS
 
     private fun applyBounds(): Boolean {
-        val x = target.left + offsetX
-        val y = target.top + offsetY
+        val x = target.left
+        val y = target.top
         if (params.x == x && params.y == y && params.width == target.width() && params.height == target.height()) {
             return false
         }
@@ -199,21 +194,6 @@ class BottomBarOverlay(
         params.width = target.width()
         params.height = target.height()
         return true
-    }
-
-    /** Falls Android das Fenster ein paar Pixel verschiebt (z. B. wegen Kamera-Loch), korrigieren wir das. */
-    private fun calibrate() {
-        val v = view ?: return
-        if (!isShowing || calibrations >= 3) return
-        val location = IntArray(2)
-        v.getLocationOnScreen(location)
-        val dx = target.left - location[0]
-        val dy = target.top - location[1]
-        if ((dx == 0 && dy == 0) || kotlin.math.abs(dx) > 300 || kotlin.math.abs(dy) > 300) return
-        calibrations++
-        offsetX += dx
-        offsetY += dy
-        if (applyBounds()) windowManager.updateViewLayout(v, params)
     }
 
     private fun create(): ComposeView {
@@ -238,7 +218,6 @@ class BottomBarOverlay(
                     )
                 }
             }
-            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> v.post { calibrate() } }
             view = this
         }
     }
@@ -282,12 +261,7 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                 onTap = onTap,
                 onLongPress = onLongPress,
             ) {
-                val mask = style.icons[BarStyle.iconKey(TabKind.HOME, homeSelected)]
-                if (mask != null) {
-                    MaskIcon(mask, style.content)
-                } else {
-                    TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content)
-                }
+                TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content)
             }
             TabSlot(
                 modifier = Modifier.weight(1f),
@@ -297,19 +271,13 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                 onTap = onTap,
                 onLongPress = onLongPress,
             ) {
-                val mask = style.icons[BarStyle.iconKey(TabKind.SUBSCRIPTIONS, subsSelected)]
                 Box {
-                    if (mask != null) {
-                        MaskIcon(mask, style.content)
-                    } else {
-                        TabIcon(
-                            if (subsSelected) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
-                            style.content,
-                        )
-                    }
+                    TabIcon(
+                        if (subsSelected) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
+                        style.content,
+                    )
                     if (state.subscriptionsBadge) {
-                        // Echte Masken sind 28 dp gross (Icon 24 dp + Rand), darum etwas weniger verschieben.
-                        val shift = if (mask != null) 1.dp else 3.dp
+                        val shift = 3.dp
                         Box(
                             Modifier
                                 .align(Alignment.TopEnd)
@@ -460,18 +428,6 @@ private fun Label(text: String, color: Color, modifier: Modifier = Modifier) {
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier,
-    )
-}
-
-/** Echtes YouTube-Icon (weisse Maske aus der echten Leiste), in Originalgrösse und unserer Farbe. */
-@Composable
-private fun MaskIcon(mask: ImageBitmap, tint: Color) {
-    val size = with(LocalDensity.current) { mask.width.toDp() }
-    Image(
-        bitmap = mask,
-        contentDescription = null,
-        colorFilter = ColorFilter.tint(tint),
-        modifier = Modifier.size(size),
     )
 }
 

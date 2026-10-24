@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 data class BarStyle(
@@ -71,9 +70,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
     init {
         File(service.filesDir, "avatar.png").delete()
         File(service.filesDir, "avatar_v2.png").delete()
-        dir.listFiles()?.filter { it.name.startsWith("icon_") }?.forEach { file ->
-            load(file)?.let { icons[file.name.removePrefix("icon_").removeSuffix(".png")] = it }
-        }
+        dir.listFiles()?.filter { it.name.startsWith("icon_") }?.forEach { it.delete() }
     }
 
     fun style(nightMode: Boolean): BarStyle = BarStyle.default(dark ?: nightMode, avatar, icons.toMap())
@@ -88,10 +85,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
         if (busy || attempts >= MAX_ATTEMPTS) return false
         if (SystemClock.uptimeMillis() - lastAttemptAt < MIN_INTERVAL_MS) return false
         if (dark == null || avatar == null) return true
-        return listOf(TabKind.HOME, TabKind.SUBSCRIPTIONS).any { kind ->
-            val tab = bar.tabs[kind] ?: return@any false
-            BarStyle.iconKey(kind, tab.selected) !in icons
-        }
+        return false
     }
 
     fun capture(bar: FoundBar, windowId: Int, windowBounds: Rect, onDone: () -> Unit) {
@@ -154,14 +148,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
         val iconCenterY = (bar.tabs[TabKind.HOME]?.iconBounds ?: bar.tabs.values.firstNotNullOfOrNull { it.iconBounds })
             ?.centerY()?.minus(dy) ?: return
 
-        for (kind in listOf(TabKind.HOME, TabKind.SUBSCRIPTIONS)) {
-            val tab = bar.tabs[kind] ?: continue
-            val mask = iconMask(bitmap, tab.bounds.centerX() - dx, iconCenterY, dark == true) ?: continue
-            val key = BarStyle.iconKey(kind, tab.selected)
-            icons[key] = mask.asImageBitmap()
-            save(mask, File(dir, "icon_$key.png"))
-        }
-
+        // Icons zeichnen wir selbst (sauberer als abgeschaute Masken), nur das Profilbild wird übernommen.
         bar.tabs[TabKind.YOU]?.let { tab ->
             val cut = cropAvatar(bitmap, tab.bounds.centerX() - dx, iconCenterY)
             if (cut != null) {
@@ -170,48 +157,6 @@ class BarStyleSampler(private val service: AccessibilityService) {
             }
             Log.i(TAG, "Profilbild: ${if (cut != null) "${cut.width}x${cut.height}" else "noch nicht geladen"}")
         }
-    }
-
-    /**
-     * Macht aus dem Icon-Bereich eine weisse Maske: je heller (bzw. im hellen Design je dunkler) ein Pixel
-     * als der Hintergrund, desto deckender. Der rote Punkt bei Abos wird weggelassen, den zeichnen wir selbst.
-     */
-    private fun iconMask(bitmap: Bitmap, centerX: Int, centerY: Int, dark: Boolean): Bitmap? {
-        val size = (ICON_BOX_DP * density).roundToInt()
-        val left = centerX - size / 2
-        val top = centerY - size / 2
-        if (left < 0 || top < 0 || left + size > bitmap.width || top + size > bitmap.height) return null
-        val pixels = IntArray(size * size)
-        bitmap.getPixels(pixels, 0, size, left, top, size, size)
-
-        // Hintergrund = Durchschnitt des Randes (die Leiste ist durchsichtig, der Hintergrund schwankt leicht).
-        var sum = 0f
-        var count = 0
-        for (i in 0 until size) {
-            for (p in intArrayOf(pixels[i], pixels[(size - 1) * size + i], pixels[i * size], pixels[i * size + size - 1])) {
-                sum += luminance(p)
-                count++
-            }
-        }
-        val bg = sum / count
-        val full = if (dark) 241f else 15f
-        val span = full - bg
-        if (abs(span) < 40) return null
-
-        val out = IntArray(size * size)
-        var visible = 0
-        for (i in pixels.indices) {
-            val p = pixels[i]
-            val r = AndroidColor.red(p)
-            val isRed = r - max(AndroidColor.green(p), AndroidColor.blue(p)) > 60
-            val alpha = if (isRed) 0f else ((luminance(p) - bg) / span).coerceIn(0f, 1f)
-            val a = (alpha * 255).roundToInt()
-            if (a > 128) visible++
-            out[i] = AndroidColor.argb(a, 255, 255, 255)
-        }
-        // Leerer Bereich (Icon noch nicht da): nichts übernehmen.
-        if (visible < size * size / 40) return null
-        return Bitmap.createBitmap(out, size, size, Bitmap.Config.ARGB_8888)
     }
 
     /** Profilbild: 24-dp-Quadrat genau auf Icon-Höhe, mittig im Tab. */
