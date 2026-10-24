@@ -106,7 +106,7 @@ class BottomBarOverlay(
         BASE_FLAGS,
         PixelFormat.TRANSLUCENT,
     ).apply {
-        gravity = Gravity.TOP or Gravity.START
+        gravity = Gravity.TOP or Gravity.LEFT
         windowAnimations = 0
         title = "FuckShortsBar"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -184,14 +184,16 @@ class BottomBarOverlay(
         if (!isShowing || passThrough) BASE_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else BASE_FLAGS
 
     private fun applyBounds(): Boolean {
-        val x = target.left
+        // Immer über die ganze Bildschirmbreite ab dem linken Rand: So kann die Leiste nie seitlich verrutschen.
         val y = target.top
-        if (params.x == x && params.y == y && params.width == target.width() && params.height == target.height()) {
+        if (params.x == 0 && params.y == y && params.width == WindowManager.LayoutParams.MATCH_PARENT &&
+            params.height == target.height()
+        ) {
             return false
         }
-        params.x = x
+        params.x = 0
         params.y = y
-        params.width = target.width()
+        params.width = WindowManager.LayoutParams.MATCH_PARENT
         params.height = target.height()
         return true
     }
