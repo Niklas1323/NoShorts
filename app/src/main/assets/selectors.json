@@ -1,0 +1,17 @@
+{
+  "youtubePackage": "com.google.android.youtube",
+  "barIds": ["pivot_bar", "bottom_bar_container", "bottom_navigation"],
+  "maxBarHeightDp": 100,
+  "labels": {
+    "home": ["Startseite", "Home"],
+    "shorts": ["Shorts"],
+    "subscriptions": ["Abos", "Abonnements", "Subscriptions"],
+    "you": ["Mein YouTube", "Du", "You", "Bibliothek", "Library", "Konto", "Account"],
+    "create": ["Erstellen", "Create", "Hochladen", "Upload"]
+  },
+  "searchLabels": ["Shorts", "Startseite", "Home", "Abos", "Subscriptions"],
+  "shortsPlayerIds": ["reel_recycler", "reel_player_page_container", "reel_watch_player", "reel_player_overlay_container"],
+  "coverIds": ["watch_player", "player_fragment_container"],
+  "badgeIdHints": ["badge", "dot"],
+  "badgeTextHints": ["neue", "new "]
+}

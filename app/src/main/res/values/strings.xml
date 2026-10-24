@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fuck Shorts</string>
+    <string name="a11y_description">Fuck Shorts versteckt den Shorts-Knopf in der YouTube-App und schliesst Shorts sofort wieder. Dafür liest die App nur den Aufbau der YouTube-App (wo welche Knöpfe sind). Nichts davon wird gespeichert oder verschickt. Andere Apps werden nicht gelesen.</string>
+    <string name="shorts_hidden_toast">Shorts sind ausgeblendet</string>
+</resources>

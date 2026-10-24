@@ -1,0 +1,370 @@
+package app.fshorts.service
+
+import android.accessibilityservice.AccessibilityService
+import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.os.Build
+import android.os.SystemClock
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.compose.material.icons.filled.Home as FilledHome
+import androidx.compose.material.icons.filled.Subscriptions as FilledSubscriptions
+import androidx.compose.material.icons.outlined.Home as OutlinedHome
+import androidx.compose.material.icons.outlined.Subscriptions as OutlinedSubscriptions
+
+data class BarUiState(
+    val selected: TabKind?,
+    val labels: Map<TabKind, String>,
+    val subscriptionsBadge: Boolean,
+    val hasCreate: Boolean,
+    val style: BarStyle,
+)
+
+/**
+ * Unsere eigene untere Leiste. Liegt als Fenster genau über der echten YouTube-Leiste
+ * und hat keinen Shorts-Knopf.
+ */
+class BottomBarOverlay(
+    private val service: AccessibilityService,
+    private val onTap: (TabKind) -> Unit,
+    private val onLongPress: () -> Unit,
+) {
+    private val windowManager = service.getSystemService(WindowManager::class.java)
+    private var view: ComposeView? = null
+    private var lifecycleOwner: OverlayLifecycleOwner? = null
+
+    private var uiState by mutableStateOf<BarUiState?>(null)
+    private var optimistic: TabKind? = null
+    private var optimisticAt = 0L
+
+    private val target = Rect()
+    private var offsetX = 0
+    private var offsetY = 0
+    private var calibrations = 0
+    private var passThrough = false
+
+    var isShowing = false
+        private set
+
+    private val params = WindowManager.LayoutParams(
+        0,
+        0,
+        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        BASE_FLAGS,
+        PixelFormat.TRANSLUCENT,
+    ).apply {
+        gravity = Gravity.TOP or Gravity.START
+        windowAnimations = 0
+        title = "FuckShortsBar"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            fitInsetsTypes = 0
+        } else {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+    }
+
+    fun show(bounds: Rect, state: BarUiState) {
+        val keepOptimistic = optimistic != null &&
+            SystemClock.uptimeMillis() - optimisticAt < OPTIMISTIC_MS &&
+            state.selected != optimistic
+        uiState = if (keepOptimistic) state.copy(selected = optimistic) else state
+        target.set(bounds)
+
+        val v = view
+        if (v == null) {
+            isShowing = true
+            applyBounds()
+            params.flags = currentFlags()
+            create().also { windowManager.addView(it, params) }
+            return
+        }
+        var changed = applyBounds()
+        if (!isShowing) {
+            v.visibility = View.VISIBLE
+            isShowing = true
+            changed = true
+        }
+        val flags = currentFlags()
+        if (params.flags != flags) {
+            params.flags = flags
+            changed = true
+        }
+        if (changed) windowManager.updateViewLayout(v, params)
+    }
+
+    fun hide() {
+        val v = view ?: return
+        if (!isShowing) return
+        isShowing = false
+        v.visibility = View.INVISIBLE
+        params.flags = currentFlags()
+        windowManager.updateViewLayout(v, params)
+    }
+
+    /** Lässt Berührungen kurz durch unsere Leiste hindurch (für den Fallback-Tipp auf die echte Leiste). */
+    fun setPassThrough(enabled: Boolean) {
+        passThrough = enabled
+        val v = view ?: return
+        val flags = currentFlags()
+        if (params.flags != flags) {
+            params.flags = flags
+            windowManager.updateViewLayout(v, params)
+        }
+    }
+
+    fun destroy() {
+        view?.let { runCatching { windowManager.removeViewImmediate(it) } }
+        lifecycleOwner?.destroy()
+        view = null
+        lifecycleOwner = null
+        isShowing = false
+    }
+
+    private fun currentFlags(): Int =
+        if (!isShowing || passThrough) BASE_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else BASE_FLAGS
+
+    private fun applyBounds(): Boolean {
+        val x = target.left + offsetX
+        val y = target.top + offsetY
+        if (params.x == x && params.y == y && params.width == target.width() && params.height == target.height()) {
+            return false
+        }
+        params.x = x
+        params.y = y
+        params.width = target.width()
+        params.height = target.height()
+        return true
+    }
+
+    /** Falls Android das Fenster ein paar Pixel verschiebt (z. B. wegen Kamera-Loch), korrigieren wir das. */
+    private fun calibrate() {
+        val v = view ?: return
+        if (!isShowing || calibrations >= 3) return
+        val location = IntArray(2)
+        v.getLocationOnScreen(location)
+        val dx = target.left - location[0]
+        val dy = target.top - location[1]
+        if ((dx == 0 && dy == 0) || kotlin.math.abs(dx) > 300 || kotlin.math.abs(dy) > 300) return
+        calibrations++
+        offsetX += dx
+        offsetY += dy
+        if (applyBounds()) windowManager.updateViewLayout(v, params)
+    }
+
+    private fun create(): ComposeView {
+        val owner = OverlayLifecycleOwner().also { it.start() }
+        lifecycleOwner = owner
+        return ComposeView(service).apply {
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
+            setContent {
+                uiState?.let { state ->
+                    BottomBar(
+                        state = state,
+                        onTap = { kind ->
+                            if (kind != TabKind.CREATE) {
+                                optimistic = kind
+                                optimisticAt = SystemClock.uptimeMillis()
+                                uiState = uiState?.copy(selected = kind)
+                            }
+                            onTap(kind)
+                        },
+                        onLongPress = onLongPress,
+                    )
+                }
+            }
+            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> v.post { calibrate() } }
+            view = this
+        }
+    }
+
+    private companion object {
+        const val BASE_FLAGS = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        const val OPTIMISTIC_MS = 600L
+    }
+}
+
+@Composable
+private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: () -> Unit) {
+    val style = state.style
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(style.background),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val homeSelected = state.selected == TabKind.HOME
+        val subsSelected = state.selected == TabKind.SUBSCRIPTIONS
+        TabSlot(
+            modifier = Modifier.weight(1f),
+            kind = TabKind.HOME,
+            label = state.labels[TabKind.HOME] ?: "Startseite",
+            color = style.content,
+            onTap = onTap,
+            onLongPress = onLongPress,
+        ) {
+            TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content)
+        }
+        TabSlot(
+            modifier = Modifier.weight(1f),
+            kind = TabKind.SUBSCRIPTIONS,
+            label = state.labels[TabKind.SUBSCRIPTIONS] ?: "Abos",
+            color = style.content,
+            onTap = onTap,
+            onLongPress = onLongPress,
+        ) {
+            Box {
+                TabIcon(
+                    if (subsSelected) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
+                    style.content,
+                )
+                if (state.subscriptionsBadge) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 2.dp, y = (-1).dp)
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFF0033)),
+                    )
+                }
+            }
+        }
+        TabSlot(
+            modifier = Modifier.weight(1f),
+            kind = TabKind.YOU,
+            label = state.labels[TabKind.YOU] ?: "Mein YouTube",
+            color = style.content,
+            onTap = onTap,
+            onLongPress = onLongPress,
+        ) {
+            val avatar = style.avatar
+            if (avatar != null) {
+                val ring = if (state.selected == TabKind.YOU) {
+                    Modifier.border(1.5.dp, style.content, CircleShape)
+                } else {
+                    Modifier
+                }
+                Image(
+                    bitmap = avatar,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .then(ring),
+                )
+            } else {
+                TabIcon(Icons.Filled.AccountCircle, style.content)
+            }
+        }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .tapTarget(TabKind.CREATE, onTap, onLongPress),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (state.hasCreate) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(style.plusBackground),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = state.labels[TabKind.CREATE] ?: "Erstellen",
+                        tint = style.content,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabSlot(
+    modifier: Modifier,
+    kind: TabKind,
+    label: String,
+    color: Color,
+    onTap: (TabKind) -> Unit,
+    onLongPress: () -> Unit,
+    icon: @Composable () -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .tapTarget(kind, onTap, onLongPress),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        icon()
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            color = color,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun TabIcon(icon: ImageVector, tint: Color) {
+    Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+}
+
+private fun Modifier.tapTarget(kind: TabKind, onTap: (TabKind) -> Unit, onLongPress: () -> Unit) =
+    pointerInput(kind) {
+        detectTapGestures(
+            onTap = { onTap(kind) },
+            onLongPress = { onLongPress() },
+        )
+    }

@@ -1,0 +1,56 @@
+package app.fshorts.service
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+
+enum class TabKind { HOME, SHORTS, SUBSCRIPTIONS, YOU, CREATE }
+
+/**
+ * Regeln, mit denen wir die Teile der YouTube-App finden.
+ * Liegen in assets/selectors.json, damit wir sie ohne Code-Änderung anpassen können
+ * (später per Remote-Config).
+ */
+data class Selectors(
+    val youtubePackage: String,
+    val barIds: List<String>,
+    val maxBarHeightDp: Int,
+    val labels: Map<TabKind, List<String>>,
+    val searchLabels: List<String>,
+    val shortsPlayerIds: List<String>,
+    val coverIds: List<String>,
+    val badgeIdHints: List<String>,
+    val badgeTextHints: List<String>,
+) {
+    fun fullId(id: String) = if (id.contains(":id/")) id else "$youtubePackage:id/$id"
+
+    companion object {
+        fun load(context: Context): Selectors {
+            val json = context.assets.open("selectors.json").bufferedReader().use { it.readText() }
+            return parse(JSONObject(json))
+        }
+
+        private fun parse(o: JSONObject): Selectors {
+            val labels = o.getJSONObject("labels")
+            return Selectors(
+                youtubePackage = o.getString("youtubePackage"),
+                barIds = o.getJSONArray("barIds").toList(),
+                maxBarHeightDp = o.optInt("maxBarHeightDp", 100),
+                labels = mapOf(
+                    TabKind.HOME to labels.getJSONArray("home").toList(),
+                    TabKind.SHORTS to labels.getJSONArray("shorts").toList(),
+                    TabKind.SUBSCRIPTIONS to labels.getJSONArray("subscriptions").toList(),
+                    TabKind.YOU to labels.getJSONArray("you").toList(),
+                    TabKind.CREATE to labels.getJSONArray("create").toList(),
+                ),
+                searchLabels = o.getJSONArray("searchLabels").toList(),
+                shortsPlayerIds = o.getJSONArray("shortsPlayerIds").toList(),
+                coverIds = o.optJSONArray("coverIds")?.toList().orEmpty(),
+                badgeIdHints = o.getJSONArray("badgeIdHints").toList(),
+                badgeTextHints = o.getJSONArray("badgeTextHints").toList(),
+            )
+        }
+
+        private fun JSONArray.toList(): List<String> = List(length()) { getString(it) }
+    }
+}
