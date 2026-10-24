@@ -88,6 +88,29 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         return false
     }
 
+    /**
+     * True, wenn unten der kleine Mini-Player zu sehen ist. Sucht nach Elementen, deren ID "miniplayer"
+     * enthält (YouTube nennt sie z. B. modern_miniplayer_close). Geht den ganzen Baum durch, darum selten aufrufen.
+     */
+    fun isMiniPlayerVisible(root: AccessibilityNodeInfo, screen: Rect): Boolean {
+        var checked = 0
+        val r = Rect()
+        fun walk(node: AccessibilityNodeInfo, depth: Int): Boolean {
+            if (checked++ > 3000 || depth > 40) return false
+            val id = node.viewIdResourceName?.lowercase()
+            if (id != null && (id.contains("miniplayer") || id.contains("mini_player")) && node.isVisibleToUser) {
+                node.getBoundsInScreen(r)
+                if (r.height() in 1 until screen.height() / 2) return true
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                if (walk(child, depth + 1)) return true
+            }
+            return false
+        }
+        return walk(root, 0)
+    }
+
     /** True, wenn z. B. der grosse Video-Player über der Leiste liegt. */
     fun isBarCovered(root: AccessibilityNodeInfo, bar: FoundBar): Boolean {
         val r = Rect()

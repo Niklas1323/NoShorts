@@ -59,6 +59,8 @@ class FuckShortsService : AccessibilityService() {
     private var hiddenByScroll = false
     private var navFromRest = false
     private var watchPageOpen = false
+    private var miniPlayerOpen = false
+    private var lastMiniCheckAt = 0L
     private var lastNavAt = 0L
     private var restSince = 0L
     private var lastObservedTop = -1
@@ -212,13 +214,14 @@ class FuckShortsService : AccessibilityService() {
             handleShelfMenu(now)
             return
         }
-        val root = rootInActiveWindow
-        if (root == null || root.packageName?.toString() != selectors.youtubePackage || isKeyboardOpen()) {
+        val foreground = foregroundWindow()?.root
+        if (foreground == null || foreground.packageName?.toString() != selectors.youtubePackage || isKeyboardOpen()) {
             youTubeActive = false
             youTubeSince = 0L
             hideAll()
             return
         }
+        val root = youTubeMainRoot() ?: foreground
         youTubeActive = true
         if (youTubeSince == 0L) youTubeSince = now
         val newScreen = screenBounds()
@@ -228,6 +231,10 @@ class FuckShortsService : AccessibilityService() {
         }
         val bar = scanner.findBar(root, screen)
         watchPageOpen = scanner.isWatchPageOpen(root, screen)
+        if (now - lastMiniCheckAt > MINI_CHECK_MS) {
+            lastMiniCheckAt = now
+            miniPlayerOpen = scanner.isMiniPlayerVisible(root, screen)
+        }
 
         if (debugDumpWanted) {
             debugDumpWanted = false
@@ -324,11 +331,15 @@ class FuckShortsService : AccessibilityService() {
         }
         // Grundregel: Unsere Leiste bleibt stehen, egal was die echte macht (Scrollen, Menüs ...).
         // Ausnahme: Kurz nach einem Tipp fährt die ganz sichtbare echte Leiste raus (Video geöffnet): dann mit.
-        val followAfterTap = now - lastNavAt < NAV_LINK_MS && navFromRest
+        // Mit Mini-Player fahren wir immer mit der echten Leiste mit: YouTube setzt den Mini-Player direkt
+        // über seine Leiste. Bliebe unsere stehen, läge der Mini-Player darunter.
+        val followAfterTap = (now - lastNavAt < NAV_LINK_MS && navFromRest) || miniPlayerOpen
         if (observedTop != null && observedTop <= rest.top + 2) {
             hiddenByScroll = false
         } else if (!followAfterTap && overlay.isShowing) {
             hiddenByScroll = true
+        } else if (miniPlayerOpen) {
+            hiddenByScroll = false
         }
         if (observedTop == null && !hiddenByScroll) {
             // Die Leiste gibt es nicht mehr (anderer Bildschirm).
@@ -407,7 +418,7 @@ class FuckShortsService : AccessibilityService() {
         // Menüpunkt nicht gefunden: Menü schliessen, Aufbau speichern, in dieser Sitzung nicht mehr probieren.
         shelfMenuOpenedAt = 0L
         shelfHideBroken = true
-        val active = rootInActiveWindow
+        val active = foregroundWindow()?.root
         if (active != null && active.packageName?.toString() == selectors.youtubePackage) {
             dumper.dump(active, windows, "regal-menue")
             performGlobalAction(GLOBAL_ACTION_BACK)
@@ -432,23 +443,62 @@ class FuckShortsService : AccessibilityService() {
     }
 
     private fun onTabTapped(kind: TabKind) {
-        val root = rootInActiveWindow ?: return
-        if (root.packageName?.toString() != selectors.youtubePackage) return
+        val root = youTubeMainRoot() ?: run {
+            tapLog("$kind: kein YouTube-Fenster gefunden")
+            return
+        }
         // Ist die echte Leiste gerade weggescrollt, nehmen wir die zuletzt gefundene: Klicks gehen trotzdem.
-        val bar = scanner.findBar(root, screenBounds()) ?: lastBar
+        val fresh = scanner.findBar(root, screenBounds())
+        val bar = fresh ?: lastBar
         val node = bar?.nodes?.get(kind)
-        val bounds = bar?.tabs?.get(kind)?.bounds
-        if (node == null || bounds == null || !node.refresh()) {
-            Log.w(TAG, "Tab $kind nicht gefunden")
+        if (node == null) {
+            tapLog("$kind: Tab nicht gefunden (Leiste ${if (fresh == null) "weg" else "da"})")
             dumper.dump(root, windows, "tab-$kind-nicht-gefunden")
             return
         }
-        if (!click(node)) tapThrough(bounds)
+        node.refresh()
+        val clicked = click(node)
+        tapLog("$kind: Klick ${if (clicked) "ok" else "fehlgeschlagen"}")
+        if (!clicked) {
+            tapThroughIfVisible(kind)
+        } else if (kind != TabKind.CREATE) {
+            // Nachprüfen: Ist der Tab jetzt wirklich ausgewählt? Sonst echter Finger-Tipp.
+            handler.postDelayed({ verifyTab(kind) }, VERIFY_MS)
+        }
         scheduleScan()
     }
 
+    private fun verifyTab(kind: TabKind) {
+        val root = youTubeMainRoot() ?: return
+        val bar = scanner.findBar(root, screen) ?: return
+        if (bar.tabs[kind]?.selected == true) return
+        tapLog("$kind: nach Klick nicht ausgewählt, versuche Finger-Tipp")
+        tapThroughIfVisible(kind)
+    }
+
+    /** Finger-Tipp auf den echten Tab, aber nur wenn die echte Leiste ganz da ist (sonst träfe er ein Video). */
+    private fun tapThroughIfVisible(kind: TabKind) {
+        val root = youTubeMainRoot() ?: return
+        val bar = scanner.findBar(root, screen)
+        val bounds = bar?.tabs?.get(kind)?.bounds
+        if (bar == null || bounds == null || bar.bounds != restBounds) {
+            tapLog("$kind: echte Leiste nicht ganz sichtbar, kein Finger-Tipp")
+            return
+        }
+        tapThrough(bounds)
+    }
+
+    private fun tapLog(line: String) {
+        Log.i(TAG, "Tipp: $line")
+        runCatching {
+            val file = java.io.File(TreeDumper.dumpDir(this).apply { mkdirs() }, "tipps.txt")
+            if (file.length() > 20_000) file.delete()
+            file.appendText("${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.ROOT).format(java.util.Date())} $line\n")
+        }
+    }
+
     private fun onBarLongPressed() {
-        val root = rootInActiveWindow ?: return
+        val root = youTubeMainRoot() ?: return
         val file = dumper.dump(root, windows, "manuell")
         val text = if (file != null) "Struktur gespeichert" else "Struktur konnte nicht gespeichert werden"
         Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
@@ -489,6 +539,31 @@ class FuckShortsService : AccessibilityService() {
         }, 40)
     }
 
+    /**
+     * Das Fenster, das gerade vorne ist. Unsere eigenen Fenster zählen nicht: Tippt man auf unsere Leiste,
+     * hält Android sonst unsere Leiste für das aktive Fenster.
+     */
+    private fun foregroundWindow(): AccessibilityWindowInfo? {
+        val all = windows
+        val active = all.firstOrNull { it.isActive }
+        if (active != null && !isOurs(active)) return active
+        return all.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !isOurs(it) }.maxByOrNull { it.layer }
+    }
+
+    private fun isOurs(window: AccessibilityWindowInfo): Boolean =
+        window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY ||
+            window.root?.packageName?.toString() == packageName
+
+    /** Das Hauptfenster von YouTube (das grösste). Dort liegen Leiste und Startseite, auch wenn ein Menü offen ist. */
+    private fun youTubeMainRoot(): AccessibilityNodeInfo? {
+        val r = Rect()
+        return windows
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            .mapNotNull { w -> w.root?.takeIf { it.packageName?.toString() == selectors.youtubePackage }?.let { w to it } }
+            .maxByOrNull { (w, _) -> w.getBoundsInScreen(r); r.width().toLong() * r.height() }
+            ?.second
+    }
+
     private fun isKeyboardOpen(): Boolean =
         windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
 
@@ -506,6 +581,8 @@ class FuckShortsService : AccessibilityService() {
         private const val POLL_MS = 16L
         private const val POLL_DURATION_MS = 500L
         private const val NAV_LINK_MS = 1_500L
+        private const val VERIFY_MS = 400L
+        private const val MINI_CHECK_MS = 400L
         private const val ICON_CENTER_DP = 20f
         private const val LABEL_TOP_DP = 32.5f
         private const val REST_STABLE_MS = 300L

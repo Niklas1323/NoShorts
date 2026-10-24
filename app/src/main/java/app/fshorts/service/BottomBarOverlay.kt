@@ -368,11 +368,10 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                 if (state.hasCreate) {
                     // Wie im Vorlagenbild: Plus-Kreis etwas unter der Icon-Reihe (Mitte 25,5 dp ab Oberkante).
                     val plusCenter = with(density) { 25.5.dp.roundToPx() }
-                    IconArea(plusCenter, Alignment.CenterEnd) {
-                        // Runder Knopf rechts aussen (wie im Vorlagenbild), Plus mit dünnen Linien.
+                    IconArea(plusCenter) {
+                        // Runder Knopf, mittig in seiner Spalte: alle vier Elemente haben gleichen Abstand.
                         Box(
                             modifier = Modifier
-                                .padding(end = 20.dp)
                                 .size(36.dp)
                                 .clip(CircleShape)
                                 .background(style.plusBackground),
