@@ -32,6 +32,7 @@ class FuckShortsService : AccessibilityService() {
     private lateinit var selectors: Selectors
     private lateinit var scanner: YouTubeScanner
     private lateinit var overlay: BottomBarOverlay
+    private lateinit var covers: ShelfCovers
     private lateinit var dumper: TreeDumper
     private lateinit var sampler: BarStyleSampler
 
@@ -48,6 +49,11 @@ class FuckShortsService : AccessibilityService() {
     private var debugDumpWanted = false
     private var nightMode = 0
 
+    // Automatisches "Nicht interessiert" auf dem Shorts-Regal.
+    private var shelfMenuOpenedAt = 0L
+    private var lastShelfHideAt = 0L
+    private var shelfHideBroken = false
+
     private val scanRunnable = Runnable {
         scanPending = false
         lastScanAt = SystemClock.uptimeMillis()
@@ -61,6 +67,7 @@ class FuckShortsService : AccessibilityService() {
         super.onServiceConnected()
         selectors = Selectors.load(this)
         scanner = YouTubeScanner(selectors, resources.displayMetrics.density)
+        covers = ShelfCovers(this)
         overlay = BottomBarOverlay(this, ::onTabTapped, ::onBarLongPressed)
         dumper = TreeDumper(this)
         sampler = BarStyleSampler(this)
@@ -81,7 +88,7 @@ class FuckShortsService : AccessibilityService() {
             }
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED -> scheduleScan()
-            overlay.isShowing -> scheduleScan()
+            overlay.isShowing || shelfMenuOpenedAt != 0L -> scheduleScan()
         }
     }
 
@@ -95,7 +102,7 @@ class FuckShortsService : AccessibilityService() {
             nightMode = night
             sampler.reset()
         }
-        overlay.hide()
+        hideAll()
         scheduleScan()
     }
 
@@ -104,6 +111,7 @@ class FuckShortsService : AccessibilityService() {
         connected = false
         handler.removeCallbacksAndMessages(null)
         if (::overlay.isInitialized) overlay.destroy()
+        if (::covers.isInitialized) covers.destroy()
         super.onDestroy()
     }
 
@@ -121,19 +129,28 @@ class FuckShortsService : AccessibilityService() {
         } catch (e: Exception) {
             // Lieber nichts anzeigen als YouTube blockieren.
             Log.w(TAG, "Scan fehlgeschlagen", e)
-            overlay.hide()
+            hideAll()
         }
-        if (overlay.isShowing) handler.postDelayed(watchdog, WATCHDOG_MS)
+        if (overlay.isShowing || covers.anyVisible) handler.postDelayed(watchdog, WATCHDOG_MS)
+    }
+
+    private fun hideAll() {
+        overlay.hide()
+        covers.hideAll()
     }
 
     private fun scanInternal() {
+        val now = SystemClock.uptimeMillis()
+        if (shelfMenuOpenedAt != 0L) {
+            handleShelfMenu(now)
+            return
+        }
         val root = rootInActiveWindow
         if (root == null || root.packageName?.toString() != selectors.youtubePackage || isKeyboardOpen()) {
             youTubeSince = 0L
-            overlay.hide()
+            hideAll()
             return
         }
-        val now = SystemClock.uptimeMillis()
         if (youTubeSince == 0L) youTubeSince = now
         val screen = screenBounds()
         val bar = scanner.findBar(root, screen)
@@ -147,10 +164,15 @@ class FuckShortsService : AccessibilityService() {
         }
 
         if (scanner.isShortsScreen(root, bar, screen)) {
-            overlay.hide()
+            hideAll()
             leaveShorts()
             return
         }
+
+        val currentStyle = sampler.style ?: BarStyle.default(nightMode == Configuration.UI_MODE_NIGHT_YES)
+        val shelves = scanner.findShelves(root, screen, bar?.bounds?.top ?: screen.bottom)
+        covers.show(shelves.map { it.bounds }, currentStyle)
+        if (shelves.isNotEmpty()) tryHideShelf(shelves, now)
 
         if (bar == null) {
             overlay.hide()
@@ -169,7 +191,8 @@ class FuckShortsService : AccessibilityService() {
         }
 
         // Beim allerersten Mal Farbe und Profilbild von der echten Leiste abschauen.
-        if (sampler.style == null && !sampler.attempted) {
+        val firstSample = sampler.style == null && !sampler.attempted
+        if (firstSample || (!overlay.isShowing && sampler.wantsAvatarRetry(bar))) {
             overlay.hide()
             sampler.sample(bar) { scheduleScan() }
             return
@@ -184,6 +207,42 @@ class FuckShortsService : AccessibilityService() {
             style = style,
         )
         overlay.show(bar.bounds, state)
+    }
+
+    /** Tippt auf ⋮ beim Shorts-Regal. Den Menüpunkt "Nicht interessiert" wählt [handleShelfMenu]. */
+    private fun tryHideShelf(shelves: List<Shelf>, now: Long) {
+        if (shelfHideBroken || !Prefs.autoHideShelf(this)) return
+        if (now - lastShelfHideAt < SHELF_HIDE_INTERVAL_MS) return
+        val button = shelves.firstNotNullOfOrNull { it.menuButton } ?: return
+        lastShelfHideAt = now
+        if (button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            shelfMenuOpenedAt = now
+            handler.postDelayed({ scheduleScan() }, 150)
+        }
+    }
+
+    private fun handleShelfMenu(now: Long) {
+        val roots = windows.mapNotNull { it.root }.filter { it.packageName?.toString() == selectors.youtubePackage }
+        val item = scanner.findMenuItem(roots, selectors.shelfHideLabels)
+        if (item != null) {
+            shelfMenuOpenedAt = 0L
+            if (click(item)) Prefs.incrementShelvesHidden(this)
+            scheduleScan()
+            return
+        }
+        if (now - shelfMenuOpenedAt < SHELF_MENU_TIMEOUT_MS) {
+            handler.postDelayed({ scheduleScan() }, 100)
+            return
+        }
+        // Menüpunkt nicht gefunden: Menü schliessen, Aufbau speichern, in dieser Sitzung nicht mehr probieren.
+        shelfMenuOpenedAt = 0L
+        shelfHideBroken = true
+        val active = rootInActiveWindow
+        if (active != null && active.packageName?.toString() == selectors.youtubePackage) {
+            dumper.dump(active, windows, "regal-menue")
+            performGlobalAction(GLOBAL_ACTION_BACK)
+        }
+        scheduleScan()
     }
 
     private fun leaveShorts() {
@@ -279,6 +338,8 @@ class FuckShortsService : AccessibilityService() {
         private const val AUTO_DUMP_AFTER_MS = 2_000L
         private const val AUTO_DUMP_INTERVAL_MS = 20_000L
         private const val DEBUG_DUMP_INTERVAL_MS = 3_000L
+        private const val SHELF_HIDE_INTERVAL_MS = 60_000L
+        private const val SHELF_MENU_TIMEOUT_MS = 1_500L
 
         @Volatile
         var running = false

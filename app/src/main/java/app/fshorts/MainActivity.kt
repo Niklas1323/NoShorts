@@ -80,6 +80,7 @@ private fun MainScreen() {
     var debug by remember { mutableStateOf(Prefs.debugDumps(context)) }
     var dumpCount by remember { mutableIntStateOf(TreeDumper.files(context).size) }
     var blocked by remember { mutableIntStateOf(Prefs.shortsBlocked(context)) }
+    var autoHide by remember { mutableStateOf(Prefs.autoHideShelf(context)) }
 
     LifecycleResumeEffect(Unit) {
         enabled = isServiceEnabled(context)
@@ -118,6 +119,23 @@ private fun MainScreen() {
             } else {
                 Button(onClick = { openYouTube(context) }, modifier = Modifier.fillMaxWidth()) {
                     Text("YouTube öffnen")
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Shorts-Regal wegklicken", fontWeight = FontWeight.Bold)
+                        Text(
+                            "Die App tippt beim Shorts-Regal auf ⋮ → \"Nicht interessiert\". " +
+                                "Dann blendet YouTube das Regal selbst aus.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Switch(checked = autoHide, onCheckedChange = {
+                        autoHide = it
+                        Prefs.setAutoHideShelf(context, it)
+                    })
                 }
             }
 
@@ -194,7 +212,7 @@ private fun SetupCard(context: Context) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("So schaltest du es ein", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("1. Tippe auf \"Bedienungshilfen öffnen\".")
-            Text("2. Tippe auf \"Fuck Shorts\" und schalte es ein.")
+            Text("2. Schalte \"Fuck Shorts\" ein.")
             Button(onClick = { openAccessibilitySettings(context) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Bedienungshilfen öffnen")
             }
@@ -256,8 +274,16 @@ private fun isServiceEnabled(context: Context): Boolean {
     }
 }
 
+/** Öffnet direkt die Seite von Fuck Shorts in den Bedienungshilfen (spart einen Schritt), sonst die Liste. */
 private fun openAccessibilitySettings(context: Context) {
-    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    val component = ComponentName(context, FuckShortsService::class.java).flattenToString()
+    val details = Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS")
+        .putExtra(Intent.EXTRA_COMPONENT_NAME, component)
+    try {
+        context.startActivity(details)
+    } catch (e: Exception) {
+        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
 }
 
 private fun openAppInfo(context: Context) {

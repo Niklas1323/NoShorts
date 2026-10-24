@@ -21,6 +21,8 @@ data class Selectors(
     val coverIds: List<String>,
     val badgeIdHints: List<String>,
     val badgeTextHints: List<String>,
+    val shelfHeaderLabels: List<String>,
+    val shelfHideLabels: List<String>,
 ) {
     fun fullId(id: String) = if (id.contains(":id/")) id else "$youtubePackage:id/$id"
 
@@ -48,6 +50,8 @@ data class Selectors(
                 coverIds = o.optJSONArray("coverIds")?.toList().orEmpty(),
                 badgeIdHints = o.getJSONArray("badgeIdHints").toList(),
                 badgeTextHints = o.getJSONArray("badgeTextHints").toList(),
+                shelfHeaderLabels = o.optJSONArray("shelfHeaderLabels")?.toList() ?: listOf("Shorts"),
+                shelfHideLabels = o.optJSONArray("shelfHideLabels")?.toList().orEmpty(),
             )
         }
 

@@ -7,6 +7,8 @@ object Prefs {
     private const val DISCLOSURE = "disclosure_accepted"
     private const val DEBUG_DUMPS = "debug_dumps"
     private const val SHORTS_BLOCKED = "shorts_blocked"
+    private const val AUTO_HIDE_SHELF = "auto_hide_shelf"
+    private const val SHELVES_HIDDEN = "shelves_hidden"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -19,4 +21,12 @@ object Prefs {
     fun shortsBlocked(context: Context) = prefs(context).getInt(SHORTS_BLOCKED, 0)
     fun incrementShortsBlocked(context: Context) =
         prefs(context).edit().putInt(SHORTS_BLOCKED, shortsBlocked(context) + 1).apply()
+
+    fun autoHideShelf(context: Context) = prefs(context).getBoolean(AUTO_HIDE_SHELF, true)
+    fun setAutoHideShelf(context: Context, on: Boolean) =
+        prefs(context).edit().putBoolean(AUTO_HIDE_SHELF, on).apply()
+
+    fun shelvesHidden(context: Context) = prefs(context).getInt(SHELVES_HIDDEN, 0)
+    fun incrementShelvesHidden(context: Context) =
+        prefs(context).edit().putInt(SHELVES_HIDDEN, shelvesHidden(context) + 1).apply()
 }

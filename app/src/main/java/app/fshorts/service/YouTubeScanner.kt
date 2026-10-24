@@ -18,6 +18,11 @@ class FoundBar(
     val nodes: Map<TabKind, AccessibilityNodeInfo>,
 )
 
+class Shelf(
+    val bounds: Rect,
+    val menuButton: AccessibilityNodeInfo?,
+)
+
 /**
  * Sucht in der YouTube-Oberfläche die untere Leiste, ihre Tabs und den Shorts-Player.
  * Verlässt sich nicht nur auf View-IDs: Wenn die ID nicht passt, suchen wir über die
@@ -72,6 +77,83 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         }
         return false
     }
+
+    /**
+     * Findet Shorts-Regale (Überschrift "Shorts" + Karten) in der scrollbaren Liste.
+     * [limitBottom] ist die Oberkante unserer Leiste, darunter wird nichts abgedeckt.
+     */
+    fun findShelves(root: AccessibilityNodeInfo, screen: Rect, limitBottom: Int): List<Shelf> {
+        val result = mutableListOf<Shelf>()
+        for (label in sel.shelfHeaderLabels) {
+            for (hit in root.findAccessibilityNodeInfosByText(label)) {
+                if (!hit.isVisibleToUser) continue
+                if (!ownLabel(hit).equals(label, ignoreCase = true)) continue
+                val hb = hit.bounds()
+                if (hb.top >= limitBottom || hb.left > screen.width() * 0.4) continue
+                val shelf = shelfFor(hit, hb, screen, limitBottom) ?: continue
+                if (result.none { Rect.intersects(it.bounds, shelf.bounds) }) result += shelf
+            }
+        }
+        return result
+    }
+
+    private fun shelfFor(hit: AccessibilityNodeInfo, headerBounds: Rect, screen: Rect, limitBottom: Int): Shelf? {
+        val path = mutableListOf<AccessibilityNodeInfo>()
+        var node: AccessibilityNodeInfo? = hit
+        while (node != null && path.size < 40) {
+            path += node
+            node = node.parent
+        }
+        val feedIdx = path.indexOfFirst { it.isScrollable && it.bounds().height() >= screen.height() * 0.4 }
+        if (feedIdx <= 0) return null
+        // Liegt die Überschrift in einer seitlich scrollbaren Leiste (z. B. Kanal-Tabs), ist es kein Regal.
+        if (path.subList(0, feedIdx).any { it.isScrollable }) return null
+
+        val feed = path[feedIdx]
+        val item = path[feedIdx - 1]
+        val bounds = item.bounds()
+        if (bounds.height() < 160 * density) {
+            // Überschrift und Karten sind getrennte Einträge in der Liste: den nächsten Eintrag dazunehmen.
+            val index = (0 until feed.childCount).firstOrNull { feed.getChild(it) == item }
+            index?.let { feed.getChild(it + 1) }?.let { bounds.union(it.bounds()) }
+        }
+        if (bounds.height() > screen.height() * 0.8) return null
+        if (!bounds.intersect(feed.bounds())) return null
+        if (bounds.bottom > limitBottom) bounds.bottom = limitBottom
+        if (bounds.height() <= 0) return null
+
+        return Shelf(bounds, findMenuButton(item, headerBounds, screen, 0))
+    }
+
+    /** Der ⋮-Knopf rechts neben der Überschrift "Shorts". */
+    private fun findMenuButton(node: AccessibilityNodeInfo, header: Rect, screen: Rect, depth: Int): AccessibilityNodeInfo? {
+        val r = node.bounds()
+        val tolerance = (40 * density).toInt()
+        val nearHeader = r.centerY() in (header.top - tolerance)..(header.bottom + tolerance)
+        if (node.isClickable && nearHeader && r.centerX() > screen.width() * 0.8 && r.width() <= 72 * density) {
+            return node
+        }
+        if (depth >= 8) return null
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { child -> findMenuButton(child, header, screen, depth + 1)?.let { return it } }
+        }
+        return null
+    }
+
+    /** Sucht in allen YouTube-Fenstern einen Menüpunkt wie "Nicht interessiert". */
+    fun findMenuItem(roots: List<AccessibilityNodeInfo>, labels: List<String>): AccessibilityNodeInfo? {
+        for (root in roots) {
+            for (label in labels) {
+                for (hit in root.findAccessibilityNodeInfosByText(label)) {
+                    val own = ownLabel(hit) ?: continue
+                    if (hit.isVisibleToUser && own.equals(label, ignoreCase = true)) return hit
+                }
+            }
+        }
+        return null
+    }
+
+    private fun AccessibilityNodeInfo.bounds(): Rect = Rect().also { getBoundsInScreen(it) }
 
     private fun climbToBar(hit: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
         if (!hit.isVisibleToUser) return null
