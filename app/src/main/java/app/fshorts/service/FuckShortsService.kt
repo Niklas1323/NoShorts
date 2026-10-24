@@ -56,14 +56,9 @@ class FuckShortsService : AccessibilityService() {
     private var restBounds: Rect? = null
     private var lastBar: FoundBar? = null
     private var lastUiState: BarUiState? = null
-    private var hiddenByScroll = false
-    private var navFromRest = false
     private var watchPageOpen = false
-    private var miniPlayerOpen = false
-    private var lastMiniCheckAt = 0L
-    private var lastNavAt = 0L
+    private var barMissingSince = 0L
     private var restSince = 0L
-    private var lastObservedTop = -1
     private var pollUntil = 0L
     private var polling = false
 
@@ -120,11 +115,7 @@ class FuckShortsService : AccessibilityService() {
         when {
             pkg == selectors.youtubePackage -> {
                 when (event.eventType) {
-                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                        debugDumpWanted = true
-                        onNavigation()
-                    }
-                    AccessibilityEvent.TYPE_VIEW_CLICKED -> onNavigation()
+                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> debugDumpWanted = true
                     AccessibilityEvent.TYPE_VIEW_SCROLLED -> onScrolled()
                 }
                 // Jede Änderung kann heissen, dass die Leiste gerade rein- oder rausfährt: Bild für Bild nachführen.
@@ -182,15 +173,6 @@ class FuckShortsService : AccessibilityService() {
         startPolling()
     }
 
-    /**
-     * Ein Tipp in YouTube. Nur wenn die echte Leiste dabei ganz da war, darf unsere danach mit ihr verschwinden
-     * (z. B. Video geöffnet). War sie weggescrollt (z. B. Tipp auf ⋮), bleibt unsere stehen.
-     */
-    private fun onNavigation() {
-        lastNavAt = SystemClock.uptimeMillis()
-        navFromRest = !hiddenByScroll
-    }
-
     private fun scan() {
         handler.removeCallbacks(watchdog)
         try {
@@ -222,7 +204,12 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         val root = youTubeMainRoot() ?: foreground
-        youTubeActive = true
+        if (!youTubeActive) {
+            // YouTube kommt gerade nach vorne: unsere Leiste sofort zeigen (gemerkte Lage), nicht erst nach dem Suchen.
+            youTubeActive = true
+            barMissingSince = 0L
+            updateBar(now, null)
+        }
         if (youTubeSince == 0L) youTubeSince = now
         val newScreen = screenBounds()
         if (newScreen != screen) {
@@ -231,10 +218,6 @@ class FuckShortsService : AccessibilityService() {
         }
         val bar = scanner.findBar(root, screen)
         watchPageOpen = scanner.isWatchPageOpen(root, screen)
-        if (now - lastMiniCheckAt > MINI_CHECK_MS) {
-            lastMiniCheckAt = now
-            miniPlayerOpen = scanner.isMiniPlayerVisible(root, screen)
-        }
 
         if (debugDumpWanted) {
             debugDumpWanted = false
@@ -283,7 +266,7 @@ class FuckShortsService : AccessibilityService() {
                 )
             }
         } else if (lastBar == null) {
-            hideAll()
+            updateBar(now, null)
             val stuck = !barSeenOnce && now - youTubeSince > AUTO_DUMP_AFTER_MS
             if (stuck && now - lastAutoDumpAt > AUTO_DUMP_INTERVAL_MS) {
                 lastAutoDumpAt = now
@@ -317,47 +300,25 @@ class FuckShortsService : AccessibilityService() {
     private fun updateBar(now: Long, fresh: FoundBar?) {
         val rest = restBounds
         val state = lastUiState
-        if (rest == null || state == null) {
+        if (rest == null || state == null || watchPageOpen) {
             overlay.hide()
             return
         }
-        val observedTop = when {
-            fresh != null -> fresh.bounds.top
-            else -> lastBar?.let { scanner.liveTop(it.container, screen) }
+        // Unsere Leiste bewegt sich nie. Sie steht immer an der Stelle der echten Leiste, egal ob die echte
+        // gerade rein- oder rausfährt. Sie verschwindet nur bei grossem Video oder wenn es die Leiste
+        // auf diesem Bildschirm gar nicht gibt (dann erst nach kurzer Zeit, damit nichts flackert).
+        val barExists = fresh != null || lastBar?.let { scanner.liveTop(it.container, screen) } != null
+        if (barExists) {
+            barMissingSince = 0L
+        } else if (barMissingSince == 0L) {
+            barMissingSince = now
         }
-        if (watchPageOpen) {
-            overlay.hide()
-            return
-        }
-        // Grundregel: Unsere Leiste bleibt stehen, egal was die echte macht (Scrollen, Menüs ...).
-        // Ausnahme: Kurz nach einem Tipp fährt die ganz sichtbare echte Leiste raus (Video geöffnet): dann mit.
-        // Mit Mini-Player fahren wir immer mit der echten Leiste mit: YouTube setzt den Mini-Player direkt
-        // über seine Leiste. Bliebe unsere stehen, läge der Mini-Player darunter.
-        val followAfterTap = (now - lastNavAt < NAV_LINK_MS && navFromRest) || miniPlayerOpen
-        if (observedTop != null && observedTop <= rest.top + 2) {
-            hiddenByScroll = false
-        } else if (!followAfterTap && overlay.isShowing) {
-            hiddenByScroll = true
-        } else if (miniPlayerOpen) {
-            hiddenByScroll = false
-        }
-        if (observedTop == null && !hiddenByScroll) {
-            // Die Leiste gibt es nicht mehr (anderer Bildschirm).
+        if (!barExists && now - barMissingSince > MISSING_HIDE_MS) {
             lastBar = null
             overlay.hide()
             return
         }
-        // Fährt die echte Leiste gerade rein (z. B. nach dem Verlassen eines Videos), springt unsere sofort
-        // an ihren Platz. So liegt unsere immer über der echten und die echte ist nie zu sehen.
-        val visibleNow = observedTop != null && observedTop < screen.bottom - 2
-        val slidingIn = visibleNow && (!overlay.isShowing || (lastObservedTop >= 0 && observedTop!! < lastObservedTop - 1))
-        lastObservedTop = observedTop ?: -1
-        val top = if (hiddenByScroll || observedTop == null || slidingIn) rest.top else observedTop.coerceAtLeast(rest.top)
-        if (top >= screen.bottom - 2) {
-            overlay.hide()
-        } else {
-            overlay.show(top, rest, state.copy(style = currentStyle()))
-        }
+        overlay.show(rest.top, rest, state.copy(style = currentStyle()))
     }
 
     private fun updateShelfPositions() {
@@ -580,9 +541,8 @@ class FuckShortsService : AccessibilityService() {
         private const val MIN_SCAN_INTERVAL_MS = 40L
         private const val POLL_MS = 16L
         private const val POLL_DURATION_MS = 500L
-        private const val NAV_LINK_MS = 1_500L
         private const val VERIFY_MS = 400L
-        private const val MINI_CHECK_MS = 400L
+        private const val MISSING_HIDE_MS = 800L
         private const val ICON_CENTER_DP = 20f
         private const val LABEL_TOP_DP = 32.5f
         private const val REST_STABLE_MS = 300L
