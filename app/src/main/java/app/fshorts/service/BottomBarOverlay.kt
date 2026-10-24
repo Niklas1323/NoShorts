@@ -40,6 +40,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -269,7 +271,12 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                 onTap = onTap,
                 onLongPress = onLongPress,
             ) {
-                TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content)
+                val mask = style.icons[BarStyle.iconKey(TabKind.HOME, homeSelected)]
+                if (mask != null) {
+                    MaskIcon(mask, style.content)
+                } else {
+                    TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content)
+                }
             }
             TabSlot(
                 modifier = Modifier.weight(1f),
@@ -279,16 +286,23 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                 onTap = onTap,
                 onLongPress = onLongPress,
             ) {
+                val mask = style.icons[BarStyle.iconKey(TabKind.SUBSCRIPTIONS, subsSelected)]
                 Box {
-                    TabIcon(
-                        if (subsSelected) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
-                        style.content,
-                    )
+                    if (mask != null) {
+                        MaskIcon(mask, style.content)
+                    } else {
+                        TabIcon(
+                            if (subsSelected) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
+                            style.content,
+                        )
+                    }
                     if (state.subscriptionsBadge) {
+                        // Echte Masken sind 28 dp gross (Icon 24 dp + Rand), darum etwas weniger verschieben.
+                        val shift = if (mask != null) 1.dp else 3.dp
                         Box(
                             Modifier
                                 .align(Alignment.TopEnd)
-                                .offset(x = 3.dp, y = (-3).dp)
+                                .offset(x = shift, y = -shift)
                                 .size(10.dp)
                                 .clip(CircleShape)
                                 .background(style.background)
@@ -352,8 +366,8 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                         // Runder Knopf rechts aussen (wie im Vorlagenbild), Plus mit dünnen Linien.
                         Box(
                             modifier = Modifier
-                                .padding(end = 18.dp)
-                                .size(40.dp)
+                                .padding(end = 20.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .background(style.plusBackground),
                             contentAlignment = Alignment.Center,
@@ -441,6 +455,18 @@ private fun Label(text: String, color: Color, modifier: Modifier = Modifier) {
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier,
+    )
+}
+
+/** Echtes YouTube-Icon (weisse Maske aus der echten Leiste), in Originalgrösse und unserer Farbe. */
+@Composable
+private fun MaskIcon(mask: ImageBitmap, tint: Color) {
+    val size = with(LocalDensity.current) { mask.width.toDp() }
+    Image(
+        bitmap = mask,
+        contentDescription = null,
+        colorFilter = ColorFilter.tint(tint),
+        modifier = Modifier.size(size),
     )
 }
 

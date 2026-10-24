@@ -12,9 +12,9 @@ import android.view.Display
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.luminance
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 data class BarStyle(
@@ -22,169 +22,244 @@ data class BarStyle(
     val content: Color,
     val plusBackground: Color,
     val avatar: ImageBitmap?,
+    /** Echte YouTube-Icons als weisse Masken, Schlüssel siehe [iconKey]. */
+    val icons: Map<String, ImageBitmap>,
 ) {
     companion object {
-        // Feste Farben statt abgeschauter Farbe: Die echte YouTube-Leiste ist durchsichtig, darum wäre eine
-        // abgeschaute Farbe je nach Video darunter mal braun, mal blau. Unsere Leiste muss deckend sein,
-        // sonst scheint der Shorts-Knopf durch.
-        fun default(dark: Boolean, avatar: ImageBitmap? = null) = BarStyle(
-            background = if (dark) Color(0xFF0F0F0F) else Color.White,
-            content = if (dark) Color(0xFFF1F1F1) else Color(0xFF0F0F0F),
-            plusBackground = if (dark) Color(0xFF272727) else Color(0xFFF2F2F2),
-            avatar = avatar,
-        )
+        // Feste, deckende Farben: Die echte Leiste ist durchsichtig, über dunklen Seiten aber praktisch #0F0F0F.
+        // Unsere muss deckend sein, sonst scheint der Shorts-Knopf durch.
+        fun default(dark: Boolean, avatar: ImageBitmap? = null, icons: Map<String, ImageBitmap> = emptyMap()) =
+            BarStyle(
+                background = if (dark) Color(0xFF0F0F0F) else Color.White,
+                content = if (dark) Color(0xFFF1F1F1) else Color(0xFF0F0F0F),
+                plusBackground = if (dark) Color(0xFF272727) else Color(0xFFF2F2F2),
+                avatar = avatar,
+                icons = icons,
+            )
+
+        fun iconKey(kind: TabKind, selected: Boolean) = "${kind.name}_$selected"
     }
 }
 
 /**
- * Macht ein Bildschirmfoto, solange unsere Leiste noch nicht sichtbar ist, und schneidet daraus
- * dein Profilbild genau so aus, wie YouTube es zeigt. Das Profilbild wird in der App gespeichert,
- * damit es beim nächsten Mal sofort da ist. Sonst wird nichts gespeichert.
+ * Schaut sich die echte YouTube-Leiste an und übernimmt daraus Pixel für Pixel:
+ * - die Icons (Startseite, Abos) als Masken, je Zustand (ausgewählt / nicht ausgewählt)
+ * - dein Profilbild
+ *
+ * Ab Android 14 fotografieren wir nur das YouTube-Fenster, unsere Leiste ist dabei nicht im Bild.
+ * Darum geht das jederzeit, ohne dass unsere Leiste verschwinden muss.
+ * Icons und Profilbild werden in der App gespeichert, damit sie beim nächsten Mal sofort da sind.
  */
 class BarStyleSampler(private val service: AccessibilityService) {
 
-    var style: BarStyle? = null
-        private set
-    var attempted = false
-        private set
-    private var attempts = 0
+    private val density = service.resources.displayMetrics.density
+    private val dir = File(service.filesDir, "bar").apply { mkdirs() }
+    private val avatarFile = File(dir, "avatar.png")
+
+    private var avatar: ImageBitmap? = load(avatarFile)
+    private val icons = mutableMapOf<String, ImageBitmap>()
+    private var dark: Boolean? = null
     private var lastAttemptAt = 0L
-    private val avatarFile = File(service.filesDir, "avatar_v2.png")
-    var savedAvatar: ImageBitmap? = loadSavedAvatar()
-        private set
+    private var attempts = 0
+    private var busy = false
+
+    /** Kann ein Foto nur vom YouTube-Fenster machen (unsere Leiste darf sichtbar bleiben). */
+    val canCaptureBehindOverlay = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 
     init {
-        // Alte, falsch ausgeschnittene Version wegwerfen.
         File(service.filesDir, "avatar.png").delete()
+        File(service.filesDir, "avatar_v2.png").delete()
+        dir.listFiles()?.filter { it.name.startsWith("icon_") }?.forEach { file ->
+            load(file)?.let { icons[file.name.removePrefix("icon_").removeSuffix(".png")] = it }
+        }
     }
 
+    fun style(nightMode: Boolean): BarStyle = BarStyle.default(dark ?: nightMode, avatar, icons.toMap())
+
     fun reset() {
-        style = null
-        attempted = false
+        dark = null
         attempts = 0
     }
 
-    /** Profilbild fehlt noch (z. B. noch nicht geladen): später nochmal probieren. */
-    fun wantsAvatarRetry(): Boolean {
-        val current = style ?: return false
-        if (current.avatar != null || attempts >= MAX_ATTEMPTS) return false
-        return SystemClock.uptimeMillis() - lastAttemptAt > RETRY_MS
+    /** Fehlt noch etwas für den aktuellen Zustand der Leiste? */
+    fun needsCapture(bar: FoundBar): Boolean {
+        if (busy || attempts >= MAX_ATTEMPTS) return false
+        if (SystemClock.uptimeMillis() - lastAttemptAt < MIN_INTERVAL_MS) return false
+        if (dark == null || avatar == null) return true
+        return listOf(TabKind.HOME, TabKind.SUBSCRIPTIONS).any { kind ->
+            val tab = bar.tabs[kind] ?: return@any false
+            BarStyle.iconKey(kind, tab.selected) !in icons
+        }
     }
 
-    fun sample(bar: FoundBar, onDone: () -> Unit) {
-        attempted = true
+    fun capture(bar: FoundBar, windowId: Int, windowBounds: Rect, onDone: () -> Unit) {
+        busy = true
         attempts++
         lastAttemptAt = SystemClock.uptimeMillis()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            onDone()
-            return
+        val callback = object : AccessibilityService.TakeScreenshotCallback {
+            override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                try {
+                    val buffer = result.hardwareBuffer
+                    val bitmap = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
+                        ?.copy(Bitmap.Config.ARGB_8888, false)
+                    buffer.close()
+                    if (bitmap != null) {
+                        read(bitmap, bar, windowBounds)
+                        bitmap.recycle()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Bildschirmfoto konnte nicht gelesen werden", e)
+                }
+                busy = false
+                onDone()
+            }
+
+            override fun onFailure(errorCode: Int) {
+                Log.w(TAG, "Bildschirmfoto fehlgeschlagen: $errorCode")
+                busy = false
+                onDone()
+            }
         }
         try {
-            service.takeScreenshot(
-                Display.DEFAULT_DISPLAY,
-                service.mainExecutor,
-                object : AccessibilityService.TakeScreenshotCallback {
-                    override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
-                        try {
-                            val buffer = result.hardwareBuffer
-                            val bitmap = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
-                                ?.copy(Bitmap.Config.ARGB_8888, false)
-                            buffer.close()
-                            if (bitmap != null) {
-                                style = build(bitmap, bar)
-                                bitmap.recycle()
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Bildschirmfoto konnte nicht gelesen werden", e)
-                        }
-                        onDone()
-                    }
-
-                    override fun onFailure(errorCode: Int) {
-                        Log.w(TAG, "Bildschirmfoto fehlgeschlagen: $errorCode")
-                        onDone()
-                    }
-                },
-            )
+            when {
+                canCaptureBehindOverlay ->
+                    service.takeScreenshotOfWindow(windowId, service.mainExecutor, callback)
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                    service.takeScreenshot(Display.DEFAULT_DISPLAY, service.mainExecutor, callback)
+                else -> {
+                    busy = false
+                    onDone()
+                }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Bildschirmfoto nicht möglich", e)
+            busy = false
             onDone()
         }
     }
 
-    private fun build(bitmap: Bitmap, bar: FoundBar): BarStyle {
-        val y = (bar.bounds.top + bar.bounds.height() / 4).coerceIn(0, bitmap.height - 1)
-        val x = (bar.bounds.left + 3).coerceIn(0, bitmap.width - 1)
-        val dark = Color(bitmap.getPixel(x, y)).luminance() < 0.5f
+    private fun read(bitmap: Bitmap, bar: FoundBar, windowBounds: Rect) {
+        // Fensterfoto: Koordinaten relativ zum Fenster. Bildschirmfoto: windowBounds ist dann (0,0).
+        val dx = if (canCaptureBehindOverlay) windowBounds.left else 0
+        val dy = if (canCaptureBehindOverlay) windowBounds.top else 0
+        val b = Rect(bar.bounds).apply { offset(-dx, -dy) }
+        if (b.bottom > bitmap.height || b.right > bitmap.width || b.top < 0) return
 
-        saveDebugImage(bitmap, bar)
-        val avatar = cropAvatar(bitmap, bar)
-        if (avatar != null) {
-            runCatching { avatarFile.outputStream().use { avatar.compress(Bitmap.CompressFormat.PNG, 100, it) } }
-            savedAvatar = avatar.asImageBitmap()
+        val sample = bitmap.getPixel((b.left + 3).coerceAtMost(bitmap.width - 1), (b.top + b.height() / 4))
+        dark = luminance(sample) < 128
+        saveDebugImage(bitmap, b)
+
+        val iconCenterY = (bar.tabs[TabKind.HOME]?.iconBounds ?: bar.tabs.values.firstNotNullOfOrNull { it.iconBounds })
+            ?.centerY()?.minus(dy) ?: return
+
+        for (kind in listOf(TabKind.HOME, TabKind.SUBSCRIPTIONS)) {
+            val tab = bar.tabs[kind] ?: continue
+            val mask = iconMask(bitmap, tab.bounds.centerX() - dx, iconCenterY, dark == true) ?: continue
+            val key = BarStyle.iconKey(kind, tab.selected)
+            icons[key] = mask.asImageBitmap()
+            save(mask, File(dir, "icon_$key.png"))
         }
-        Log.i(TAG, "Profilbild: ${if (avatar != null) "${avatar.width}x${avatar.height}" else "nicht gefunden"}")
-        return BarStyle.default(dark, savedAvatar)
+
+        bar.tabs[TabKind.YOU]?.let { tab ->
+            val cut = cropAvatar(bitmap, tab.bounds.centerX() - dx, iconCenterY)
+            if (cut != null) {
+                avatar = cut.asImageBitmap()
+                save(cut, avatarFile)
+            }
+            Log.i(TAG, "Profilbild: ${if (cut != null) "${cut.width}x${cut.height}" else "noch nicht geladen"}")
+        }
     }
 
     /**
-     * Schneidet das Profilbild aus: ein Quadrat von 24 dp (so gross zeigt YouTube es), mittig im
-     * "Mein YouTube"-Tab und auf derselben Höhe wie die anderen Icons.
+     * Macht aus dem Icon-Bereich eine weisse Maske: je heller (bzw. im hellen Design je dunkler) ein Pixel
+     * als der Hintergrund, desto deckender. Der rote Punkt bei Abos wird weggelassen, den zeichnen wir selbst.
      */
-    private fun cropAvatar(bitmap: Bitmap, bar: FoundBar): Bitmap? {
-        val tab = bar.tabs[TabKind.YOU] ?: return null
-        val centerY = bar.tabs[TabKind.HOME]?.iconBounds?.centerY()
-            ?: tab.iconBounds?.centerY()
-            ?: return null
-        val size = (AVATAR_DP * service.resources.displayMetrics.density).roundToInt()
-        val left = tab.bounds.centerX() - size / 2
+    private fun iconMask(bitmap: Bitmap, centerX: Int, centerY: Int, dark: Boolean): Bitmap? {
+        val size = (ICON_BOX_DP * density).roundToInt()
+        val left = centerX - size / 2
+        val top = centerY - size / 2
+        if (left < 0 || top < 0 || left + size > bitmap.width || top + size > bitmap.height) return null
+        val pixels = IntArray(size * size)
+        bitmap.getPixels(pixels, 0, size, left, top, size, size)
+
+        // Hintergrund = Durchschnitt des Randes (die Leiste ist durchsichtig, der Hintergrund schwankt leicht).
+        var sum = 0f
+        var count = 0
+        for (i in 0 until size) {
+            for (p in intArrayOf(pixels[i], pixels[(size - 1) * size + i], pixels[i * size], pixels[i * size + size - 1])) {
+                sum += luminance(p)
+                count++
+            }
+        }
+        val bg = sum / count
+        val full = if (dark) 241f else 15f
+        val span = full - bg
+        if (abs(span) < 40) return null
+
+        val out = IntArray(size * size)
+        var visible = 0
+        for (i in pixels.indices) {
+            val p = pixels[i]
+            val r = AndroidColor.red(p)
+            val isRed = r - max(AndroidColor.green(p), AndroidColor.blue(p)) > 60
+            val alpha = if (isRed) 0f else ((luminance(p) - bg) / span).coerceIn(0f, 1f)
+            val a = (alpha * 255).roundToInt()
+            if (a > 128) visible++
+            out[i] = AndroidColor.argb(a, 255, 255, 255)
+        }
+        // Leerer Bereich (Icon noch nicht da): nichts übernehmen.
+        if (visible < size * size / 40) return null
+        return Bitmap.createBitmap(out, size, size, Bitmap.Config.ARGB_8888)
+    }
+
+    /** Profilbild: 24-dp-Quadrat genau auf Icon-Höhe, mittig im Tab. */
+    private fun cropAvatar(bitmap: Bitmap, centerX: Int, centerY: Int): Bitmap? {
+        val size = (AVATAR_DP * density).roundToInt()
+        val left = centerX - size / 2
         val top = centerY - size / 2
         if (left < 0 || top < 0 || left + size > bitmap.width || top + size > bitmap.height) return null
         val cut = Bitmap.createBitmap(bitmap, left, top, size, size)
-        val reference = bitmap.getPixel(tab.bounds.left + 2, top)
-        return if (looksLikePicture(cut, reference)) cut else null
-    }
-
-    /** Ein Profilbild hat Inhalt. Ist der Ausschnitt fast nur Hintergrund, ist das Bild noch nicht geladen. */
-    private fun looksLikePicture(bitmap: Bitmap, background: Int): Boolean {
-        var different = 0
-        var total = 0
+        // Ein geladenes Profilbild hat Inhalt; ein leerer Platzhalter ist fast einfarbig.
+        var min = 255f
+        var maxL = 0f
         for (gy in 2..6) {
             for (gx in 2..6) {
-                if (distance(bitmap.getPixel(bitmap.width * gx / 8, bitmap.height * gy / 8), background) > 60) different++
-                total++
+                val l = luminance(cut.getPixel(cut.width * gx / 8, cut.height * gy / 8))
+                min = minOf(min, l)
+                maxL = maxOf(maxL, l)
             }
         }
-        return different * 100 / total >= 40
+        return if (maxL - min > 25) cut else null
     }
 
-    private fun distance(a: Int, b: Int) =
-        abs(AndroidColor.red(a) - AndroidColor.red(b)) +
-            abs(AndroidColor.green(a) - AndroidColor.green(b)) +
-            abs(AndroidColor.blue(a) - AndroidColor.blue(b))
+    private fun luminance(p: Int) =
+        0.299f * AndroidColor.red(p) + 0.587f * AndroidColor.green(p) + 0.114f * AndroidColor.blue(p)
 
     /** Bild der echten Leiste für die Fehlersuche (landet bei "Struktur teilen"). */
-    private fun saveDebugImage(bitmap: Bitmap, bar: FoundBar) {
+    private fun saveDebugImage(bitmap: Bitmap, r: Rect) {
         runCatching {
-            val r = Rect(bar.bounds)
-            if (!r.intersect(0, 0, bitmap.width, bitmap.height)) return
             val crop = Bitmap.createBitmap(bitmap, r.left, r.top, r.width(), r.height())
-            val dir = TreeDumper.dumpDir(service).apply { mkdirs() }
-            File(dir, "leiste-${System.currentTimeMillis()}.png").outputStream().use {
+            val dumps = TreeDumper.dumpDir(service).apply { mkdirs() }
+            File(dumps, "leiste-${System.currentTimeMillis()}.png").outputStream().use {
                 crop.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             crop.recycle()
         }
     }
 
-    private fun loadSavedAvatar(): ImageBitmap? = runCatching {
-        if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.path)?.asImageBitmap() else null
+    private fun save(bitmap: Bitmap, file: File) {
+        runCatching { file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+    }
+
+    private fun load(file: File): ImageBitmap? = runCatching {
+        if (file.exists()) BitmapFactory.decodeFile(file.path)?.asImageBitmap() else null
     }.getOrNull()
 
     private companion object {
         const val TAG = "FuckShorts"
-        const val MAX_ATTEMPTS = 6
-        const val RETRY_MS = 4_000L
+        const val MAX_ATTEMPTS = 30
+        const val MIN_INTERVAL_MS = 1_000L
         const val AVATAR_DP = 24f
+        const val ICON_BOX_DP = 28f
     }
 }

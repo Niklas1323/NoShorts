@@ -58,6 +58,7 @@ class FuckShortsService : AccessibilityService() {
     private var hiddenByScroll = false
     private var lastNavAt = 0L
     private var restSince = 0L
+    private var lastObservedTop = -1
     private var pollUntil = 0L
     private var polling = false
 
@@ -121,6 +122,8 @@ class FuckShortsService : AccessibilityService() {
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> onNavigation()
                     AccessibilityEvent.TYPE_VIEW_SCROLLED -> onScrolled()
                 }
+                // Jede Änderung kann heissen, dass die Leiste gerade rein- oder rausfährt: Bild für Bild nachführen.
+                if (lastBar != null) startPolling()
                 scheduleScan()
             }
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
@@ -240,18 +243,19 @@ class FuckShortsService : AccessibilityService() {
                 hideAll()
                 return
             }
-            // Farbe und Profilbild abschauen: nur wenn die echte Leiste ganz da ist und unsere noch nicht.
-            val firstSample = sampler.style == null && !sampler.attempted
+            // Icons und Profilbild von der echten Leiste abschauen, sobald sie ganz still steht.
             val atRest = bar.bounds == restBounds
             if (!atRest) restSince = 0L else if (restSince == 0L) restSince = now
-            if (atRest && !overlay.isShowing && (firstSample || sampler.wantsAvatarRetry())) {
-                // Erst abschauen, wenn die echte Leiste ganz still steht (nicht mitten im Reinfahren).
+            if (atRest && sampler.needsCapture(bar)) {
                 if (now - restSince < REST_STABLE_MS) {
                     handler.postDelayed({ scheduleScan() }, REST_STABLE_MS)
+                } else if (sampler.canCaptureBehindOverlay) {
+                    sampler.capture(bar, root.windowId, windowBounds(root.windowId)) { scheduleScan() }
+                } else if (!overlay.isShowing) {
+                    // Ältere Android-Versionen: nur ganzer Bildschirm, darum vorher nichts von uns zeigen.
+                    sampler.capture(bar, root.windowId, Rect(screen)) { scheduleScan() }
                     return
                 }
-                sampler.sample(bar) { scheduleScan() }
-                return
             }
             // Positionen nur von der ganz eingefahrenen Leiste übernehmen, sonst nur Auswahl und roten Punkt.
             val previous = lastUiState
@@ -320,7 +324,12 @@ class FuckShortsService : AccessibilityService() {
             overlay.hide()
             return
         }
-        val top = if (hiddenByScroll || observedTop == null) rest.top else observedTop.coerceAtLeast(rest.top)
+        // Fährt die echte Leiste gerade rein (z. B. nach dem Verlassen eines Videos), springt unsere sofort
+        // an ihren Platz. So liegt unsere immer über der echten und die echte ist nie zu sehen.
+        val visibleNow = observedTop != null && observedTop < screen.bottom - 2
+        val slidingIn = visibleNow && (!overlay.isShowing || (lastObservedTop >= 0 && observedTop!! < lastObservedTop - 1))
+        lastObservedTop = observedTop ?: -1
+        val top = if (hiddenByScroll || observedTop == null || slidingIn) rest.top else observedTop.coerceAtLeast(rest.top)
         if (top >= screen.bottom - 2) {
             overlay.hide()
         } else {
@@ -336,8 +345,10 @@ class FuckShortsService : AccessibilityService() {
 
     private fun coverLimit(): Int = if (overlay.isShowing) overlay.top else screen.bottom
 
-    private fun currentStyle(): BarStyle =
-        sampler.style ?: BarStyle.default(nightMode == Configuration.UI_MODE_NIGHT_YES, sampler.savedAvatar)
+    private fun currentStyle(): BarStyle = sampler.style(nightMode == Configuration.UI_MODE_NIGHT_YES)
+
+    private fun windowBounds(windowId: Int): Rect =
+        windows.firstOrNull { it.id == windowId }?.let { w -> Rect().also { w.getBoundsInScreen(it) } } ?: Rect(screen)
 
     private fun buildUiState(bar: FoundBar): BarUiState {
         // Höhen von Icon und Schrift aus der echten Leiste (Startseite-Tab als Vorlage).
