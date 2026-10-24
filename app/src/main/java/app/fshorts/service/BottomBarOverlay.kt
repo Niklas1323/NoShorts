@@ -338,7 +338,14 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                     .tapTarget(TabKind.CREATE, onTap, onLongPress),
             ) {
                 if (state.hasCreate) {
-                    IconArea(state) {
+                    // Wie im Vorlagenbild: Plus-Kreis mittig zwischen Icon-Reihe und Schrift-Reihe.
+                    val labelCenter = state.labelTopPx?.let { it + with(density) { 6.dp.roundToPx() } }
+                    val plusCenter = if (state.iconCenterPx != null && labelCenter != null) {
+                        (state.iconCenterPx + labelCenter) / 2
+                    } else {
+                        null
+                    }
+                    IconArea(plusCenter) {
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
@@ -378,7 +385,7 @@ private fun TabSlot(
     ) {
         if (state.iconCenterPx != null && labelTop != null) {
             // Gleiche Höhe wie bei YouTube: Icon-Mitte und Schrift-Oberkante aus der echten Leiste.
-            IconArea(state) { icon() }
+            IconArea(state.iconCenterPx) { icon() }
             Label(
                 text = label,
                 color = state.style.content,
@@ -402,8 +409,7 @@ private fun TabSlot(
 
 /** Box, deren Mitte genau auf der Höhe der Icon-Mitte der echten Leiste liegt. */
 @Composable
-private fun BoxScope.IconArea(state: BarUiState, content: @Composable () -> Unit) {
-    val center = state.iconCenterPx
+private fun BoxScope.IconArea(center: Int?, content: @Composable () -> Unit) {
     val density = LocalDensity.current
     val modifier = if (center != null) {
         Modifier

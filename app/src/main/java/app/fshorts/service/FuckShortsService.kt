@@ -56,9 +56,7 @@ class FuckShortsService : AccessibilityService() {
     private var lastBar: FoundBar? = null
     private var lastUiState: BarUiState? = null
     private var hiddenByScroll = false
-    private var lastScrollUpAt = 0L
-    private var lastScrollDownAt = 0L
-    private var lastObservedTop = -1
+    private var lastScrollAt = 0L
     private var pollUntil = 0L
     private var polling = false
 
@@ -120,7 +118,7 @@ class FuckShortsService : AccessibilityService() {
                         hiddenByScroll = false
                     }
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> hiddenByScroll = false
-                    AccessibilityEvent.TYPE_VIEW_SCROLLED -> onScrolled(event.scrollDeltaY)
+                    AccessibilityEvent.TYPE_VIEW_SCROLLED -> onScrolled()
                 }
                 scheduleScan()
             }
@@ -169,18 +167,10 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
-    /**
-     * YouTube zeigt seine Leiste wieder, sobald man hochscrollt. Damit die echte Leiste (mit Shorts-Knopf)
-     * nie zuerst auftaucht, ist unsere in diesem Moment sofort ganz da.
-     */
-    private fun onScrolled(deltaY: Int) {
-        val now = SystemClock.uptimeMillis()
-        if (deltaY < -SCROLL_THRESHOLD_PX) {
-            lastScrollUpAt = now
-            if (hiddenByScroll && youTubeActive) updateBar(now, null)
-        } else if (deltaY > SCROLL_THRESHOLD_PX) {
-            lastScrollDownAt = now
-        }
+    /** Beim Scrollen fährt YouTube seine Leiste raus/rein. Wir prüfen ab jetzt jedes Bild, damit unsere stehen bleibt. */
+    private fun onScrolled() {
+        lastScrollAt = SystemClock.uptimeMillis()
+        if (youTubeActive) updateBar(lastScrollAt, null)
         startPolling()
     }
 
@@ -290,8 +280,9 @@ class FuckShortsService : AccessibilityService() {
 
     /**
      * Setzt unsere Leiste auf die richtige Höhe.
-     * Regel: Unsere Oberkante ist nie tiefer als die der echten Leiste. Beim Rausfahren folgen wir ihr,
-     * beim Reinfahren nach Hochscrollen sind wir sofort ganz da.
+     * Fährt YouTube seine Leiste wegen Scrollen raus, bleibt unsere einfach stehen. Ein Fenster einer anderen
+     * App lässt sich nie Bild für Bild genau mitbewegen; so sieht man die echte Leiste dafür nie.
+     * Verschwindet die Leiste aus einem anderen Grund (z. B. Video geöffnet), verschwindet unsere mit.
      */
     private fun updateBar(now: Long, fresh: FoundBar?) {
         val rest = restBounds
@@ -312,14 +303,10 @@ class FuckShortsService : AccessibilityService() {
         }
         if (observedTop <= rest.top + 2) {
             hiddenByScroll = false
-        } else if (now - lastScrollDownAt < SCROLL_LINK_MS) {
+        } else if (now - lastScrollAt < SCROLL_LINK_MS) {
             hiddenByScroll = true
         }
-        // Fährt die echte Leiste gerade wieder hoch, sind wir sofort ganz da (falls das Hochscrollen nicht gemeldet wurde).
-        if (hiddenByScroll && lastObservedTop >= 0 && observedTop < lastObservedTop - 1) lastScrollUpAt = now
-        lastObservedTop = observedTop
-        val forcedShow = hiddenByScroll && now - lastScrollUpAt < FORCE_SHOW_MS
-        val top = if (forcedShow) rest.top else observedTop.coerceAtLeast(rest.top)
+        val top = if (hiddenByScroll) rest.top else observedTop.coerceAtLeast(rest.top)
         if (top >= screen.bottom - 2) {
             overlay.hide()
         } else {
@@ -482,9 +469,7 @@ class FuckShortsService : AccessibilityService() {
         private const val MIN_SCAN_INTERVAL_MS = 40L
         private const val POLL_MS = 16L
         private const val POLL_DURATION_MS = 500L
-        private const val SCROLL_THRESHOLD_PX = 4
         private const val SCROLL_LINK_MS = 800L
-        private const val FORCE_SHOW_MS = 700L
         private const val WATCHDOG_MS = 400L
         private const val BACK_COOLDOWN_MS = 700L
         private const val HINT_WINDOW_MS = 10_000L
