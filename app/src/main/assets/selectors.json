@@ -70,5 +70,12 @@
   ],
   "watchIds": [
     "watch_player"
+  ],
+  "miniPlayerLabels": [
+    "Mini-Player schließen",
+    "Miniplayer schließen",
+    "Close miniplayer",
+    "Close mini player",
+    "Mini-Player schliessen"
   ]
 }

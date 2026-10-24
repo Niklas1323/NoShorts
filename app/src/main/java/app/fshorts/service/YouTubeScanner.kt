@@ -93,6 +93,16 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
      * enthält (YouTube nennt sie z. B. modern_miniplayer_close). Geht den ganzen Baum durch, darum selten aufrufen.
      */
     fun isMiniPlayerVisible(root: AccessibilityNodeInfo, screen: Rect): Boolean {
+        // Schnell: kleine Knöpfe (Schliessen, Pause) unten rechts, wie beim Mini-Player.
+        val maxButton = 72 * density
+        for (label in sel.miniPlayerLabels) {
+            for (hit in root.findAccessibilityNodeInfosByText(label)) {
+                if (!hit.isVisibleToUser) continue
+                val b = hit.bounds()
+                val small = b.width() <= maxButton && b.height() <= maxButton
+                if (small && b.centerX() > screen.width() * 0.45 && b.centerY() > screen.height() * 0.45) return true
+            }
+        }
         var checked = 0
         val r = Rect()
         fun walk(node: AccessibilityNodeInfo, depth: Int): Boolean {
@@ -248,6 +258,19 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         return best
     }
 
+    /**
+     * Liest eine bekannte Leiste neu ein, auch wenn sie gerade weggescrollt ist (für Klicks auf ihre Knöpfe).
+     */
+    fun rebuildBar(container: AccessibilityNodeInfo): FoundBar? {
+        if (!container.refresh()) return null
+        val b = container.bounds()
+        val tabs = mutableMapOf<TabKind, TabInfo>()
+        val nodes = mutableMapOf<TabKind, AccessibilityNodeInfo>()
+        collectTabs(container, 0, b, tabs, nodes, lenient = true)
+        if (tabs.isEmpty()) return null
+        return FoundBar(container, b, tabs, nodes)
+    }
+
     private fun buildBar(container: AccessibilityNodeInfo, screen: Rect): FoundBar? {
         if (!container.isVisibleToUser) return null
         val b = Rect()
@@ -270,12 +293,14 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         barBounds: Rect,
         tabs: MutableMap<TabKind, TabInfo>,
         nodes: MutableMap<TabKind, AccessibilityNodeInfo>,
+        lenient: Boolean = false,
     ) {
         val r = Rect()
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             child.getBoundsInScreen(r)
-            val tabSized = r.width() in 1..(barBounds.width() / 2)
+            // lenient: Leiste ist weggescrollt, Grössen sind dann 0 – nur nach Beschriftung gehen.
+            val tabSized = lenient || r.width() in 1..(barBounds.width() / 2)
             if (tabSized && (child.isClickable || ownLabel(child) != null)) {
                 val kind = classify(deepLabel(child, 0))
                 if (kind != null && kind !in tabs) {
@@ -293,7 +318,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
                 }
                 if (child.isClickable) continue
             }
-            if (depth < 6) collectTabs(child, depth + 1, barBounds, tabs, nodes)
+            if (depth < 6) collectTabs(child, depth + 1, barBounds, tabs, nodes, lenient)
         }
     }
 
