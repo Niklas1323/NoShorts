@@ -375,15 +375,27 @@ class FuckShortsService : AccessibilityService() {
             overlay.hide()
             return
         }
-        // Auf der Startseite bleibt unsere Leiste stehen. Ausnahmen: Ein Video wird geöffnet (Tipp bei ganz
-        // sichtbarer Leiste) oder der Mini-Player ist offen (YouTube setzt ihn direkt über seine Leiste).
-        // Dann fahren wir mit der echten mit; weil wir etwas hinterher sind, liegt unsere dabei darüber.
+        // Startseite: unsere Leiste bleibt immer ganz da und fährt nie halb runter. Sie verschwindet erst,
+        // wenn nach einem Tipp (Video geöffnet) die echte Leiste schon komplett weg ist.
         val onHome = state.selected == TabKind.HOME
         val videoOpening = now - lastNavAt < NAV_LINK_MS && navFromRest
+        val fullyGone = observedTop >= screen.bottom - 2
+        if (onHome) {
+            if (observedTop <= rest.top + 2) hiddenByScroll = false
+            if (videoOpening && fullyGone) {
+                overlay.hide()
+            } else {
+                if (!fullyGone || overlay.isShowing) hiddenByScroll = observedTop > rest.top + 2
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            }
+            return
+        }
+        // Andere Seiten: Mini-Player offen oder Video geöffnet -> mit der echten Leiste mitfahren
+        // (YouTube setzt den Mini-Player direkt über seine Leiste). Sonst stehen bleiben.
         val follow = videoOpening || miniPlayerOpen
         if (observedTop <= rest.top + 2) {
             hiddenByScroll = false
-        } else if (!follow && (overlay.isShowing || onHome)) {
+        } else if (!follow && overlay.isShowing) {
             hiddenByScroll = true
         } else if (follow) {
             hiddenByScroll = false
