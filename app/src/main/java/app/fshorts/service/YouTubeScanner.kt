@@ -27,6 +27,10 @@ class Shelf(
     val feed: AccessibilityNodeInfo,
 )
 
+// Shorts-Player von YouTube 21.41 (am Pixel nachgesehen): eine Seite pro Short in einer senkrechten Liste.
+private const val SHORTS_PAGE_ID = "reel_player_page_container"
+private val SHEET_IDS = listOf("design_bottom_sheet", "touch_outside")
+
 /**
  * Sucht in der YouTube-Oberfläche die untere Leiste, ihre Tabs und den Shorts-Player.
  * Verlässt sich nicht nur auf View-IDs: Wenn die ID nicht passt, suchen wir über die
@@ -72,6 +76,42 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
             }
         }
         return false
+    }
+
+    /**
+     * Woran man den gerade sichtbaren Short erkennt: Kanal und Titel (linke Spalte unten, z. B. "Zu Kanal „@X“").
+     * Rechts stehen Like-Zahl & Co., die sich während des Ansehens ändern können – die zählen nicht.
+     * Null, solange der Short noch lädt.
+     */
+    fun shortFingerprint(root: AccessibilityNodeInfo, screen: Rect): String? {
+        val r = Rect()
+        val page = root.findAccessibilityNodeInfosByViewId(sel.fullId(SHORTS_PAGE_ID))
+            .filter { it.isVisibleToUser }
+            .maxByOrNull { it.getBoundsInScreen(r); r.height() } ?: return null
+        // Kanal = Bild mit Beschreibung ("Zu Kanal „@X“"), Titel = erste Beschreibung darunter.
+        // Etiketten darüber ("Synchronisiert", "Shop") kommen und gehen und zählen darum nicht.
+        var channel: String? = null
+        var channelBottom = 0
+        var title: String? = null
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            // Kanal und Titel liegen bei YouTube ~20 Ebenen tief.
+            if (depth > 40 || title != null) return
+            val desc = node.contentDescription?.toString()
+            if (!desc.isNullOrBlank()) {
+                node.getBoundsInScreen(r)
+                if (r.left < screen.width() / 2 && r.right < screen.width() * 0.9f && r.top > screen.height() / 2) {
+                    if (channel == null && node.className?.toString()?.endsWith("ImageView") == true) {
+                        channel = desc
+                        channelBottom = r.bottom
+                    } else if (channel != null && r.top >= channelBottom - 2) {
+                        title = desc
+                    }
+                }
+            }
+            for (i in 0 until node.childCount) walk(node.getChild(i) ?: continue, depth + 1)
+        }
+        walk(page, 0)
+        return channel?.let { c -> title?.let { "$c|$it" } ?: c }
     }
 
     /**
@@ -151,6 +191,18 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
     }
 
     /** True, wenn z. B. der grosse Video-Player über der Leiste liegt. */
+    /** Ein Menü von unten (z. B. nach ⋮) in einem eigenen Fenster. */
+    fun isBottomSheet(windowRoot: AccessibilityNodeInfo): Boolean =
+        SHEET_IDS.any { windowRoot.findAccessibilityNodeInfosByViewId(sel.fullId(it)).isNotEmpty() }
+
+    /** Oberkante des Menüs (es fährt von unten rein und wieder raus), oder null, wenn es keins gibt. */
+    fun sheetTop(windowRoot: AccessibilityNodeInfo): Int? {
+        val r = Rect()
+        return windowRoot.findAccessibilityNodeInfosByViewId(sel.fullId(SHEET_IDS[0]))
+            .filter { it.isVisibleToUser }
+            .minOfOrNull { it.getBoundsInScreen(r); r.top }
+    }
+
     fun isBarCovered(root: AccessibilityNodeInfo, bar: FoundBar): Boolean {
         val r = Rect()
         for (id in sel.coverIds) {
@@ -169,8 +221,12 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
      */
     fun findShelves(root: AccessibilityNodeInfo, screen: Rect, limitBottom: Int): List<Shelf> {
         val result = mutableListOf<Shelf>()
+        val feed = findFeed(root, screen)
         for (label in sel.shelfHeaderLabels) {
-            for (hit in root.findAccessibilityNodeInfosByText(label)) {
+            // Manche Überschriften (z. B. auf "Abos") haben nur eine Beschreibung, die findet die Textsuche
+            // von Android nicht: dann in den Einträgen der Liste selbst nachsehen.
+            val hits = root.findAccessibilityNodeInfosByText(label) + (feed?.let { headersIn(it, label) } ?: emptyList())
+            for (hit in hits) {
                 if (!hit.isVisibleToUser) continue
                 if (!ownLabel(hit).equals(label, ignoreCase = true)) continue
                 val hb = hit.bounds()
@@ -178,6 +234,27 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
                 val shelf = shelfFor(hit, hb, screen, limitBottom) ?: continue
                 if (result.none { Rect.intersects(it.bounds, shelf.bounds) }) result += shelf
             }
+        }
+        return result
+    }
+
+    /** Überschriften [label] in den sichtbaren Einträgen der Liste (bis 3 Ebenen tief). */
+    private fun headersIn(feed: AccessibilityNodeInfo, label: String): List<AccessibilityNodeInfo> {
+        val result = mutableListOf<AccessibilityNodeInfo>()
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (ownLabel(node).equals(label, ignoreCase = true)) {
+                result += node
+                return
+            }
+            if (depth >= 3) return
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                if (child.isVisibleToUser) walk(child, depth + 1)
+            }
+        }
+        for (i in 0 until feed.childCount) {
+            val item = feed.getChild(i) ?: continue
+            if (item.isVisibleToUser) walk(item, 1)
         }
         return result
     }
@@ -274,7 +351,9 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
     private fun findMenuButton(node: AccessibilityNodeInfo, header: Rect, screen: Rect, depth: Int): AccessibilityNodeInfo? {
         val r = node.bounds()
         val tolerance = (40 * density).toInt()
-        val nearHeader = r.centerY() in (header.top - tolerance)..(header.bottom + tolerance)
+        // Muss in der Zeile der Überschrift beginnen: Das ⋮ der ersten Short-Karte direkt darunter zählt nicht
+        // (Regal auf "Abos" hat gar kein eigenes ⋮).
+        val nearHeader = r.centerY() in (header.top - tolerance)..(header.bottom + tolerance) && r.top < header.bottom
         if (node.isClickable && nearHeader && r.centerX() > screen.width() * 0.8 && r.width() <= 72 * density) {
             return node
         }

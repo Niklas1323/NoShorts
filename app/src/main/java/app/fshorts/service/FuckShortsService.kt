@@ -36,6 +36,7 @@ class FuckShortsService : AccessibilityService() {
     private lateinit var covers: ShelfCovers
     private lateinit var dumper: TreeDumper
     private lateinit var sampler: BarStyleSampler
+    private lateinit var touchWatcher: TouchWatcher
 
     private var connected = false
     private var scanPending = false
@@ -80,6 +81,28 @@ class FuckShortsService : AccessibilityService() {
     private var lastObservedTop = -1
     private var pollUntil = 0L
     private var polling = false
+
+    // Short per Link (z. B. aus WhatsApp): Genau dieser eine darf laufen, weiterwischen nicht.
+    // Erkennung: YouTube kommt aus einer anderen App nach vorne und der Short geht auf, ohne dass in YouTube
+    // getippt wurde. Die Tastatur (Suche) zählt nicht als andere App.
+    private var leftYouTube = true
+    private var enteredYouTubeAt = 0L
+    private var touchedSinceEnter = false
+    private var linkShortActive = false
+    private var linkShort: String? = null
+    private var notShortsSince = 0L
+    private var lastLinkFixAt = 0L
+    private var lastFingerprint: String? = null
+    private var menuOpen = false
+    private var menuFront = false
+    private var menuWindowId = -1
+    private var menuMinTop = Int.MAX_VALUE
+    private val menuWindows = HashMap<Int, Boolean>()
+    /** YouTube-Fenster, in dem es keine Leiste gab (z. B. Kamera). -1 = keins. */
+    private var barlessWindowId = -1
+    private var linkShortAt = 0L
+    private var lastFingerprintAt = 0L
+    private var linkFixTries = 0
 
     // Shorts-Regale und automatisches "Nicht interessiert".
     private var shelves: List<Shelf> = emptyList()
@@ -126,6 +149,10 @@ class FuckShortsService : AccessibilityService() {
         overlay = BottomBarOverlay(this, ::onTabTapped, ::onBarLongPressed)
         dumper = TreeDumper(this)
         sampler = BarStyleSampler(this)
+        touchWatcher = TouchWatcher(this) {
+            if (!touchedSinceEnter && youTubeActive) Log.d(TAG, "Berührung in YouTube")
+            touchedSinceEnter = true
+        }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         connected = true
         running = true
@@ -144,6 +171,7 @@ class FuckShortsService : AccessibilityService() {
                         onNavigation()
                     }
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                        touchedSinceEnter = true
                         onNavigation()
                         // Ein Tipp kann einen Short öffnen: die nächsten 1,5 s ganz oft nachsehen, damit er sofort zugeht.
                         fastUntil = SystemClock.uptimeMillis() + FAST_WINDOW_MS
@@ -182,6 +210,7 @@ class FuckShortsService : AccessibilityService() {
         handler.removeCallbacksAndMessages(null)
         if (::overlay.isInitialized) overlay.destroy()
         if (::covers.isInitialized) covers.destroy()
+        if (::touchWatcher.isInitialized) touchWatcher.stop()
         super.onDestroy()
     }
 
@@ -272,14 +301,55 @@ class FuckShortsService : AccessibilityService() {
         } else {
             foregroundNullSince = 0L
         }
-        if (foreground == null || foreground.packageName?.toString() != selectors.youtubePackage || isKeyboardOpen()) {
+        val youTubeInFront = foreground?.packageName?.toString() == selectors.youtubePackage
+        if (!youTubeInFront) leftYouTube = true
+        if (foreground == null || !youTubeInFront || isKeyboardOpen()) {
             reason("YouTube nicht vorne (${foreground?.packageName})")
             youTubeActive = false
+            menuFront = false
+            menuOpen = false
             youTubeSince = 0L
             hideAll()
             return
         }
         val root = youTubeMainRoot() ?: foreground
+        if (leftYouTube) {
+            leftYouTube = false
+            enteredYouTubeAt = now
+            touchedSinceEnter = false
+            // Vielleicht kommt ein neuer Link: den geteilten Short neu merken.
+            linkShort = null
+        }
+        // Menü (z. B. nach ⋮) im eigenen Fenster über YouTube: Es liegt über der echten Leiste, unsere läge
+        // aber über dem Menü. Darum weg, solange das Menü die Leiste abdeckt; fährt es rein oder raus, steht
+        // unsere. Alles andere (Seite, Link-Short) bleibt wie es ist. Das Fenster darunter gibt Android solange
+        // gar nicht heraus, darum hier nichts weiter suchen.
+        menuFront = isMenuWindow(foreground)
+        if (menuFront) {
+            youTubeActive = true
+            val rest = restBounds
+            val state = lastUiState
+            val sheetTop = scanner.sheetTop(foreground)
+            if (foreground.windowId != menuWindowId) {
+                menuWindowId = foreground.windowId
+                menuMinTop = Int.MAX_VALUE
+            }
+            if (sheetTop != null) menuMinTop = minOf(menuMinTop, sheetTop)
+            // Fährt es schon ein Stück runter, geht es zu: unsere schon jetzt zeigen, sonst sieht man die echte kurz.
+            val closing = sheetTop != null && sheetTop > menuMinTop + (CLOSING_DP * resources.displayMetrics.density)
+            menuOpen = rest == null || state == null || watchPageOpen || sheetTop == null ||
+                (sheetTop < rest.top - 2 && !closing)
+            if (menuOpen) {
+                reason("Menü offen")
+                hideAll()
+            } else if (rest != null && state != null) {
+                reason("Menü fährt rein/raus (oben=$sheetTop)")
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            }
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return
+        }
+        menuOpen = false
         if (!youTubeActive) {
             // YouTube kommt gerade nach vorne: unsere Leiste sofort an der gemerkten Stelle zeigen,
             // nicht erst nach dem Suchen. Die normale Logik übernimmt ab dem nächsten Durchgang.
@@ -295,13 +365,28 @@ class FuckShortsService : AccessibilityService() {
         }
         youTubeActive = true
         if (youTubeSince == 0L) youTubeSince = now
+        // Zurück aus einem YouTube-Fenster ohne Leiste (z. B. Kamera nach Plus): Sobald ein anderes Fenster vorne
+        // ist, kommt die Seite mit der Leiste zurück. Sofort zeigen, die Suche danach kostet sonst 2 Bilder.
+        val barless = barlessWindowId
+        if (barless != -1 && (foreground.windowId != barless || root.windowId != barless)) {
+            barlessWindowId = -1
+            val rest = restBounds
+            val state = lastUiState
+            if (rest != null && state != null && !watchPageOpen && !overlay.isShowing) {
+                reason("zurück von Seite ohne Leiste")
+                hiddenByScroll = false
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                continueScanSoon()
+                return
+            }
+        }
         val newScreen = screenBounds()
         if (newScreen != screen) {
             screen = newScreen
             restBounds = null
         }
         // Gerade getippt: Zuerst nur nachsehen, ob ein Short aufgeht, damit er so schnell wie möglich wieder zugeht.
-        if (now < fastUntil && scanner.isShortsPlayerOpen(root, screen)) {
+        if (now < fastUntil && !linkShortActive && scanner.isShortsPlayerOpen(root, screen) && !shortAllowed(root, now)) {
             onShortsOpen()
             return
         }
@@ -355,8 +440,18 @@ class FuckShortsService : AccessibilityService() {
         }
 
         if (scanner.isShortsScreen(root, bar, screen)) {
-            onShortsOpen()
-            return
+            if (!shortAllowed(root, now)) {
+                onShortsOpen()
+                return
+            }
+        } else if (linkShortActive) {
+            // Geteilter Short ist zu (z. B. Startseite getippt). Kurz warten: Beim Umbau fehlt der Player manchmal.
+            if (notShortsSince == 0L) notShortsSince = now
+            if (now - notShortsSince > LINK_END_MS) {
+                reason("Short per Link geschlossen")
+                linkShortActive = false
+                linkShort = null
+            }
         }
 
         if (bar != null) {
@@ -385,12 +480,13 @@ class FuckShortsService : AccessibilityService() {
             }
         } else if (lastBar == null) {
             if (rest != null && state != null && keepWhileScrolledAway(now)) {
-                reason("echte weggescrollt und entfernt, unsere bleibt (Scan)")
+                reason("echte weggescrollt und entfernt, unsere bleibt")
                 hiddenByScroll = true
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
                 return
             }
             reason("keine Leiste gefunden")
+            barlessWindowId = root.windowId
             hideAll()
             val stuck = !barSeenOnce && now - youTubeSince > AUTO_DUMP_AFTER_MS
             if (stuck && now - lastAutoDumpAt > AUTO_DUMP_INTERVAL_MS) {
@@ -436,7 +532,9 @@ class FuckShortsService : AccessibilityService() {
             }
         }
 
-        shelves = scanner.findShelves(root, screen, coverLimit())
+        val found = scanner.findShelves(root, screen, coverLimit())
+        if (found.size != shelves.size) Log.d(TAG, "Shorts-Regale: ${found.size}")
+        shelves = found
         covers.show(shelves.map { it.bounds }, currentStyle())
         if (shelves.isNotEmpty()) tryHideShelf(shelves, now)
     }
@@ -459,10 +557,15 @@ class FuckShortsService : AccessibilityService() {
     private fun updateBar(now: Long, fresh: FoundBar?) {
         val rest = restBounds
         val state = lastUiState
-        if (rest == null || state == null) {
+        if (rest == null || state == null || menuOpen) {
             overlay.hide()
             return
         }
+        // Menü vorne: Das regelt der Scan (Lage des Menüs), die Leiste dahinter ist nicht abfragbar.
+        if (menuFront) return
+        // Keine echte Leiste bekannt und unsere ist weg (z. B. Short per Link läuft und meldet dauernd
+        // "gescrollt"): nichts nachzuführen, das Wiederauftauchen merkt der Scan.
+        if (fresh == null && lastBar == null && !overlay.isShowing && !watchPageOpen) return
         // Video offen: Die echte Leiste liegt unverändert hinter dem Video (oder fehlt ganz, wenn die Startseite
         // weggescrollt war). Das Verlassen merkt man darum nicht an ihr, sondern daran, dass der grosse Player
         // nach unten wegrutscht. YouTube meldet dabei ~100 ms lang nichts; darum bei jedem Bild selbst nachsehen.
@@ -647,6 +750,60 @@ class FuckShortsService : AccessibilityService() {
         leaveShorts()
     }
 
+    /**
+     * Darf dieser Short offen bleiben? Nur ein per Link geöffneter (siehe [enteredYouTubeAt]) – und nur genau
+     * dieser: Wischt man zum nächsten, scrollen wir die Liste wieder zurück an den Anfang.
+     */
+    private fun shortAllowed(root: AccessibilityNodeInfo, now: Long): Boolean {
+        notShortsSince = 0L
+        if (!linkShortActive) {
+            if (touchedSinceEnter || now - enteredYouTubeAt > LINK_WINDOW_MS) return false
+            linkShortActive = true
+            linkShort = null
+            reason("Short per Link offen")
+        }
+        // Der Abdruck braucht viele Abfragen; ein laufender Short löst aber dauernd Scans aus.
+        if (linkShort != null && now - lastFingerprintAt < FINGERPRINT_MS) return true
+        lastFingerprintAt = now
+        val current = scanner.shortFingerprint(root, screen)
+        if (current != lastFingerprint) {
+            lastFingerprint = current
+            Log.d(TAG, "Short sichtbar: $current (geteilt: $linkShort)")
+        }
+        if (current == null) return true
+        val first = linkShort
+        // Lädt der Short noch, kommen Kanal und Titel nacheinander: der längere Abdruck gilt.
+        if (first == null || current.startsWith(first)) {
+            if (current != first) Log.d(TAG, "Short per Link: $current")
+            if (first == null) linkShortAt = now
+            linkShort = current
+            linkFixTries = 0
+            return true
+        }
+        if (first.startsWith(current)) return true
+        // Direkt nach dem Öffnen zeigt YouTube manchmal kurz noch den alten Short, dann erst den aus dem Link.
+        if (now - linkShortAt < LINK_SETTLE_MS) {
+            Log.d(TAG, "Short per Link (neu geladen): $current")
+            linkShort = current
+            return true
+        }
+        if (now - lastLinkFixAt < LINK_FIX_MS) return true
+        lastLinkFixAt = now
+        // Die Shorts-Liste lässt sich über die Bedienungshilfen nicht scrollen: einmal echt zurückwischen.
+        if (linkFixTries == 0) {
+            linkFixTries++
+            reason("Short per Link: weitergewischt, zurück")
+            swipeFeedDown()
+            handler.postDelayed({ scheduleScan() }, LINK_FIX_MS)
+            return true
+        }
+        // Hat nicht gereicht: Shorts ganz schliessen.
+        reason("Short per Link: weitergewischt, schliesse")
+        linkShortActive = false
+        linkShort = null
+        return false
+    }
+
     private fun leaveShorts() {
         val now = SystemClock.uptimeMillis()
         if (now - lastBackAt < BACK_COOLDOWN_MS) return
@@ -670,6 +827,7 @@ class FuckShortsService : AccessibilityService() {
      */
     private fun onTabTapped(kind: TabKind) {
         tapSeq++
+        touchedSinceEnter = true
         val root = youTubeMainRoot() ?: run {
             tapLog("$kind: kein YouTube-Fenster gefunden")
             return
@@ -852,7 +1010,9 @@ class FuckShortsService : AccessibilityService() {
         window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY ||
             window.root?.packageName?.toString() == packageName
 
-    /** Das Hauptfenster von YouTube (das grösste). Dort liegen Leiste und Startseite, auch wenn ein Menü offen ist. */
+    /**
+     * Das Hauptfenster von YouTube (das grösste). Dort liegen Leiste und Startseite, auch wenn ein Menü offen ist.
+     */
     private fun youTubeMainRoot(): AccessibilityNodeInfo? {
         val r = Rect()
         return windows
@@ -860,6 +1020,18 @@ class FuckShortsService : AccessibilityService() {
             .mapNotNull { w -> w.root?.takeIf { it.packageName?.toString() == selectors.youtubePackage }?.let { w to it } }
             .maxByOrNull { (w, _) -> w.getBoundsInScreen(r); r.width().toLong() * r.height() }
             ?.second
+    }
+
+    /** Pro Fenster nur einmal nachsehen: Jede Abfrage kostet Zeit, die beim Verlassen eines Videos fehlt. */
+    private fun isMenuWindow(windowRoot: AccessibilityNodeInfo): Boolean {
+        menuWindows[windowRoot.windowId]?.let { return it }
+        val menu = scanner.isBottomSheet(windowRoot)
+        // Ein leeres Fenster wird vielleicht gerade erst aufgebaut: dann später nochmal schauen.
+        if (windowRoot.childCount > 0) {
+            if (menuWindows.size > 20) menuWindows.clear()
+            menuWindows[windowRoot.windowId] = menu
+        }
+        return menu
     }
 
     private fun isKeyboardOpen(): Boolean =
@@ -889,6 +1061,12 @@ class FuckShortsService : AccessibilityService() {
         private const val SLOW_SCAN_MS = 150L
         private const val REVEAL_POLL_MS = 50L
         private const val REVEAL_TRIES = 20
+        private const val LINK_WINDOW_MS = 8_000L
+        private const val LINK_END_MS = 400L
+        private const val LINK_FIX_MS = 600L
+        private const val LINK_SETTLE_MS = 2_000L
+        private const val CLOSING_DP = 24f
+        private const val FINGERPRINT_MS = 200L
         // Android braucht ein paar Bilder, bis unsere Leiste Berührungen durchlässt.
         private const val PASS_THROUGH_DELAY_MS = 80L
         private const val ICON_CENTER_DP = 20f
