@@ -25,6 +25,8 @@ data class Selectors(
     val shelfHeaderLabels: List<String>,
     val shelfHideLabels: List<String>,
     val miniPlayerLabels: List<String>,
+    val miniPlayerIds: List<String>,
+    val feedIds: List<String>,
 ) {
     fun fullId(id: String) = if (id.contains(":id/")) id else "$youtubePackage:id/$id"
 
@@ -56,6 +58,8 @@ data class Selectors(
                 shelfHeaderLabels = o.optJSONArray("shelfHeaderLabels")?.toList() ?: listOf("Shorts"),
                 shelfHideLabels = o.optJSONArray("shelfHideLabels")?.toList().orEmpty(),
                 miniPlayerLabels = o.optJSONArray("miniPlayerLabels")?.toList().orEmpty(),
+                miniPlayerIds = o.optJSONArray("miniPlayerIds")?.toList().orEmpty(),
+                feedIds = o.optJSONArray("feedIds")?.toList().orEmpty(),
             )
         }
 

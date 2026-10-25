@@ -59,12 +59,24 @@ class FuckShortsService : AccessibilityService() {
     private var hiddenByScroll = false
     private var navFromRest = false
     private var watchPageOpen = false
+    private var watchNode: AccessibilityNodeInfo? = null
+    private var watchTop = 0
+    /** Der letzte volle Scan hat unsere Leiste absichtlich versteckt (Shorts, verdeckt): nicht vorschnell zeigen. */
+    private var hiddenOnPurpose = false
+    /**
+     * YouTube nimmt seine Leiste beim Runterscrollen (z. B. Startseite) ganz aus der Oberfläche. Dann merken wir
+     * uns die Liste der Seite: Solange es sie gibt, sind wir noch auf derselben Seite und unsere Leiste bleibt.
+     */
+    private var goneFeed: AccessibilityNodeInfo? = null
+    private var lastScrollAt = 0L
+    private var tapSeq = 0
+    private var foregroundNullSince = 0L
     private var miniPlayerOpen = false
     private var lastMiniCheckAt = 0L
+    private var lastMiniWalkAt = 0L
     private var lastNavAt = 0L
     private var restSince = 0L
     private var fastUntil = 0L
-    private var hiddenUntil = 0L
     private var lastObservedTop = -1
     private var pollUntil = 0L
     private var polling = false
@@ -90,7 +102,7 @@ class FuckShortsService : AccessibilityService() {
             val now = SystemClock.uptimeMillis()
             // Solange unsere Leiste weg ist, die echte aber noch existiert (z. B. Video offen), weiter nachsehen:
             // So sind wir sofort da, wenn die echte wieder reinfährt.
-            val waitingForBar = !overlay.isShowing && lastBar != null
+            val waitingForBar = !overlay.isShowing && (lastBar != null || watchPageOpen)
             if (!connected || !youTubeActive || (now > pollUntil && !waitingForBar && now > fastUntil)) {
                 polling = false
                 return
@@ -182,6 +194,11 @@ class FuckShortsService : AccessibilityService() {
         handler.postDelayed(scanRunnable, delay)
     }
 
+    /** Nächster Scan erst nach ein paar Bildern, damit Android unsere Leiste vorher zeichnen kann. */
+    private fun continueScanSoon() {
+        handler.postDelayed({ scheduleScan() }, DRAW_FIRST_MS)
+    }
+
     private fun startPolling() {
         pollUntil = SystemClock.uptimeMillis() + POLL_DURATION_MS
         if (!polling) {
@@ -192,6 +209,7 @@ class FuckShortsService : AccessibilityService() {
 
     /** Beim Scrollen fährt YouTube seine Leiste raus/rein. Wir prüfen ab jetzt jedes Bild, damit unsere stehen bleibt. */
     private fun onScrolled() {
+        lastScrollAt = SystemClock.uptimeMillis()
         if (youTubeActive) updateBar(SystemClock.uptimeMillis(), null)
         startPolling()
     }
@@ -207,8 +225,11 @@ class FuckShortsService : AccessibilityService() {
 
     private fun scan() {
         handler.removeCallbacks(watchdog)
+        val started = SystemClock.uptimeMillis()
         try {
             scanInternal()
+            val took = SystemClock.uptimeMillis() - started
+            if (took > SLOW_SCAN_MS) Log.d(TAG, "Scan dauerte $took ms")
         } catch (e: Exception) {
             // Lieber nichts anzeigen als YouTube blockieren.
             Log.w(TAG, "Scan fehlgeschlagen", e)
@@ -216,12 +237,21 @@ class FuckShortsService : AccessibilityService() {
         }
         if (overlay.isShowing || covers.anyVisible) handler.postDelayed(watchdog, WATCHDOG_MS)
         // Unsere Leiste ist weg, die echte gibt es noch (z. B. Video offen): laufend nachsehen.
-        if (youTubeActive && !overlay.isShowing && lastBar != null) startPolling()
+        if (youTubeActive && !overlay.isShowing && (lastBar != null || watchPageOpen)) startPolling()
     }
 
     private fun hideAll() {
         overlay.hide()
         covers.hideAll()
+    }
+
+    private var lastReason = ""
+
+    /** Schreibt ins Protokoll (adb logcat -s FuckShorts), warum die Leiste gerade steht oder weg ist. Nur bei Wechsel. */
+    private fun reason(text: String) {
+        if (text == lastReason) return
+        lastReason = text
+        Log.d(TAG, "Leiste: $text")
     }
 
     private fun scanInternal() {
@@ -231,7 +261,19 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         val foreground = foregroundWindow()?.root
+        if (foreground == null && youTubeActive) {
+            // Beim Fensterwechsel (z. B. Plus -> Kamera) meldet Android kurz gar kein Fenster. Nicht gleich alles
+            // verstecken, sonst sieht man die echte Leiste, bis das neue Fenster da ist.
+            if (foregroundNullSince == 0L) foregroundNullSince = now
+            if (now - foregroundNullSince < FOREGROUND_GAP_MS) {
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+                return
+            }
+        } else {
+            foregroundNullSince = 0L
+        }
         if (foreground == null || foreground.packageName?.toString() != selectors.youtubePackage || isKeyboardOpen()) {
+            reason("YouTube nicht vorne (${foreground?.packageName})")
             youTubeActive = false
             youTubeSince = 0L
             hideAll()
@@ -243,7 +285,13 @@ class FuckShortsService : AccessibilityService() {
             // nicht erst nach dem Suchen. Die normale Logik übernimmt ab dem nächsten Durchgang.
             val rest = restBounds
             val state = lastUiState
-            if (rest != null && state != null) overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            if (rest != null && state != null && !watchPageOpen) {
+                youTubeActive = true
+                youTubeSince = now
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                continueScanSoon()
+                return
+            }
         }
         youTubeActive = true
         if (youTubeSince == 0L) youTubeSince = now
@@ -252,50 +300,80 @@ class FuckShortsService : AccessibilityService() {
             screen = newScreen
             restBounds = null
         }
-        val bar = scanner.findBar(root, screen)
-        watchPageOpen = scanner.isWatchPageOpen(root, screen)
-        if (now - lastMiniCheckAt > MINI_CHECK_MS) {
-            lastMiniCheckAt = now
-            miniPlayerOpen = scanner.isMiniPlayerVisible(root, screen)
+        // Gerade getippt: Zuerst nur nachsehen, ob ein Short aufgeht, damit er so schnell wie möglich wieder zugeht.
+        if (now < fastUntil && scanner.isShortsPlayerOpen(root, screen)) {
+            onShortsOpen()
+            return
         }
 
-        if (debugDumpWanted) {
-            debugDumpWanted = false
-            if (Prefs.debugDumps(this) && now - lastDebugDumpAt > DEBUG_DUMP_INTERVAL_MS) {
-                lastDebugDumpAt = now
-                dumper.dump(root, windows, "bildschirmwechsel")
+        // Video offen: nur den Player nachsehen (eine Abfrage). Eine volle Suche dauert, während YouTube die
+        // Video-Seite wegschiebt, bis zu 500 ms und hält so die Bild-für-Bild-Prüfung auf.
+        val openWatch = watchNode
+        if (watchPageOpen && openWatch != null) {
+            if (scanner.isStillLargePlayer(openWatch, watchTop, screen)) {
+                // Beim Öffnen fährt der Player noch hoch: immer die höchste Lage merken.
+                watchTop = minOf(watchTop, scanner.topOf(openWatch))
+                reason("Video offen")
+                hideAll()
+                return
+            }
+            // Video geht gerade zu: unsere Leiste sofort zeigen, die volle Suche unten prüft danach alles.
+            watchPageOpen = false
+            watchNode = null
+            val rest = restBounds
+            val state = lastUiState
+            if (rest != null && state != null) {
+                reason("Video verlassen (Scan)")
+                hiddenByScroll = false
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                // Erst zeichnen lassen, dann weitersuchen: Die volle Suche blockiert sonst das Zeichnen.
+                continueScanSoon()
+                return
             }
         }
 
+        // Reihenfolge ist wichtig: Erst alles, was nötig ist, damit unsere Leiste richtig steht. Langsames
+        // (Mini-Player, Profilbild, Regale) danach, sonst sieht man beim Verlassen eines Videos die echte Leiste.
+        val bar = scanner.findBar(root, screen)
+        watchNode = scanner.findWatchPlayer(root, screen)?.also { watchTop = scanner.topOf(it) }
+        watchPageOpen = watchNode != null
+
+        // Echte Leiste ist wieder da (z. B. zurück aus der Kamera), unsere noch nicht: sofort zeigen. Jede weitere
+        // Abfrage kostet jetzt 30–50 ms, weil YouTube gerade umbaut. Shorts & Co. prüft der nächste Scan.
+        val rest = restBounds
+        val state = lastUiState
+        if (bar != null && !overlay.isShowing && !watchPageOpen && !hiddenOnPurpose && rest != null && state != null &&
+            bar.tabs[TabKind.SHORTS]?.selected != true && bar.bounds.top < screen.bottom - 2
+        ) {
+            lastBar = bar
+            lastObservedTop = bar.bounds.top
+            reason("echte wieder da (Scan, top=${bar.bounds.top})")
+            hiddenByScroll = false
+            overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            continueScanSoon()
+            return
+        }
+
         if (scanner.isShortsScreen(root, bar, screen)) {
-            hideAll()
-            leaveShorts()
+            onShortsOpen()
             return
         }
 
         if (bar != null) {
             barSeenOnce = true
+            goneFeed = null
             lastBar = bar
             rememberRestPosition(bar)
             if (scanner.isBarCovered(root, bar)) {
+                reason("verdeckt ${bar.bounds.toShortString()}")
+                hiddenOnPurpose = true
                 hideAll()
                 return
             }
-            // Icons und Profilbild von der echten Leiste abschauen, sobald sie ganz still steht.
+            hiddenOnPurpose = false
+            // Positionen nur von der ganz eingefahrenen Leiste übernehmen, sonst nur Auswahl und roten Punkt.
             val atRest = bar.bounds == restBounds
             if (!atRest) restSince = 0L else if (restSince == 0L) restSince = now
-            if (atRest && sampler.needsCapture(bar)) {
-                if (now - restSince < REST_STABLE_MS) {
-                    handler.postDelayed({ scheduleScan() }, REST_STABLE_MS)
-                } else if (sampler.canCaptureBehindOverlay) {
-                    sampler.capture(bar, root.windowId, windowBounds(root.windowId)) { scheduleScan() }
-                } else if (!overlay.isShowing) {
-                    // Ältere Android-Versionen: nur ganzer Bildschirm, darum vorher nichts von uns zeigen.
-                    sampler.capture(bar, root.windowId, Rect(screen)) { scheduleScan() }
-                    return
-                }
-            }
-            // Positionen nur von der ganz eingefahrenen Leiste übernehmen, sonst nur Auswahl und roten Punkt.
             val previous = lastUiState
             lastUiState = if (atRest || previous == null) {
                 buildUiState(bar)
@@ -306,6 +384,13 @@ class FuckShortsService : AccessibilityService() {
                 )
             }
         } else if (lastBar == null) {
+            if (rest != null && state != null && keepWhileScrolledAway(now)) {
+                reason("echte weggescrollt und entfernt, unsere bleibt (Scan)")
+                hiddenByScroll = true
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                return
+            }
+            reason("keine Leiste gefunden")
             hideAll()
             val stuck = !barSeenOnce && now - youTubeSince > AUTO_DUMP_AFTER_MS
             if (stuck && now - lastAutoDumpAt > AUTO_DUMP_INTERVAL_MS) {
@@ -315,7 +400,41 @@ class FuckShortsService : AccessibilityService() {
             return
         }
 
+        val wasShowing = overlay.isShowing
         updateBar(now, bar)
+        if (!wasShowing && overlay.isShowing) {
+            // Unsere Leiste kommt gerade: sofort zeichnen lassen, Mini-Player, Profilbild und Regale danach.
+            continueScanSoon()
+            return
+        }
+
+        if (now - lastMiniCheckAt > MINI_CHECK_MS) {
+            lastMiniCheckAt = now
+            val walk = now - lastMiniWalkAt > MINI_WALK_MS
+            if (walk) lastMiniWalkAt = now
+            miniPlayerOpen = scanner.isMiniPlayerVisible(root, screen, walk)
+        }
+
+        if (debugDumpWanted) {
+            debugDumpWanted = false
+            if (Prefs.debugDumps(this) && now - lastDebugDumpAt > DEBUG_DUMP_INTERVAL_MS) {
+                lastDebugDumpAt = now
+                dumper.dump(root, windows, "bildschirmwechsel")
+            }
+        }
+
+        // Icons und Profilbild von der echten Leiste abschauen, sobald sie ganz still steht.
+        if (bar != null && bar.bounds == restBounds && sampler.needsCapture(bar)) {
+            if (now - restSince < REST_STABLE_MS) {
+                handler.postDelayed({ scheduleScan() }, REST_STABLE_MS)
+            } else if (sampler.canCaptureBehindOverlay) {
+                sampler.capture(bar, root.windowId, windowBounds(root.windowId)) { scheduleScan() }
+            } else if (!overlay.isShowing) {
+                // Ältere Android-Versionen: nur ganzer Bildschirm, darum vorher nichts von uns zeigen.
+                sampler.capture(bar, root.windowId, Rect(screen)) { scheduleScan() }
+                return
+            }
+        }
 
         shelves = scanner.findShelves(root, screen, coverLimit())
         covers.show(shelves.map { it.bounds }, currentStyle())
@@ -344,12 +463,38 @@ class FuckShortsService : AccessibilityService() {
             overlay.hide()
             return
         }
+        // Video offen: Die echte Leiste liegt unverändert hinter dem Video (oder fehlt ganz, wenn die Startseite
+        // weggescrollt war). Das Verlassen merkt man darum nicht an ihr, sondern daran, dass der grosse Player
+        // nach unten wegrutscht. YouTube meldet dabei ~100 ms lang nichts; darum bei jedem Bild selbst nachsehen.
+        if (watchPageOpen && fresh == null) {
+            val node = watchNode
+            if (node != null && scanner.isStillLargePlayer(node, watchTop, screen)) {
+                watchTop = minOf(watchTop, scanner.topOf(node))
+                reason("Video offen")
+                overlay.hide()
+                return
+            }
+            watchPageOpen = false
+            watchNode = null
+            reason("Video verlassen")
+            hiddenByScroll = false
+            overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            scheduleScan()
+            return
+        }
         val observedTop = when {
             fresh != null -> fresh.bounds.top
             else -> lastBar?.let { scanner.liveTop(it.container, screen) }
         }
         if (observedTop == null) {
+            if (keepWhileScrolledAway(now)) {
+                reason("echte weggescrollt und entfernt, unsere bleibt")
+                hiddenByScroll = true
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                return
+            }
             // Die Leiste gibt es nicht mehr (anderer Bildschirm, z. B. Kamera nach Plus): sofort weg.
+            reason("Leiste nicht mehr da")
             lastBar = null
             lastObservedTop = -1
             overlay.hide()
@@ -362,19 +507,18 @@ class FuckShortsService : AccessibilityService() {
         val appearing = visibleNow && wasHidden
         val movingUp = visibleNow && lastObservedTop >= 0 && observedTop < lastObservedTop - 1
         lastObservedTop = observedTop
-        if (now < hiddenUntil) {
-            overlay.hide()
-            return
-        }
         if (appearing || movingUp) {
+            reason("echte taucht auf (top=$observedTop)")
             hiddenByScroll = false
             overlay.show(rest.top, rest, state.copy(style = currentStyle()))
             return
         }
         if (watchPageOpen) {
+            reason("Video offen")
             overlay.hide()
             return
         }
+        reason("normal (top=$observedTop)")
         // Startseite: unsere Leiste bleibt immer ganz da und fährt nie halb runter. Sie verschwindet erst,
         // wenn nach einem Tipp (Video geöffnet) die echte Leiste schon komplett weg ist.
         val onHome = state.selected == TabKind.HOME
@@ -406,6 +550,24 @@ class FuckShortsService : AccessibilityService() {
         } else {
             overlay.show(top, rest, state.copy(style = currentStyle()))
         }
+    }
+
+    /** Echte Leiste ist weg: Nur weil gescrollt wurde (dieselbe Liste ist noch da)? Dann bleibt unsere stehen. */
+    private fun keepWhileScrolledAway(now: Long): Boolean {
+        if (watchPageOpen) {
+            goneFeed = null
+            return false
+        }
+        val known = goneFeed
+        if (known != null && scanner.isFeedStillThere(known, screen)) return true
+        // Noch keine Liste gemerkt, oder sie war beim schnellen Wischen kurz nicht abfragbar: neu suchen,
+        // aber nur direkt nach dem Scrollen und ohne Tipp dazwischen (sonst ist es wohl eine andere Seite).
+        goneFeed = null
+        if (lastNavAt > lastScrollAt) return false
+        if (known == null && now - lastScrollAt > SCROLL_GONE_MS) return false
+        val root = youTubeMainRoot() ?: return false
+        goneFeed = scanner.findFeed(root, screen)
+        return goneFeed != null
     }
 
     private fun updateShelfPositions() {
@@ -474,6 +636,17 @@ class FuckShortsService : AccessibilityService() {
         scheduleScan()
     }
 
+    /**
+     * Ein Short ist offen: sofort zurück. Unsere Leiste bleibt dabei stehen, sonst sieht man, bis der Short
+     * zu ist, die echte Leiste mit dem Shorts-Knopf.
+     */
+    private fun onShortsOpen() {
+        reason("Shorts offen")
+        hiddenOnPurpose = true
+        covers.hideAll()
+        leaveShorts()
+    }
+
     private fun leaveShorts() {
         val now = SystemClock.uptimeMillis()
         if (now - lastBackAt < BACK_COOLDOWN_MS) return
@@ -491,41 +664,98 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /**
-     * Tipp auf unsere Leiste. Am zuverlässigsten ist ein echter Finger-Tipp auf den echten Knopf darunter
-     * (wie wenn du selbst tippst). Das geht, wenn die echte Leiste ganz da ist. Ist sie weggescrollt,
-     * klicken wir den Knopf über die Bedienungshilfen und prüfen danach, ob es geklappt hat.
+     * Tipp auf unsere Leiste. Zuerst klicken wir den echten Knopf über die Bedienungshilfen und prüfen danach,
+     * ob es geklappt hat; nur sonst ein künstlicher Finger-Tipp. Der Finger-Tipp allein war unzuverlässig:
+     * Ist das Handy beschäftigt, landet er auf unserer eigenen Leiste statt auf der echten (Protokoll: tipps.txt).
      */
     private fun onTabTapped(kind: TabKind) {
+        tapSeq++
         val root = youTubeMainRoot() ?: run {
             tapLog("$kind: kein YouTube-Fenster gefunden")
             return
         }
         if (kind == TabKind.CREATE) {
-            // Plus öffnet die Kamera: unsere Leiste sofort weg, nicht erst wenn YouTube umgeschaltet hat.
-            overlay.hide()
+            // Plus öffnet die Kamera. Die erscheint erst ~300 ms später; bis dahin bleibt unsere Leiste stehen,
+            // sonst sieht man so lange die echte mit Shorts-Knopf. Sie verschwindet, sobald die echte Leiste
+            // aus YouTube verschwindet (siehe updateBar). Dafür ab jetzt jedes Bild prüfen.
             fastUntil = SystemClock.uptimeMillis() + FAST_WINDOW_MS
-            hiddenUntil = fastUntil
+            startPolling()
         }
+        // Auch bei weggescrollter Leiste: ihre Knöpfe neu einlesen und über die Bedienungshilfen klicken.
         val fresh = scanner.findBar(root, screenBounds())
-        val freshBounds = fresh?.tabs?.get(kind)?.bounds
-        if (fresh != null && freshBounds != null && isAtRest(fresh)) {
-            tapLog("$kind: Finger-Tipp auf echten Knopf")
-            tapThrough(freshBounds)
-            scheduleScan()
-            return
-        }
-        // Echte Leiste weggescrollt: ihre Knöpfe neu einlesen und über die Bedienungshilfen klicken.
         val bar = fresh ?: lastBar?.let { scanner.rebuildBar(it.container) }
         val node = bar?.nodes?.get(kind)
+        if (node == null && fresh == null) {
+            // YouTube hat seine Leiste beim Scrollen ganz entfernt: Liste ein Stück hochscrollen, dann kommt
+            // sie zurück, und wir klicken den echten Knopf.
+            revealBarThenClick(kind, root)
+            return
+        }
         if (node == null) {
-            tapLog("$kind: Tab nicht gefunden (Leiste ${if (fresh == null) "weg" else "da"})")
+            tapLog("$kind: Tab nicht gefunden (Leiste da)")
             dumper.dump(root, windows, "tab-$kind-nicht-gefunden")
+            tapThroughIfVisible(kind)
             return
         }
         val clicked = click(node)
         tapLog("$kind: Klick ${if (clicked) "ok" else "fehlgeschlagen"}")
-        if (kind != TabKind.CREATE) handler.postDelayed({ verifyTab(kind) }, VERIFY_MS)
+        if (!clicked) {
+            tapThroughIfVisible(kind)
+        } else if (kind != TabKind.CREATE) {
+            verifyLater(kind)
+        }
         scheduleScan()
+    }
+
+    /** Prüft nach einer Weile, ob der Tab gewählt ist – aber nur, wenn du seither nicht schon weitergetippt hast. */
+    private fun verifyLater(kind: TabKind) {
+        val seq = tapSeq
+        handler.postDelayed({ if (seq == tapSeq) verifyTab(kind) }, VERIFY_MS)
+    }
+
+    private fun revealBarThenClick(kind: TabKind, root: AccessibilityNodeInfo) {
+        val feed = goneFeed ?: scanner.findFeed(root, screen)
+        val scrolled = feed?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
+        tapLog("$kind: echte Leiste weg, scrolle hoch (${if (scrolled) "ok" else "fehlgeschlagen"})")
+        if (!scrolled) swipeFeedDown()
+        waitForBarThenClick(kind, tapSeq, 0, swiped = !scrolled)
+    }
+
+    /** Wartet, bis die echte Leiste wieder da ist, und klickt dann ihren Knopf. */
+    private fun waitForBarThenClick(kind: TabKind, seq: Int, attempt: Int, swiped: Boolean) {
+        handler.postDelayed({
+            if (seq != tapSeq) return@postDelayed
+            val root = youTubeMainRoot() ?: return@postDelayed
+            val node = scanner.findBar(root, screenBounds())?.nodes?.get(kind)
+            when {
+                node != null -> {
+                    val clicked = click(node)
+                    tapLog("$kind: Leiste wieder da, Klick ${if (clicked) "ok" else "fehlgeschlagen"}")
+                    if (clicked && kind != TabKind.CREATE) verifyLater(kind)
+                    scheduleScan()
+                }
+                // Hochscrollen über die Bedienungshilfen hat die Leiste nicht zurückgebracht: echt wischen.
+                attempt == REVEAL_TRIES / 2 && !swiped -> {
+                    swipeFeedDown()
+                    waitForBarThenClick(kind, seq, attempt + 1, swiped = true)
+                }
+                attempt < REVEAL_TRIES -> waitForBarThenClick(kind, seq, attempt + 1, swiped)
+                else -> tapLog("$kind: echte Leiste kam nicht zurück")
+            }
+        }, REVEAL_POLL_MS)
+    }
+
+    /** Künstliches Wischen nach unten mitten im Bild (= Liste hochscrollen), weit weg von unserer Leiste. */
+    private fun swipeFeedDown() {
+        val x = screen.exactCenterX()
+        val path = Path().apply {
+            moveTo(x, screen.height() * 0.35f)
+            lineTo(x, screen.height() * 0.65f)
+        }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 120))
+            .build()
+        dispatchGesture(gesture, null, handler)
     }
 
     private fun isAtRest(bar: FoundBar): Boolean {
@@ -536,7 +766,10 @@ class FuckShortsService : AccessibilityService() {
     private fun verifyTab(kind: TabKind) {
         val root = youTubeMainRoot() ?: return
         val bar = scanner.findBar(root, screen) ?: return
-        if (bar.tabs[kind]?.selected == true) return
+        if (bar.tabs[kind]?.selected == true) {
+            tapLog("$kind: ausgewählt")
+            return
+        }
         tapLog("$kind: nach Klick nicht ausgewählt, versuche Finger-Tipp")
         tapThroughIfVisible(kind)
     }
@@ -601,7 +834,7 @@ class FuckShortsService : AccessibilityService() {
                 }
             }
             if (!dispatchGesture(gesture, done, handler)) overlay.setPassThrough(false)
-        }, 40)
+        }, PASS_THROUGH_DELAY_MS)
     }
 
     /**
@@ -649,6 +882,15 @@ class FuckShortsService : AccessibilityService() {
         private const val VERIFY_MS = 400L
         private const val FAST_WINDOW_MS = 1_500L
         private const val MINI_CHECK_MS = 400L
+        private const val MINI_WALK_MS = 5_000L
+        private const val DRAW_FIRST_MS = 50L
+        private const val SCROLL_GONE_MS = 1_500L
+        private const val FOREGROUND_GAP_MS = 500L
+        private const val SLOW_SCAN_MS = 150L
+        private const val REVEAL_POLL_MS = 50L
+        private const val REVEAL_TRIES = 20
+        // Android braucht ein paar Bilder, bis unsere Leiste Berührungen durchlässt.
+        private const val PASS_THROUGH_DELAY_MS = 80L
         private const val ICON_CENTER_DP = 20f
         private const val LABEL_TOP_DP = 32.5f
         private const val REST_STABLE_MS = 300L

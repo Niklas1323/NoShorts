@@ -71,6 +71,13 @@
   "watchIds": [
     "watch_player"
   ],
+  "feedIds": [
+    "results"
+  ],
+  "miniPlayerIds": [
+    "modern_miniplayer_close",
+    "modern_miniplayer_overlay_action_button"
+  ],
   "miniPlayerLabels": [
     "Mini-Player schließen",
     "Miniplayer schließen",

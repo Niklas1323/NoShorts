@@ -90,6 +90,7 @@ class BottomBarOverlay(
 
     private val target = Rect()
     private var passThrough = false
+    private var ignoreTapsUntil = 0L
 
     var isShowing = false
         private set
@@ -159,9 +160,14 @@ class BottomBarOverlay(
         windowManager.updateViewLayout(v, params)
     }
 
-    /** Lässt Berührungen kurz durch unsere Leiste hindurch (für den Fallback-Tipp auf die echte Leiste). */
+    /**
+     * Lässt Berührungen kurz durch unsere Leiste hindurch (für den Fallback-Tipp auf die echte Leiste).
+     * Android setzt das erst ein paar Bilder später um. Kommt unser künstlicher Tipp früher an, landet er
+     * auf unserer Leiste – in einer anderen Spalte (4 statt 5 Knöpfe). Darum Tipps eine Weile ignorieren.
+     */
     fun setPassThrough(enabled: Boolean) {
         passThrough = enabled
+        if (enabled) ignoreTapsUntil = SystemClock.uptimeMillis() + IGNORE_AFTER_PASS_THROUGH_MS
         val v = view ?: return
         val flags = currentFlags()
         if (params.flags != flags) {
@@ -204,7 +210,8 @@ class BottomBarOverlay(
             setViewTreeSavedStateRegistryOwner(owner)
             // Berührungen selbst auswerten statt über Compose: einfacher und zuverlässiger in einem Overlay.
             // Die Leiste hat vier gleich breite Spalten: Startseite, Abos, Mein YouTube, Plus.
-            setOnTouchListener(TapHandler(onTap = { x, width ->
+            setOnTouchListener(TapHandler(onTap = tap@{ x, width ->
+                if (SystemClock.uptimeMillis() < ignoreTapsUntil) return@tap
                 val column = (x / width * 4).toInt().coerceIn(0, 3)
                 val kind = COLUMNS[column]
                 if (kind != TabKind.CREATE || uiState?.hasCreate == true) {
@@ -241,6 +248,7 @@ class BottomBarOverlay(
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         const val OPTIMISTIC_MS = 600L
+        const val IGNORE_AFTER_PASS_THROUGH_MS = 700L
         val COLUMNS = listOf(TabKind.HOME, TabKind.SUBSCRIPTIONS, TabKind.YOU, TabKind.CREATE)
     }
 
@@ -476,16 +484,22 @@ private fun BoxScope.IconArea(
 
 @Composable
 private fun Label(text: String, color: Color, modifier: Modifier = Modifier) {
+    // YouTube vergrössert die Schrift in seiner Leiste nicht mit der Systemschrift. Darum in dp statt sp,
+    // sonst wird "Mein YouTube" bei grosser Schrift abgeschnitten.
+    val density = LocalDensity.current
     Text(
         text = text,
         color = color,
-        fontSize = 10.sp,
-        lineHeight = 12.sp,
+        fontSize = with(density) { LABEL_DP.dp.toSp() },
+        lineHeight = with(density) { 12.dp.toSp() },
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier,
     )
 }
+
+/** Schriftgrösse wie die echte Leiste (gemessen: "Startseite" ist dort 129 px breit bei Dichte 2,875). */
+private const val LABEL_DP = 10.5f
 
 @Composable
 private fun TabIcon(icon: ImageVector, tint: Color) {

@@ -57,6 +57,11 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
 
     fun isShortsScreen(root: AccessibilityNodeInfo, bar: FoundBar?, screen: Rect): Boolean {
         if (bar?.tabs?.get(TabKind.SHORTS)?.selected == true) return true
+        return isShortsPlayerOpen(root, screen)
+    }
+
+    /** Nur der Shorts-Player (ohne Leiste zu suchen): schnell genug, um es direkt nach einem Tipp zu prüfen. */
+    fun isShortsPlayerOpen(root: AccessibilityNodeInfo, screen: Rect): Boolean {
         val screenArea = screen.width().toLong() * screen.height()
         val r = Rect()
         for (id in sel.shortsPlayerIds) {
@@ -73,26 +78,48 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
      * True, wenn ein Video gross offen ist (Wiedergabe-Seite): oben ein Player über die ganze Breite.
      * Der kleine Mini-Player unten zählt nicht.
      */
-    fun isWatchPageOpen(root: AccessibilityNodeInfo, screen: Rect): Boolean {
-        val r = Rect()
+    fun findWatchPlayer(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
         for (id in sel.watchIds) {
             for (node in root.findAccessibilityNodeInfosByViewId(sel.fullId(id))) {
-                if (!node.isVisibleToUser) continue
-                node.getBoundsInScreen(r)
-                val wide = r.width() >= screen.width() * 0.9
-                val nearTop = r.top < screen.height() * 0.35
-                val playerSized = r.height() >= 150 * density && r.height() <= screen.height() * 0.7
-                if (wide && nearTop && playerSized) return true
+                if (isLargePlayer(node, screen)) return node
             }
         }
-        return false
+        return null
+    }
+
+    /**
+     * Prüft einen schon gefundenen Player neu (eine einzige Abfrage, schnell genug für jedes Bild).
+     * Beim Verlassen des Videos rutscht die ganze Video-Seite nach unten weg: Sobald der Player tiefer
+     * steht als beim Öffnen ([openTop]), ist das Video am Zugehen.
+     */
+    fun isStillLargePlayer(node: AccessibilityNodeInfo, openTop: Int, screen: Rect): Boolean {
+        if (!node.refresh() || !isLargePlayer(node, screen)) return false
+        return node.bounds().top <= openTop + 4 * density
+    }
+
+    fun topOf(node: AccessibilityNodeInfo): Int = node.bounds().top
+
+    private fun isLargePlayer(node: AccessibilityNodeInfo, screen: Rect): Boolean {
+        if (!node.isVisibleToUser) return false
+        val r = node.bounds()
+        val wide = r.width() >= screen.width() * 0.9
+        val nearTop = r.top < screen.height() * 0.35
+        val playerSized = r.height() >= 150 * density && r.height() <= screen.height() * 0.7
+        return wide && nearTop && playerSized
     }
 
     /**
      * True, wenn unten der kleine Mini-Player zu sehen ist. Sucht nach Elementen, deren ID "miniplayer"
-     * enthält (YouTube nennt sie z. B. modern_miniplayer_close). Geht den ganzen Baum durch, darum selten aufrufen.
+     * enthält (YouTube nennt sie z. B. modern_miniplayer_close). Mit [allowWalk] geht sie notfalls den
+     * ganzen Baum durch, darum dann selten aufrufen.
      */
-    fun isMiniPlayerVisible(root: AccessibilityNodeInfo, screen: Rect): Boolean {
+    fun isMiniPlayerVisible(root: AccessibilityNodeInfo, screen: Rect, allowWalk: Boolean): Boolean {
+        // Am schnellsten: die bekannten IDs (auf dem Pixel nachgesehen, YouTube 21.41).
+        for (id in sel.miniPlayerIds) {
+            for (node in root.findAccessibilityNodeInfosByViewId(sel.fullId(id))) {
+                if (node.isVisibleToUser && node.bounds().centerY() > screen.height() / 2) return true
+            }
+        }
         // Schnell: kleine Knöpfe (Schliessen, Pause) unten rechts, wie beim Mini-Player.
         val maxButton = 72 * density
         for (label in sel.miniPlayerLabels) {
@@ -103,6 +130,8 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
                 if (small && b.centerX() > screen.width() * 0.45 && b.centerY() > screen.height() * 0.45) return true
             }
         }
+        // Langsam (bis zu 300 ms, wenn YouTube gerade umbaut): nur ab und zu, falls YouTube die IDs ändert.
+        if (!allowWalk) return false
         var checked = 0
         val r = Rect()
         fun walk(node: AccessibilityNodeInfo, depth: Int): Boolean {
@@ -208,6 +237,37 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         val r = container.bounds()
         if (r.isEmpty || r.top >= screen.bottom) return screen.bottom
         return r.top
+    }
+
+    /**
+     * Die grosse senkrechte Liste der aktuellen Seite (Startseite, Abos ...). Solange es sie noch gibt, sind wir
+     * auf derselben Seite, auch wenn YouTube seine Leiste beim Scrollen ganz entfernt hat.
+     */
+    fun findFeed(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
+        for (id in sel.feedIds) {
+            for (node in root.findAccessibilityNodeInfosByViewId(sel.fullId(id))) {
+                if (isFeed(node, screen)) return node
+            }
+        }
+        var checked = 0
+        fun walk(node: AccessibilityNodeInfo, depth: Int): AccessibilityNodeInfo? {
+            if (checked++ > 400 || depth > 20) return null
+            if (isFeed(node, screen)) return node
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                walk(child, depth + 1)?.let { return it }
+            }
+            return null
+        }
+        return walk(root, 0)
+    }
+
+    fun isFeedStillThere(feed: AccessibilityNodeInfo, screen: Rect): Boolean = feed.refresh() && isFeed(feed, screen)
+
+    private fun isFeed(node: AccessibilityNodeInfo, screen: Rect): Boolean {
+        if (!node.isScrollable || !node.isVisibleToUser) return false
+        val r = node.bounds()
+        return r.height() >= screen.height() * 0.4 && r.width() >= screen.width() * 0.9
     }
 
     /** Der ⋮-Knopf rechts neben der Überschrift "Shorts". */

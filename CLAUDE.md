@@ -25,12 +25,30 @@ Der Nutzer fand Version 14–16 am besten. Gewünschtes Verhalten:
   wenn die echte Leiste komplett weg ist. Die echte Leiste darf nie sichtbar werden.
 - **Video verlassen:** unsere Leiste muss im selben Moment da sein wie die echte (nie die echte zuerst).
 - **Plus → Kamera:** Leiste sofort weg; beim Zurückkommen flüssig, ohne Animation, sofort da.
-- **Mini-Player** soll über der Leiste liegen (auf der Startseite aktuell nicht gelöst).
-- **Knöpfe** funktionieren laut Nutzer nur manchmal (Protokoll: `tipps.txt` im Dump-Ordner).
-- Shorts sollen nach einem Tipp so schnell wie möglich wieder zugehen.
+- **Mini-Player** soll über der Leiste liegen (YouTube setzt ihn selbst darüber, geprüft auf Startseite).
+- **Knöpfe** funktionierten nur manchmal – behoben (siehe unten), Protokoll: `tipps.txt` im Dump-Ordner.
+- Shorts sollen nach einem Tipp so schnell wie möglich wieder zugehen (~120 ms; unsere Leiste bleibt dabei stehen).
 
-Unsicher/geraten: `watchIds` (`watch_player`), Mini-Player-Erkennung, Shorts-Player-IDs. Mit
-`adb shell uiautomator dump` den echten Aufbau ansehen und `selectors.json` korrigieren.
+Unsicher/geraten: Shorts-Player-IDs. Mit `adb shell uiautomator dump` den echten Aufbau ansehen und
+`selectors.json` korrigieren (bei laufendem Video vorher `adb shell input keyevent KEYCODE_MEDIA_PAUSE`,
+sonst "could not get idle state").
+
+## Am Pixel 9 nachgemessen (YouTube 21.41, 25.10.2026)
+
+Mit `adb shell screenrecord` + ffmpeg Bild für Bild geprüft:
+- `watch_player` stimmt. Video offen: echte Leiste liegt unverändert dahinter, YouTube meldet ~100 ms nichts.
+  Beim Verlassen rutscht die ganze Video-Seite nach unten → wir erkennen das am Player (Oberkante sinkt),
+  in der 16-ms-Schleife. Rest: höchstens 1 Bild ein ~1 mm Streifen.
+- Mini-Player-IDs: `modern_miniplayer_close`, `modern_miniplayer_overlay_action_button`.
+- Startseite: YouTube **entfernt** seine Leiste beim Runterscrollen ganz aus dem Baum. Unsere bleibt, solange
+  die Liste (`results`) dieselbe ist (`goneFeed`). Tipp auf unsere Leiste dann: Liste hochscrollen
+  (ACTION_SCROLL_BACKWARD), warten bis die echte Leiste da ist, dann klicken.
+- Knöpfe: Erst Klick über Bedienungshilfen, Finger-Tipp nur als Notlösung. Der Finger-Tipp landete sonst
+  oft auf unserer eigenen Leiste (4 statt 5 Spalten → falscher Tab, z. B. Plus → "Mein YouTube").
+- Abfragen an YouTube kosten 30–50 ms, während YouTube umbaut. Darum: sobald unsere Leiste neu erscheinen
+  soll, Scan abbrechen (`continueScanSoon`), sonst wird sie erst nach dem Scan gezeichnet.
+- Systemschrift ist beim Nutzer 150 %; YouTube vergrössert seine Leistenschrift nicht → unsere in dp.
+- Warum die Leiste gerade steht/weg ist: `adb logcat -s FuckShorts` ("Leiste: ...").
 
 ## Testen auf dem Pixel (adb)
 
@@ -52,4 +70,7 @@ und `adb shell settings put secure accessibility_enabled 1`.
 
 GitHub Actions (`.github/workflows/build-apk.yml`) baut bei jedem Push eine APK und veröffentlicht sie als Release
 (`releases/latest/download/FuckShorts.apk`). Lokal: JDK 17 + Android SDK, `./gradlew assembleDebug`.
+Auf dem Windows-PC des Nutzers installiert: JDK unter `C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot`,
+SDK unter `%LOCALAPPDATA%\Android\Sdk` (`local.properties`), adb über winget (Google.PlatformTools).
+Lokale Builds haben versionCode 1 → `adb install -r -d`.
 Arbeits-Branch: `claude/intelligent-volta-4lochv`.

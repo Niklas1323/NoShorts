@@ -166,17 +166,25 @@ class BarStyleSampler(private val service: AccessibilityService) {
         val top = centerY - size / 2
         if (left < 0 || top < 0 || left + size > bitmap.width || top + size > bitmap.height) return null
         val cut = Bitmap.createBitmap(bitmap, left, top, size, size)
-        // Ein geladenes Profilbild hat Inhalt; ein leerer Platzhalter ist fast einfarbig.
+        // Ein geladenes Profilbild hat Inhalt; ein leerer Platzhalter ist fast einfarbig und grau.
+        // Ein Buchstaben-Bild (farbiger Kreis mit dünnem "L") hat kaum Helligkeitsunterschiede an den
+        // Messpunkten, aber eine kräftige Farbe.
         var min = 255f
         var maxL = 0f
+        var maxChroma = 0
         for (gy in 2..6) {
             for (gx in 2..6) {
-                val l = luminance(cut.getPixel(cut.width * gx / 8, cut.height * gy / 8))
+                val p = cut.getPixel(cut.width * gx / 8, cut.height * gy / 8)
+                val l = luminance(p)
                 min = minOf(min, l)
                 maxL = maxOf(maxL, l)
+                val r = AndroidColor.red(p)
+                val g = AndroidColor.green(p)
+                val bl = AndroidColor.blue(p)
+                maxChroma = maxOf(maxChroma, maxOf(r, g, bl) - minOf(r, g, bl))
             }
         }
-        return if (maxL - min > 25) cut else null
+        return if (maxL - min > 25 || maxChroma > 60) cut else null
     }
 
     private fun luminance(p: Int) =
