@@ -2,8 +2,9 @@
 
 Android-App (Kotlin, Compose), die in der echten YouTube-App den Shorts-Knopf versteckt.
 Ein `AccessibilityService` legt eine eigene untere Leiste (Startseite, Abos, Mein YouTube, Plus) als
-`TYPE_ACCESSIBILITY_OVERLAY` über die echte YouTube-Leiste, schliesst Shorts sofort (Zurück) und deckt
-Shorts-Regale ab bzw. klickt sie über ⋮ → "Kein Interesse/Nicht interessiert" weg.
+`TYPE_ACCESSIBILITY_OVERLAY` über die echte YouTube-Leiste, schliesst Shorts sofort (Zurück) und klickt
+Shorts-Regale über ⋮ → "Kein Interesse/Nicht interessiert" weg. Regale werden **nicht** abgedeckt (Wunsch des
+Nutzers, 26.10.2026 – die frühere graue Fläche `ShelfCovers` mit Zitat ist gelöscht).
 
 Der Nutzer (Niklas) schreibt Deutsch (Schweiz, "ss" statt "ß") und möchte sehr einfache Erklärungen.
 Er arbeitet vom Handy aus; diese Sitzung läuft auf seinem Computer, das Pixel hängt per USB dran.
@@ -14,7 +15,7 @@ Er arbeitet vom Handy aus; diese Sitzung läuft auf seinem Computer, das Pixel h
 - `.../service/BottomBarOverlay.kt` – unsere Leiste (Fenster + Compose-Inhalt, Touch über `TapHandler`)
 - `.../service/YouTubeScanner.kt` – findet echte Leiste, Tabs, Regale, Shorts-Player, Mini-Player
 - `.../service/BarStyle.kt` – Farben, Profilbild (aus Fenster-Screenshot ausgeschnitten)
-- `.../service/ShelfCovers.kt` – graue Fläche (ohne Text – Nutzer wollte das Zitat weg) über Shorts-Regalen
+- `.../service/TouchWatcher.kt` – merkt jede Berührung (für "Short per Link")
 - `app/src/main/assets/selectors.json` – IDs/Beschriftungen der YouTube-Elemente (viele davon geraten!)
 
 ## Stand und offene Punkte (Version 16)

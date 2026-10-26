@@ -33,7 +33,6 @@ class FuckShortsService : AccessibilityService() {
     private lateinit var selectors: Selectors
     private lateinit var scanner: YouTubeScanner
     private lateinit var overlay: BottomBarOverlay
-    private lateinit var covers: ShelfCovers
     private lateinit var dumper: TreeDumper
     private lateinit var sampler: BarStyleSampler
     private lateinit var touchWatcher: TouchWatcher
@@ -132,7 +131,6 @@ class FuckShortsService : AccessibilityService() {
             }
             try {
                 updateBar(now, null)
-                updateShelfPositions()
                 if (now < fastUntil) scheduleScan()
             } catch (e: Exception) {
                 Log.w(TAG, "Nachführen fehlgeschlagen", e)
@@ -145,7 +143,6 @@ class FuckShortsService : AccessibilityService() {
         super.onServiceConnected()
         selectors = Selectors.load(this)
         scanner = YouTubeScanner(selectors, resources.displayMetrics.density)
-        covers = ShelfCovers(this)
         overlay = BottomBarOverlay(this, ::onTabTapped, ::onBarLongPressed)
         dumper = TreeDumper(this)
         sampler = BarStyleSampler(this)
@@ -185,7 +182,7 @@ class FuckShortsService : AccessibilityService() {
             }
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED -> scheduleScan()
-            overlay.isShowing || covers.anyVisible || shelfMenuOpenedAt != 0L -> scheduleScan()
+            overlay.isShowing || shelfMenuOpenedAt != 0L -> scheduleScan()
         }
     }
 
@@ -209,7 +206,6 @@ class FuckShortsService : AccessibilityService() {
         connected = false
         handler.removeCallbacksAndMessages(null)
         if (::overlay.isInitialized) overlay.destroy()
-        if (::covers.isInitialized) covers.destroy()
         if (::touchWatcher.isInitialized) touchWatcher.stop()
         super.onDestroy()
     }
@@ -264,14 +260,13 @@ class FuckShortsService : AccessibilityService() {
             Log.w(TAG, "Scan fehlgeschlagen", e)
             hideAll()
         }
-        if (overlay.isShowing || covers.anyVisible) handler.postDelayed(watchdog, WATCHDOG_MS)
+        if (overlay.isShowing) handler.postDelayed(watchdog, WATCHDOG_MS)
         // Unsere Leiste ist weg, die echte gibt es noch (z. B. Video offen): laufend nachsehen.
         if (youTubeActive && !overlay.isShowing && (lastBar != null || watchPageOpen)) startPolling()
     }
 
     private fun hideAll() {
         overlay.hide()
-        covers.hideAll()
     }
 
     private var lastReason = ""
@@ -535,7 +530,6 @@ class FuckShortsService : AccessibilityService() {
         val found = scanner.findShelves(root, screen, coverLimit())
         if (found.size != shelves.size) Log.d(TAG, "Shorts-Regale: ${found.size}")
         shelves = found
-        covers.show(shelves.map { it.bounds }, currentStyle())
         if (shelves.isNotEmpty()) tryHideShelf(shelves, now)
     }
 
@@ -673,12 +667,6 @@ class FuckShortsService : AccessibilityService() {
         return goneFeed != null
     }
 
-    private fun updateShelfPositions() {
-        if (shelves.isEmpty()) return
-        val limit = coverLimit()
-        covers.show(shelves.mapNotNull { scanner.refreshShelf(it, limit) }, currentStyle())
-    }
-
     private fun coverLimit(): Int = if (overlay.isShowing) overlay.top else screen.bottom
 
     private fun currentStyle(): BarStyle = sampler.style(nightMode == Configuration.UI_MODE_NIGHT_YES)
@@ -746,7 +734,6 @@ class FuckShortsService : AccessibilityService() {
     private fun onShortsOpen() {
         reason("Shorts offen")
         hiddenOnPurpose = true
-        covers.hideAll()
         leaveShorts()
     }
 
