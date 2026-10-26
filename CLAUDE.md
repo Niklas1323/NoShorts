@@ -92,6 +92,39 @@ Gefunden und behoben:
   accelerometer_rotation 0` (danach zurückstellen). Wach halten: `svc power stayon usb` (danach `false`).
 - Oben auf der Startseite steht oft Werbung; ein Tipp darauf öffnet Chrome oder ein Werbevideo.
 
+### Nachtrag 26.10.2026, ~10:30
+- YouTube hell/dunkel wurde nur einmal abgeschaut → `BarStyleSampler` prüft jetzt alle 30 s und nach Rückkehr
+  (`recheckSoon`) neu. Am Pixel geprüft (0.1.31): Wechsel auf hell wird erkannt ("YouTube-Design gewechselt"),
+  unsere Leiste wird danach hell; bis dahin kurz dunkel. `analyze` in tools/pixel-test sucht helle Pixel und
+  taugt im hellen Design NICHT (muss für hell umgebaut werden). Einstellungen-Fehler am Pixel behoben (0.1.31).
+- Unsere Leiste lag über den **YouTube-Einstellungen** (`SettingsActivity`, eigenes Fenster mit Liste): Die
+  Berührung-als-Scrollen-Regel hielt deren Liste für die Startseite. Jetzt zählt nur eine Liste im Fenster der
+  Leiste (`barWindowId`), und das muss vorne sein (`isBarWindowInFront`, kleine Popups ausgenommen).
+
+## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 26.10.2026)
+
+Muss:
+1. Video verlassen: 1–2 Bilder schmaler Streifen der echten Leiste (siehe "Noch offen"). Idee: während ein Video
+   offen ist, unsere Leiste unsichtbar *bereithalten* und schon beim ersten Zeichen (Berührung + Wisch nach unten
+   auf dem Player, oder TYPE_WINDOW_STATE_CHANGED) zeigen; oder Leiste der Video-Seite selbst beobachten.
+2. Tastatur mit Zurück schliessen: ~3 Bilder echte Leiste durch die ausblendende Tastatur. Idee: Lage des
+   Tastatur-Fensters / Insets beobachten statt nur "Fenster da".
+3. Helles Design komplett testen (alle Tests aus `tools/pixel-test/suite.sh`), auch Umschalten hell↔dunkel.
+4. Werbe-Menü (⋮ bei Werbung, `app_engagement_panel`) nach der Korrektur testen.
+5. Nach Dienst-Neustart (App-Update) auf gescrollter Startseite fehlt unsere Leiste: `restBounds` und
+   letzten Zustand in `Prefs` speichern und beim Start laden.
+6. Plus 5× hintereinander und alle Knöpfe auch auf gescrollter Startseite (Leiste entfernt) 5× testen.
+7. Mini-Player: auf Abos/Mein YouTube und gescrollter Startseite prüfen (darf teilweise unter der Leiste sein).
+8. Querformat (Auto-Drehen an): Leiste, Video-Vollbild, Zurückdrehen.
+9. Sonderfälle: Benachrichtigungen runterziehen, App-Wechsel (Recents), Bildschirm aus/an, Anruf, Split-Screen,
+   Short per Link aus WhatsApp (unsere Leiste darf dabei nicht falsch stehen).
+10. Längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit `adb logcat -s FuckShorts` belegen.
+
+Später (bewusst nach hinten geschoben):
+- Aussehen mit Claude Design; andere Handys/Grössen, andere Sprachen (Beschriftungen in `selectors.json`).
+- Nach jedem YouTube-Update kurz `suite.sh` laufen lassen (YouTube ändert IDs und Abläufe oft, z. B. 21.42:
+  ⋮ als Popup, "Kamera schließen").
+
 ## Neu am 26.10.2026, Vormittag (Cloud-Sitzung)
 
 - **⋮-Menü:** Statt unsere Leiste zu verstecken (dann sah man abgedunkelte Wortreste der echten), zeigt
