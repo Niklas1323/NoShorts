@@ -100,6 +100,8 @@ class BottomBarOverlay(
 
     private val target = Rect()
     private var passThrough = false
+    /** Flags, die das Fenster gerade wirklich hat. */
+    private var appliedFlags = 0
     private var underMenu = false
     private var ignoreTapsUntil = 0L
 
@@ -161,30 +163,45 @@ class BottomBarOverlay(
             isShowing = true
             applyBounds()
             params.flags = currentFlags()
+            appliedFlags = params.flags
             create().also { windowManager.addView(it, params) }
             return
         }
-        var changed = applyBounds()
+        val moved = applyBounds()
         if (!isShowing) {
-            v.visibility = View.VISIBLE
+            // Nur sichtbar machen (siehe hide): erscheint schon im nächsten Bild. Berührbar wird sie ein Bild
+            // später, damit Android das Zeichnen nicht mit dem Umstellen des Fensters aufhält.
+            v.alpha = 1f
             isShowing = true
-            changed = true
+            if (!moved) {
+                v.post { applyFlags() }
+                return
+            }
         }
+        params.flags = currentFlags()
+        if (moved || params.flags != appliedFlags) {
+            appliedFlags = params.flags
+            windowManager.updateViewLayout(v, params)
+        }
+    }
+
+    private fun applyFlags() {
+        val v = view ?: return
         val flags = currentFlags()
-        if (params.flags != flags) {
-            params.flags = flags
-            changed = true
-        }
-        if (changed) windowManager.updateViewLayout(v, params)
+        if (flags == appliedFlags) return
+        params.flags = flags
+        appliedFlags = flags
+        windowManager.updateViewLayout(v, params)
     }
 
     fun hide() {
         val v = view ?: return
         if (!isShowing) return
         isShowing = false
-        v.visibility = View.INVISIBLE
-        params.flags = currentFlags()
-        windowManager.updateViewLayout(v, params)
+        // Durchsichtig statt unsichtbar: Ein unsichtbares Fenster richtet Android beim Wiederzeigen neu ein
+        // (1–2 Bilder später, z. B. beim Verlassen eines Videos sah man so die echte Leiste kurz).
+        v.alpha = 0f
+        applyFlags()
     }
 
     /**
@@ -195,12 +212,7 @@ class BottomBarOverlay(
     fun setPassThrough(enabled: Boolean) {
         passThrough = enabled
         if (enabled) ignoreTapsUntil = SystemClock.uptimeMillis() + IGNORE_AFTER_PASS_THROUGH_MS
-        val v = view ?: return
-        val flags = currentFlags()
-        if (params.flags != flags) {
-            params.flags = flags
-            windowManager.updateViewLayout(v, params)
-        }
+        applyFlags()
     }
 
     fun destroy() {
