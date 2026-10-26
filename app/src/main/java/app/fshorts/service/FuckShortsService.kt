@@ -72,6 +72,8 @@ class FuckShortsService : AccessibilityService() {
     private var feedKeptAt = 0L
     private var lastTouchAt = 0L
     private var createTappedAt = 0L
+    /** Die offene Tastatur hatte ein Eingabefeld mit Fokus (siehe isKeyboardOpen). */
+    private var imeFocusSeen = false
     /** Fenster, in dem die echte Leiste zuletzt gefunden wurde. */
     private var barWindowId = -1
     /** Warum die Liste zuletzt nicht als "dieselbe Seite" galt (nur fürs Protokoll). */
@@ -1239,8 +1241,22 @@ class FuckShortsService : AccessibilityService() {
         return menu
     }
 
-    private fun isKeyboardOpen(): Boolean =
-        windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+    /**
+     * Tastatur offen? Nach "Suchen" blendet sie sich noch ~0,3 s aus, Android meldet sie aber bis zum Ende.
+     * Dahinter sah man schon die echte Leiste der Ergebnis-Seite. YouTube nimmt den Fokus aber sofort aus dem
+     * Suchfeld: Ist er weg, gilt die Tastatur schon als zu.
+     */
+    private fun isKeyboardOpen(): Boolean {
+        if (windows.none { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }) {
+            imeFocusSeen = false
+            return false
+        }
+        if (findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.isEditable == true) {
+            imeFocusSeen = true
+            return true
+        }
+        return !imeFocusSeen
+    }
 
     private fun screenBounds(): Rect {
         val display = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
