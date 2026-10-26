@@ -426,6 +426,7 @@ class FuckShortsService : AccessibilityService() {
         if (!youTubeActive) {
             // YouTube kommt gerade nach vorne: unsere Leiste sofort an der gemerkten Stelle zeigen,
             // nicht erst nach dem Suchen. Die normale Logik übernimmt ab dem nächsten Durchgang.
+            sampler.recheckSoon()
             val rest = restBounds
             val state = lastUiState
             if (rest != null && state != null && !watchPageOpen) {
@@ -443,6 +444,8 @@ class FuckShortsService : AccessibilityService() {
         val barless = barlessWindowId
         if (barless != -1 && (foreground.windowId != barless || root.windowId != barless)) {
             barlessWindowId = -1
+            // Vielleicht wurde dort YouTube auf hell/dunkel umgestellt (Einstellungen).
+            sampler.recheckSoon()
             val rest = restBounds
             val state = lastUiState
             if (rest != null && state != null && !watchPageOpen && !overlay.isShowing) {

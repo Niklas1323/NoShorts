@@ -61,6 +61,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
     private val icons = mutableMapOf<String, ImageBitmap>()
     private var dark: Boolean? = null
     private var lastAttemptAt = 0L
+    private var checkedAt = 0L
     private var attempts = 0
     private var busy = false
 
@@ -85,7 +86,14 @@ class BarStyleSampler(private val service: AccessibilityService) {
         if (busy || attempts >= MAX_ATTEMPTS) return false
         if (SystemClock.uptimeMillis() - lastAttemptAt < MIN_INTERVAL_MS) return false
         if (dark == null || avatar == null) return true
-        return false
+        // Hell/dunkel kann man in YouTube umstellen (unabhängig vom Handy): ab und zu neu nachsehen.
+        return SystemClock.uptimeMillis() - checkedAt > RECHECK_MS
+    }
+
+    /** Bald neu nachsehen (z. B. zurück aus den YouTube-Einstellungen, wo man hell/dunkel umstellt). */
+    fun recheckSoon() {
+        checkedAt = 0L
+        attempts = 0
     }
 
     fun capture(bar: FoundBar, windowId: Int, windowBounds: Rect, onDone: () -> Unit) {
@@ -142,7 +150,11 @@ class BarStyleSampler(private val service: AccessibilityService) {
         if (b.bottom > bitmap.height || b.right > bitmap.width || b.top < 0) return
 
         val sample = bitmap.getPixel((b.left + 3).coerceAtMost(bitmap.width - 1), (b.top + b.height() / 4))
-        dark = luminance(sample) < 128
+        val nowDark = luminance(sample) < 128
+        if (dark != null && dark != nowDark) Log.i(TAG, "YouTube-Design gewechselt: ${if (nowDark) "dunkel" else "hell"}")
+        dark = nowDark
+        checkedAt = SystemClock.uptimeMillis()
+        attempts = 0
         saveDebugImage(bitmap, b)
 
         val iconCenterY = (bar.tabs[TabKind.HOME]?.iconBounds ?: bar.tabs.values.firstNotNullOfOrNull { it.iconBounds })
@@ -214,6 +226,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
         const val TAG = "FuckShorts"
         const val MAX_ATTEMPTS = 30
         const val MIN_INTERVAL_MS = 1_000L
+        const val RECHECK_MS = 30_000L
         const val AVATAR_DP = 24f
         const val ICON_BOX_DP = 28f
     }
