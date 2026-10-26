@@ -14,7 +14,7 @@ Er arbeitet vom Handy aus; diese Sitzung läuft auf seinem Computer, das Pixel h
 - `.../service/BottomBarOverlay.kt` – unsere Leiste (Fenster + Compose-Inhalt, Touch über `TapHandler`)
 - `.../service/YouTubeScanner.kt` – findet echte Leiste, Tabs, Regale, Shorts-Player, Mini-Player
 - `.../service/BarStyle.kt` – Farben, Profilbild (aus Fenster-Screenshot ausgeschnitten)
-- `.../service/ShelfCovers.kt` – graue Fläche mit Zitat über Shorts-Regalen
+- `.../service/ShelfCovers.kt` – graue Fläche (ohne Text – Nutzer wollte das Zitat weg) über Shorts-Regalen
 - `app/src/main/assets/selectors.json` – IDs/Beschriftungen der YouTube-Elemente (viele davon geraten!)
 
 ## Stand und offene Punkte (Version 16)
@@ -35,6 +35,13 @@ Der Nutzer fand Version 14–16 am besten. Gewünschtes Verhalten:
 Shorts-Player-IDs sind am Pixel geprüft (`reel_recycler`, `reel_player_page_container`, ...). Aufbau ansehen:
 `adb shell uiautomator dump` (bei laufendem Video vorher `adb shell input keyevent KEYCODE_MEDIA_PAUSE`,
 sonst "could not get idle state").
+
+## Nächste Aufgaben (Wunsch des Nutzers, 26.10.2026)
+
+- "Man darf die alte Leiste nie sehen" – noch übrig: abgedunkelte Wortreste hinter offenem ⋮-Menü,
+  2 schwache Bilder beim Schliessen der Kamera, evtl. 1 Bild ein 1-mm-Streifen beim Video-Verlassen.
+- App auf dem Pixel zu einem fertigen Produkt machen (Stabilität, Sonderfälle, Startseiten-Regal-Ausblenden
+  noch ungetestet). Andere Handys und schöneres Aussehen kommen **später**.
 
 ## Am Pixel 9 nachgemessen (YouTube 21.41, 25.10.2026)
 
