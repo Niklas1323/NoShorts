@@ -38,6 +38,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -70,6 +76,10 @@ data class BarUiState(
     /** Unsere Leiste reicht bis ganz unten (Gestensteuerung): Gestenstrich selbst zeichnen. */
     val showHandle: Boolean,
     val style: BarStyle,
+    /** Ist ein Menü offen, dunkelt YouTube alles ab: unsere Leiste genauso stark (0 = normal). */
+    val dim: Float = 0f,
+    /** Wo das Menü über unserer Leiste liegt (Fensterkoordinaten): dort ist unsere Leiste durchsichtig. */
+    val hole: Rect? = null,
 )
 
 /**
@@ -90,6 +100,7 @@ class BottomBarOverlay(
 
     private val target = Rect()
     private var passThrough = false
+    private var underMenu = false
     private var ignoreTapsUntil = 0L
 
     var isShowing = false
@@ -121,6 +132,22 @@ class BottomBarOverlay(
      * eingefahren ist (Breite, Höhe).
      */
     fun show(top: Int, rest: Rect, state: BarUiState) {
+        underMenu = false
+        place(top, rest, state.copy(dim = 0f, hole = null))
+    }
+
+    /**
+     * Ein Menü (⋮, Teilen) ist offen und liegt über der Leiste. Unsere Leiste liegt aber immer zuoberst.
+     * Darum: abgedunkelt wie YouTube den Rest, mit einem Loch, wo das Menü ist. Berührungen gehen durch
+     * (Tipp neben das Menü schliesst es, wie bei YouTube).
+     */
+    fun showUnderMenu(rest: Rect, state: BarUiState, dim: Float, sheet: Rect) {
+        underMenu = true
+        val hole = Rect(sheet).apply { offset(-rest.left, -rest.top) }
+        place(rest.top, rest, state.copy(dim = dim, hole = hole))
+    }
+
+    private fun place(top: Int, rest: Rect, state: BarUiState) {
         val keepOptimistic = optimistic != null &&
             SystemClock.uptimeMillis() - optimisticAt < OPTIMISTIC_MS &&
             state.selected != optimistic
@@ -185,7 +212,7 @@ class BottomBarOverlay(
     }
 
     private fun currentFlags(): Int =
-        if (!isShowing || passThrough) BASE_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else BASE_FLAGS
+        if (!isShowing || passThrough || underMenu) BASE_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else BASE_FLAGS
 
     private fun applyBounds(): Boolean {
         // Immer über die ganze Bildschirmbreite ab dem linken Rand: So kann die Leiste nie seitlich verrutschen.
@@ -301,9 +328,24 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
     val style = state.style
     val density = LocalDensity.current
     val barHeight = with(density) { state.barHeightPx.toDp() }
+    val holeRadius = with(density) { 16.dp.toPx() }
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                if (state.dim > 0f) drawRect(Color.Black.copy(alpha = state.dim))
+                state.hole?.let { h ->
+                    drawRoundRect(
+                        color = Color.Transparent,
+                        topLeft = Offset(h.left.toFloat(), h.top.toFloat()),
+                        size = Size(h.width().toFloat(), h.height().toFloat()),
+                        cornerRadius = CornerRadius(holeRadius, holeRadius),
+                        blendMode = BlendMode.Clear,
+                    )
+                }
+            }
             .background(style.background),
     ) {
         if (state.showHandle) {

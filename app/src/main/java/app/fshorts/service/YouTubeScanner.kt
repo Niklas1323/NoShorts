@@ -203,6 +203,16 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
             .minOfOrNull { it.getBoundsInScreen(r); r.top }
     }
 
+    /** Ganze Fläche des Menüs (für das "Loch" in unserer abgedunkelten Leiste), oder null. */
+    fun sheetBounds(windowRoot: AccessibilityNodeInfo): Rect? {
+        val r = Rect()
+        return windowRoot.findAccessibilityNodeInfosByViewId(sel.fullId(SHEET_IDS[0]))
+            .filter { it.isVisibleToUser }
+            .map { it.getBoundsInScreen(r); Rect(r) }
+            .filter { !it.isEmpty }
+            .maxByOrNull { it.width().toLong() * it.height() }
+    }
+
     fun isBarCovered(root: AccessibilityNodeInfo, bar: FoundBar): Boolean {
         val r = Rect()
         for (id in sel.coverIds) {

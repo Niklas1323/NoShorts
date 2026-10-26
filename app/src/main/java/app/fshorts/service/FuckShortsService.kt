@@ -96,10 +96,15 @@ class FuckShortsService : AccessibilityService() {
     private var menuFront = false
     private var menuWindowId = -1
     private var menuMinTop = Int.MAX_VALUE
+    /** Wie stark YouTube hinter einem Menü abdunkelt (0..1), einmal gemessen. null = noch unbekannt. */
+    private var menuDim: Float? = null
+    private var dimMeasuring = false
     private val menuWindows = HashMap<Int, Boolean>()
     /** YouTube-Fenster, in dem es keine Leiste gab (z. B. Kamera). -1 = keins. */
     private var barlessWindowId = -1
     private var linkShortAt = 0L
+    /** Unsere Leiste wurde vor dem Schliessen der Kamera schon gezeigt: kurz nicht wieder verstecken. */
+    private var preShownAt = 0L
     private var lastFingerprintAt = 0L
     private var linkFixTries = 0
 
@@ -151,6 +156,7 @@ class FuckShortsService : AccessibilityService() {
             touchedSinceEnter = true
         }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        menuDim = Prefs.menuDim(this)
         connected = true
         running = true
         scheduleScan()
@@ -168,6 +174,7 @@ class FuckShortsService : AccessibilityService() {
                         onNavigation()
                     }
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                        if (closesBarlessPage(event)) showBeforeBarlessCloses()
                         touchedSinceEnter = true
                         onNavigation()
                         // Ein Tipp kann einen Short öffnen: die nächsten 1,5 s ganz oft nachsehen, damit er sofort zugeht.
@@ -246,6 +253,29 @@ class FuckShortsService : AccessibilityService() {
     private fun onNavigation() {
         lastNavAt = SystemClock.uptimeMillis()
         navFromRest = !hiddenByScroll
+    }
+
+    /** Tipp auf "Schliessen" in einem YouTube-Fenster ohne Leiste (z. B. Kamera nach Plus)? */
+    private fun closesBarlessPage(event: AccessibilityEvent): Boolean {
+        if (barlessWindowId == -1 || event.windowId != barlessWindowId) return false
+        val label = (event.contentDescription ?: event.text.firstOrNull())?.toString()?.trim()?.lowercase() ?: return false
+        return CLOSE_LABELS.any { label == it || label.startsWith("$it ") }
+    }
+
+    /**
+     * Die Kamera geht gleich zu. Android meldet die Seite darunter erst, wenn sie schon zu sehen ist (2 Bilder mit
+     * der echten Leiste). Darum unsere schon jetzt zeigen. Geht die Kamera doch nicht zu, versteckt der nächste
+     * Scan sie wieder.
+     */
+    private fun showBeforeBarlessCloses() {
+        val rest = restBounds ?: return
+        val state = lastUiState ?: return
+        if (watchPageOpen || overlay.isShowing) return
+        reason("Kamera wird geschlossen, unsere vorab zeigen")
+        preShownAt = SystemClock.uptimeMillis()
+        hiddenByScroll = false
+        overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        continueScanSoon()
     }
 
     private fun scan() {
@@ -334,9 +364,18 @@ class FuckShortsService : AccessibilityService() {
             val closing = sheetTop != null && sheetTop > menuMinTop + (CLOSING_DP * resources.displayMetrics.density)
             menuOpen = rest == null || state == null || watchPageOpen || sheetTop == null ||
                 (sheetTop < rest.top - 2 && !closing)
-            if (menuOpen) {
+            val sheet = scanner.sheetBounds(foreground)
+            val dim = menuDim
+            if (menuOpen && rest != null && state != null && sheet != null && !watchPageOpen && dim != null) {
+                // Hinter dem Menü dunkelt YouTube alles ab, auch seine Leiste. Statt sie dort durchscheinen zu
+                // lassen, zeigen wir unsere genauso abgedunkelt, mit einem Loch, wo das Menü liegt.
+                reason("Menü offen, unsere abgedunkelt")
+                overlay.showUnderMenu(rest, state.copy(style = currentStyle()), dim, sheet)
+            } else if (menuOpen) {
                 reason("Menü offen")
                 hideAll()
+                // Einmal messen, wie stark YouTube abdunkelt; ab dann zeigen wir unsere abgedunkelt.
+                if (dim == null && rest != null && sheet != null) measureMenuDim(rest, sheet)
             } else if (rest != null && state != null) {
                 reason("Menü fährt rein/raus (oben=$sheetTop)")
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
@@ -480,6 +519,11 @@ class FuckShortsService : AccessibilityService() {
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
                 return
             }
+            if (now - preShownAt < PRE_SHOW_HOLD_MS) {
+                // Kamera fährt noch weg: unsere Leiste stehen lassen, gleich nochmal nachsehen.
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+                return
+            }
             reason("keine Leiste gefunden")
             barlessWindowId = root.windowId
             hideAll()
@@ -533,6 +577,69 @@ class FuckShortsService : AccessibilityService() {
         if (shelves.isNotEmpty()) tryHideShelf(shelves, now)
     }
 
+    /**
+     * Misst, wie stark YouTube hinter einem offenen Menü abdunkelt. Dazu ein Bildschirmfoto, solange unsere
+     * Leiste weg ist: Das hellste Pixel der echten Leiste neben dem Menü (weisse Schrift bzw. weisser
+     * Hintergrund im hellen Design) wäre ohne Abdunkeln etwa 245 hell.
+     */
+    private fun measureMenuDim(rest: Rect, sheet: Rect) {
+        if (dimMeasuring || overlay.isShowing || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return
+        dimMeasuring = true
+        try {
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                    try {
+                        val buffer = result.hardwareBuffer
+                        val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
+                            ?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                        buffer.close()
+                        if (bitmap != null) {
+                            var brightest = 0f
+                            // Nur Icons und Schrift (oberer Teil), nicht den Gestenstrich darunter: den zeichnet
+                            // Android über die Abdunkelung, er ist immer hell.
+                            val iconsBottom = rest.top + (LABEL_TOP_DP * 1.4f * resources.displayMetrics.density).roundToInt()
+                            val area = Rect(rest.left, rest.top, rest.right, minOf(rest.bottom, iconsBottom))
+                                .apply { intersect(0, 0, bitmap.width, bitmap.height) }
+                            var y = area.top
+                            while (y < area.bottom) {
+                                var x = area.left
+                                while (x < area.right) {
+                                    if (!sheet.contains(x, y)) {
+                                        val p = bitmap.getPixel(x, y)
+                                        val l = 0.299f * android.graphics.Color.red(p) +
+                                            0.587f * android.graphics.Color.green(p) +
+                                            0.114f * android.graphics.Color.blue(p)
+                                        if (l > brightest) brightest = l
+                                    }
+                                    x += 2
+                                }
+                                y += 2
+                            }
+                            bitmap.recycle()
+                            // Nur wenn genug von der echten Leiste neben dem Menü zu sehen war.
+                            if (brightest > 10f) {
+                                val dim = (1f - brightest / 245f).coerceIn(0.15f, 0.85f)
+                                menuDim = dim
+                                Prefs.setMenuDim(this@FuckShortsService, dim)
+                                Log.d(TAG, "Menü-Abdunkelung gemessen: $dim")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Abdunkelung messen fehlgeschlagen", e)
+                    }
+                    dimMeasuring = false
+                    scheduleScan()
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    dimMeasuring = false
+                }
+            })
+        } catch (e: Exception) {
+            dimMeasuring = false
+        }
+    }
+
     /** Merkt sich, wo die echte Leiste sitzt, wenn sie ganz eingefahren ist (höchste Lage, volle Höhe). */
     private fun rememberRestPosition(bar: FoundBar) {
         val rest = restBounds
@@ -551,12 +658,12 @@ class FuckShortsService : AccessibilityService() {
     private fun updateBar(now: Long, fresh: FoundBar?) {
         val rest = restBounds
         val state = lastUiState
+        // Menü vorne: Das regelt der Scan (Lage des Menüs), die Leiste dahinter ist nicht abfragbar.
+        if (menuFront) return
         if (rest == null || state == null || menuOpen) {
             overlay.hide()
             return
         }
-        // Menü vorne: Das regelt der Scan (Lage des Menüs), die Leiste dahinter ist nicht abfragbar.
-        if (menuFront) return
         // Keine echte Leiste bekannt und unsere ist weg (z. B. Short per Link läuft und meldet dauernd
         // "gescrollt"): nichts nachzuführen, das Wiederauftauchen merkt der Scan.
         if (fresh == null && lastBar == null && !overlay.isShowing && !watchPageOpen) return
@@ -590,6 +697,7 @@ class FuckShortsService : AccessibilityService() {
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
                 return
             }
+            if (now - preShownAt < PRE_SHOW_HOLD_MS) return
             // Die Leiste gibt es nicht mehr (anderer Bildschirm, z. B. Kamera nach Plus): sofort weg.
             reason("Leiste nicht mehr da")
             lastBar = null
@@ -1067,6 +1175,8 @@ class FuckShortsService : AccessibilityService() {
         private const val DEBUG_DUMP_INTERVAL_MS = 3_000L
         private const val SHELF_HIDE_INTERVAL_MS = 60_000L
         private const val SHELF_MENU_TIMEOUT_MS = 1_500L
+        private const val PRE_SHOW_HOLD_MS = 700L
+        private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
 
         @Volatile
         var running = false

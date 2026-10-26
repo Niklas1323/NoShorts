@@ -9,6 +9,7 @@ object Prefs {
     private const val SHORTS_BLOCKED = "shorts_blocked"
     private const val AUTO_HIDE_SHELF = "auto_hide_shelf"
     private const val SHELVES_HIDDEN = "shelves_hidden"
+    private const val MENU_DIM = "menu_dim"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -29,4 +30,8 @@ object Prefs {
     fun shelvesHidden(context: Context) = prefs(context).getInt(SHELVES_HIDDEN, 0)
     fun incrementShelvesHidden(context: Context) =
         prefs(context).edit().putInt(SHELVES_HIDDEN, shelvesHidden(context) + 1).apply()
+
+    fun menuDim(context: Context): Float? =
+        prefs(context).getFloat(MENU_DIM, -1f).takeIf { it >= 0f }
+    fun setMenuDim(context: Context, dim: Float) = prefs(context).edit().putFloat(MENU_DIM, dim).apply()
 }
