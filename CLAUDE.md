@@ -44,6 +44,21 @@ sonst "could not get idle state").
 - App auf dem Pixel zu einem fertigen Produkt machen (Stabilität, Sonderfälle, Startseiten-Regal-Ausblenden
   noch ungetestet). Andere Handys und schöneres Aussehen kommen **später**.
 
+## Neu am 26.10.2026 (Cloud-Sitzung, NOCH NICHT am Pixel getestet)
+
+- **⋮-Menü:** Statt unsere Leiste zu verstecken (dann sah man abgedunkelte Wortreste der echten), zeigt
+  `BottomBarOverlay.showUnderMenu` sie abgedunkelt (`BarUiState.dim`) mit einem durchsichtigen Loch, wo das
+  Menü liegt (`hole`, Ecken 16 dp, `BlendMode.Clear` in Offscreen-Ebene), und lässt Berührungen durch.
+  Die Abdunkelung misst `FuckShortsService.measureMenuDim` einmal per `takeScreenshot` (hellstes Pixel der
+  echten Leiste neben dem Menü im Icon-/Schriftbereich, Referenz 245) und speichert sie (`Prefs.menuDim`).
+  Bis zur ersten Messung: wie früher versteckt. Prüfen: Stimmt die Helligkeit? Sitzt das Loch richtig?
+  Falls falsch gemessen: `adb shell pm clear app.fshorts` setzt es zurück (löscht aber alle Einstellungen).
+- **Kamera schliessen:** Tipp auf Schliessen/Zurück im Fenster ohne Leiste (`closesBarlessPage`) zeigt
+  unsere Leiste sofort und hält sie 0,7 s (`PRE_SHOW_HOLD_MS`). Zurück-Geste löst das nicht aus.
+- Regal ausblenden: Menüpunkte jetzt auch "Weniger Shorts anzeigen"/"Show fewer Shorts".
+- Startseiten-Regal-Ausblenden weiter ungetestet in dieser Version (in Version 3 hat es einmal geklappt:
+  YouTube zeigte "Ok, wir zeigen dir weniger Shorts im Startseitenfeed").
+
 ## Am Pixel 9 nachgemessen (YouTube 21.41, 25.10.2026)
 
 Mit `adb shell screenrecord` + ffmpeg Bild für Bild geprüft:
