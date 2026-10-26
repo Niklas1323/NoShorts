@@ -404,10 +404,11 @@ class FuckShortsService : AccessibilityService() {
         // (Die Kamera ist anders: Dort ist das Hauptfenster gar nicht da, siehe barlessWindowId.)
         if (foreground.windowId == root.windowId) coverWindowId = -1
         if (foreground.windowId != root.windowId && foreground.windowId != barlessWindowId &&
-            now - preShownAt >= PRE_SHOW_HOLD_MS
+            now - preShownAt >= PRE_SHOW_HOLD_MS && !waitingForCamera(now)
         ) {
             val rest = restBounds
-            if (rest == null || Rect.intersects(windowBounds(foreground.windowId), rest)) {
+            // Nur wenn es die ganze Leiste abdeckt: Das ⋮-Popup (YouTube 21.42) streift sie bloss mit seinem Schatten.
+            if (rest == null || windowBounds(foreground.windowId).contains(rest)) {
                 youTubeActive = true
                 if (youTubeSince == 0L) youTubeSince = now
                 reason("anderes YouTube-Fenster über der Leiste")
@@ -615,11 +616,25 @@ class FuckShortsService : AccessibilityService() {
 
     /**
      * Nach einem Tipp auf Plus nimmt YouTube seine Leiste schon weg, bevor die Kamera erscheint (3 Bilder lang
-     * sah man sonst die echte Leiste). Solange noch das Fenster mit der Leiste vorne ist, bleibt unsere stehen.
+     * sah man sonst die echte Leiste). Unsere bleibt stehen, bis die Kamera wirklich da ist: Android meldet ihr
+     * Fenster schon als vorne, bevor es gezeichnet ist – erst wenn es Inhalt hat, ist es zu sehen.
      */
     private fun waitingForCamera(now: Long): Boolean {
         if (now - createTappedAt > CREATE_HOLD_MS) return false
-        return foregroundWindow()?.id == barWindowId
+        val front = foregroundWindow() ?: return true
+        if (front.id == barWindowId) return true
+        val root = front.root ?: return true
+        return !hasVisibleContent(root)
+    }
+
+    private fun hasVisibleContent(root: AccessibilityNodeInfo): Boolean {
+        val r = Rect()
+        for (i in 0 until root.childCount) {
+            val child = root.getChild(i) ?: continue
+            child.getBoundsInScreen(r)
+            if (child.isVisibleToUser && !r.isEmpty) return true
+        }
+        return false
     }
 
     /**
@@ -740,7 +755,7 @@ class FuckShortsService : AccessibilityService() {
         val rest = restBounds
         val state = lastUiState
         // Menü vorne oder Panel offen: Das regelt der Scan (Lage des Menüs), die Leiste ist nicht abfragbar.
-        if (menuFront || panelMinTop != Int.MAX_VALUE) return
+        if (menuFront || panelMinTop != Int.MAX_VALUE || coverWindowId != -1) return
         if (rest == null || state == null || menuOpen) {
             overlay.hide()
             return
