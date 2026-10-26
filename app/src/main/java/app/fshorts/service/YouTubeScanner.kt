@@ -30,6 +30,8 @@ class Shelf(
 // Shorts-Player von YouTube 21.41 (am Pixel nachgesehen): eine Seite pro Short in einer senkrechten Liste.
 private const val SHORTS_PAGE_ID = "reel_player_page_container"
 private val SHEET_IDS = listOf("design_bottom_sheet", "touch_outside")
+// Panel im YouTube-Fenster selbst (Werbe-Menü, auf der Video-Seite auch Kommentare), YouTube 21.42.
+private const val PANEL_ID = "app_engagement_panel"
 
 /**
  * Sucht in der YouTube-Oberfläche die untere Leiste, ihre Tabs und den Shorts-Player.
@@ -211,6 +213,19 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
             .map { it.getBoundsInScreen(r); Rect(r) }
             .filter { !it.isEmpty }
             .maxByOrNull { it.width().toLong() * it.height() }
+    }
+
+    /**
+     * Oberkante eines Panels, das von unten im YouTube-Fenster selbst hochfährt (z. B. "Mein Anzeigen-Center"
+     * nach ⋮ bei Werbung), oder null. Solange es offen ist, gibt YouTube seine Leiste nicht heraus.
+     */
+    fun panelTop(root: AccessibilityNodeInfo, screen: Rect): Int? {
+        val r = Rect()
+        return root.findAccessibilityNodeInfosByViewId(sel.fullId(PANEL_ID))
+            .filter { it.isVisibleToUser }
+            .map { it.getBoundsInScreen(r); Rect(r) }
+            .filter { it.width() >= screen.width() * 0.9 && it.bottom >= screen.bottom - 2 && it.top < screen.bottom - 2 }
+            .minOfOrNull { it.top }
     }
 
     fun isBarCovered(root: AccessibilityNodeInfo, bar: FoundBar): Boolean {

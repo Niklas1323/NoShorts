@@ -102,6 +102,10 @@ class FuckShortsService : AccessibilityService() {
     private val menuWindows = HashMap<Int, Boolean>()
     /** YouTube-Fenster, in dem es keine Leiste gab (z. B. Kamera). -1 = keins. */
     private var barlessWindowId = -1
+    /** Anderes YouTube-Fenster (z. B. Premium-Werbung) über der Seite mit der Leiste. -1 = keins. */
+    private var coverWindowId = -1
+    /** Höchste Lage eines offenen Panels im YouTube-Fenster (z. B. Werbe-Menü). MAX_VALUE = keins offen. */
+    private var panelMinTop = Int.MAX_VALUE
     private var linkShortAt = 0L
     /** Unsere Leiste wurde vor dem Schliessen der Kamera schon gezeigt: kurz nicht wieder verstecken. */
     private var preShownAt = 0L
@@ -257,7 +261,7 @@ class FuckShortsService : AccessibilityService() {
 
     /** Tipp auf "Schliessen" in einem YouTube-Fenster ohne Leiste (z. B. Kamera nach Plus)? */
     private fun closesBarlessPage(event: AccessibilityEvent): Boolean {
-        if (barlessWindowId == -1 || event.windowId != barlessWindowId) return false
+        if (event.windowId == -1 || (event.windowId != barlessWindowId && event.windowId != coverWindowId)) return false
         val label = (event.contentDescription ?: event.text.firstOrNull())?.toString()?.trim()?.lowercase() ?: return false
         return CLOSE_LABELS.any { label == it || label.startsWith("$it ") }
     }
@@ -384,6 +388,23 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         menuOpen = false
+        // Ein anderes YouTube-Fenster liegt über der Seite mit der Leiste (z. B. Premium-Werbung): Es deckt die
+        // echte Leiste ab, unsere läge darüber. Wie eine Seite ohne Leiste behandeln (Schliessen zeigt sie vorab).
+        // (Die Kamera ist anders: Dort ist das Hauptfenster gar nicht da, siehe barlessWindowId.)
+        if (foreground.windowId == root.windowId) coverWindowId = -1
+        if (foreground.windowId != root.windowId && foreground.windowId != barlessWindowId &&
+            now - preShownAt >= PRE_SHOW_HOLD_MS
+        ) {
+            val rest = restBounds
+            if (rest == null || Rect.intersects(windowBounds(foreground.windowId), rest)) {
+                youTubeActive = true
+                if (youTubeSince == 0L) youTubeSince = now
+                reason("anderes YouTube-Fenster über der Leiste")
+                coverWindowId = foreground.windowId
+                hideAll()
+                return
+            }
+        }
         if (!youTubeActive) {
             // YouTube kommt gerade nach vorne: unsere Leiste sofort an der gemerkten Stelle zeigen,
             // nicht erst nach dem Suchen. Die normale Logik übernimmt ab dem nächsten Durchgang.
@@ -456,6 +477,9 @@ class FuckShortsService : AccessibilityService() {
         val bar = scanner.findBar(root, screen)
         watchNode = scanner.findWatchPlayer(root, screen)?.also { watchTop = scanner.topOf(it) }
         watchPageOpen = watchNode != null
+
+        if (bar == null && !watchPageOpen && handlePanel(root, now)) return
+        panelMinTop = Int.MAX_VALUE
 
         // Echte Leiste ist wieder da (z. B. zurück aus der Kamera), unsere noch nicht: sofort zeigen. Jede weitere
         // Abfrage kostet jetzt 30–50 ms, weil YouTube gerade umbaut. Shorts & Co. prüft der nächste Scan.
@@ -578,6 +602,42 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /**
+     * Panel von unten im YouTube-Fenster selbst (z. B. Werbe-Menü "Mein Anzeigen-Center"). Es liegt über der
+     * echten Leiste, unsere läge darüber: weg, solange es offen ist. Fährt es runter oder ist es zu, steht unsere
+     * sofort – YouTube setzt seine Leiste erst ein paar Bilder später wieder ein, sonst sähe man sie kurz.
+     * Gibt true zurück, wenn das Panel alles geregelt hat.
+     */
+    private fun handlePanel(root: AccessibilityNodeInfo, now: Long): Boolean {
+        val top = scanner.panelTop(root, screen)
+        val rest = restBounds
+        val state = lastUiState
+        if (top == null) {
+            if (panelMinTop == Int.MAX_VALUE) return false
+            panelMinTop = Int.MAX_VALUE
+            if (rest == null || state == null) return false
+            reason("Panel zu, unsere vorab zeigen")
+            preShownAt = now
+            hiddenByScroll = false
+            overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            continueScanSoon()
+            return true
+        }
+        panelMinTop = minOf(panelMinTop, top)
+        val closing = top > panelMinTop + CLOSING_DP * resources.displayMetrics.density
+        if (rest != null && state != null && (closing || top >= rest.top - 2)) {
+            reason("Panel fährt raus (oben=$top)")
+            preShownAt = now
+            hiddenByScroll = false
+            overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        } else {
+            reason("Panel offen (oben=$top)")
+            hideAll()
+        }
+        handler.postDelayed({ scheduleScan() }, POLL_MS)
+        return true
+    }
+
+    /**
      * Misst, wie stark YouTube hinter einem offenen Menü abdunkelt. Dazu ein Bildschirmfoto, solange unsere
      * Leiste weg ist: Das hellste Pixel der echten Leiste neben dem Menü (weisse Schrift bzw. weisser
      * Hintergrund im hellen Design) wäre ohne Abdunkeln etwa 245 hell.
@@ -658,8 +718,8 @@ class FuckShortsService : AccessibilityService() {
     private fun updateBar(now: Long, fresh: FoundBar?) {
         val rest = restBounds
         val state = lastUiState
-        // Menü vorne: Das regelt der Scan (Lage des Menüs), die Leiste dahinter ist nicht abfragbar.
-        if (menuFront) return
+        // Menü vorne oder Panel offen: Das regelt der Scan (Lage des Menüs), die Leiste ist nicht abfragbar.
+        if (menuFront || panelMinTop != Int.MAX_VALUE) return
         if (rest == null || state == null || menuOpen) {
             overlay.hide()
             return
@@ -769,7 +829,9 @@ class FuckShortsService : AccessibilityService() {
         // aber nur direkt nach dem Scrollen und ohne Tipp dazwischen (sonst ist es wohl eine andere Seite).
         goneFeed = null
         if (lastNavAt > lastScrollAt) return false
-        if (known == null && now - lastScrollAt > SCROLL_GONE_MS) return false
+        // YouTube entfernt seine weggescrollte Leiste oft erst Sekunden später (z. B. ~8 s, wenn ein Video in der
+        // Liste anläuft). Stand unsere wegen Scrollen allein da, ist es also trotzdem noch dieselbe Seite.
+        if (known == null && now - lastScrollAt > SCROLL_GONE_MS && !hiddenByScroll) return false
         val root = youTubeMainRoot() ?: return false
         goneFeed = scanner.findFeed(root, screen)
         return goneFeed != null
