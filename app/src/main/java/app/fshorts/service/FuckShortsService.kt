@@ -69,6 +69,9 @@ class FuckShortsService : AccessibilityService() {
      */
     private var goneFeed: AccessibilityNodeInfo? = null
     private var lastScrollAt = 0L
+    private var feedKeptAt = 0L
+    /** Warum die Liste zuletzt nicht als "dieselbe Seite" galt (nur fürs Protokoll). */
+    private var keepFail = ""
     private var tapSeq = 0
     private var foregroundNullSince = 0L
     private var miniPlayerOpen = false
@@ -548,7 +551,7 @@ class FuckShortsService : AccessibilityService() {
                 handler.postDelayed({ scheduleScan() }, POLL_MS)
                 return
             }
-            reason("keine Leiste gefunden")
+            reason("keine Leiste gefunden ($keepFail)")
             barlessWindowId = root.windowId
             hideAll()
             val stuck = !barSeenOnce && now - youTubeSince > AUTO_DUMP_AFTER_MS
@@ -759,7 +762,7 @@ class FuckShortsService : AccessibilityService() {
             }
             if (now - preShownAt < PRE_SHOW_HOLD_MS) return
             // Die Leiste gibt es nicht mehr (anderer Bildschirm, z. B. Kamera nach Plus): sofort weg.
-            reason("Leiste nicht mehr da")
+            reason("Leiste nicht mehr da ($keepFail)")
             lastBar = null
             lastObservedTop = -1
             overlay.hide()
@@ -821,20 +824,41 @@ class FuckShortsService : AccessibilityService() {
     private fun keepWhileScrolledAway(now: Long): Boolean {
         if (watchPageOpen) {
             goneFeed = null
+            keepFail = "Video offen"
             return false
         }
         val known = goneFeed
-        if (known != null && scanner.isFeedStillThere(known, screen)) return true
+        if (known != null && scanner.isFeedStillThere(known, screen)) {
+            feedKeptAt = now
+            return true
+        }
         // Noch keine Liste gemerkt, oder sie war beim schnellen Wischen kurz nicht abfragbar: neu suchen,
         // aber nur direkt nach dem Scrollen und ohne Tipp dazwischen (sonst ist es wohl eine andere Seite).
         goneFeed = null
-        if (lastNavAt > lastScrollAt) return false
+        if (lastNavAt > lastScrollAt) {
+            keepFail = "Tipp nach dem Scrollen"
+            return false
+        }
         // YouTube entfernt seine weggescrollte Leiste oft erst Sekunden später (z. B. ~8 s, wenn ein Video in der
         // Liste anläuft). Stand unsere wegen Scrollen allein da, ist es also trotzdem noch dieselbe Seite.
-        if (known == null && now - lastScrollAt > SCROLL_GONE_MS && !hiddenByScroll) return false
-        val root = youTubeMainRoot() ?: return false
-        goneFeed = scanner.findFeed(root, screen)
-        return goneFeed != null
+        if (known == null && now - lastScrollAt > SCROLL_GONE_MS && !hiddenByScroll) {
+            keepFail = "nicht gescrollt"
+            return false
+        }
+        val root = youTubeMainRoot()
+        goneFeed = root?.let { scanner.findFeed(it, screen) }
+        if (goneFeed != null) {
+            feedKeptAt = now
+            return true
+        }
+        // Läuft ein Video in der Liste an, baut YouTube die Liste um und sie ist kurz nicht abfragbar.
+        // Dann nicht gleich verstecken, sondern gleich nochmal nachsehen.
+        if (hiddenByScroll && now - feedKeptAt < FEED_GRACE_MS) {
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return true
+        }
+        keepFail = "keine Liste"
+        return false
     }
 
     private fun coverLimit(): Int = if (overlay.isShowing) overlay.top else screen.bottom
@@ -1214,6 +1238,7 @@ class FuckShortsService : AccessibilityService() {
         private const val MINI_WALK_MS = 5_000L
         private const val DRAW_FIRST_MS = 50L
         private const val SCROLL_GONE_MS = 1_500L
+        private const val FEED_GRACE_MS = 600L
         private const val FOREGROUND_GAP_MS = 500L
         private const val SLOW_SCAN_MS = 150L
         private const val REVEAL_POLL_MS = 50L
