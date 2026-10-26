@@ -70,6 +70,10 @@ class FuckShortsService : AccessibilityService() {
     private var goneFeed: AccessibilityNodeInfo? = null
     private var lastScrollAt = 0L
     private var feedKeptAt = 0L
+    private var lastTouchAt = 0L
+    private var createTappedAt = 0L
+    /** Fenster, in dem die echte Leiste zuletzt gefunden wurde. */
+    private var barWindowId = -1
     /** Warum die Liste zuletzt nicht als "dieselbe Seite" galt (nur fürs Protokoll). */
     private var keepFail = ""
     private var tapSeq = 0
@@ -161,6 +165,7 @@ class FuckShortsService : AccessibilityService() {
         touchWatcher = TouchWatcher(this) {
             if (!touchedSinceEnter && youTubeActive) Log.d(TAG, "Berührung in YouTube")
             touchedSinceEnter = true
+            lastTouchAt = SystemClock.uptimeMillis()
         }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         menuDim = Prefs.menuDim(this)
@@ -266,7 +271,8 @@ class FuckShortsService : AccessibilityService() {
     private fun closesBarlessPage(event: AccessibilityEvent): Boolean {
         if (event.windowId == -1 || (event.windowId != barlessWindowId && event.windowId != coverWindowId)) return false
         val label = (event.contentDescription ?: event.text.firstOrNull())?.toString()?.trim()?.lowercase() ?: return false
-        return CLOSE_LABELS.any { label == it || label.startsWith("$it ") }
+        // YouTube 21.42: "Kamera schließen"
+        return CLOSE_LABELS.any { label == it || label.startsWith("$it ") || label.endsWith(" $it") }
     }
 
     /**
@@ -520,6 +526,7 @@ class FuckShortsService : AccessibilityService() {
             goneFeed = null
             lastBar = bar
             rememberRestPosition(bar)
+            barWindowId = root.windowId
             if (scanner.isBarCovered(root, bar)) {
                 reason("verdeckt ${bar.bounds.toShortString()}")
                 hiddenOnPurpose = true
@@ -546,8 +553,8 @@ class FuckShortsService : AccessibilityService() {
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
                 return
             }
-            if (now - preShownAt < PRE_SHOW_HOLD_MS) {
-                // Kamera fährt noch weg: unsere Leiste stehen lassen, gleich nochmal nachsehen.
+            if (now - preShownAt < PRE_SHOW_HOLD_MS || waitingForCamera(now)) {
+                // Kamera fährt noch weg bzw. kommt gleich: unsere Leiste stehen lassen, gleich nochmal nachsehen.
                 handler.postDelayed({ scheduleScan() }, POLL_MS)
                 return
             }
@@ -602,6 +609,15 @@ class FuckShortsService : AccessibilityService() {
         if (found.size != shelves.size) Log.d(TAG, "Shorts-Regale: ${found.size}")
         shelves = found
         if (shelves.isNotEmpty()) tryHideShelf(shelves, now)
+    }
+
+    /**
+     * Nach einem Tipp auf Plus nimmt YouTube seine Leiste schon weg, bevor die Kamera erscheint (3 Bilder lang
+     * sah man sonst die echte Leiste). Solange noch das Fenster mit der Leiste vorne ist, bleibt unsere stehen.
+     */
+    private fun waitingForCamera(now: Long): Boolean {
+        if (now - createTappedAt > CREATE_HOLD_MS) return false
+        return foregroundWindow()?.id == barWindowId
     }
 
     /**
@@ -761,6 +777,10 @@ class FuckShortsService : AccessibilityService() {
                 return
             }
             if (now - preShownAt < PRE_SHOW_HOLD_MS) return
+            if (waitingForCamera(now)) {
+                reason("Plus getippt, warte auf Kamera")
+                return
+            }
             // Die Leiste gibt es nicht mehr (anderer Bildschirm, z. B. Kamera nach Plus): sofort weg.
             reason("Leiste nicht mehr da ($keepFail)")
             lastBar = null
@@ -835,13 +855,16 @@ class FuckShortsService : AccessibilityService() {
         // Noch keine Liste gemerkt, oder sie war beim schnellen Wischen kurz nicht abfragbar: neu suchen,
         // aber nur direkt nach dem Scrollen und ohne Tipp dazwischen (sonst ist es wohl eine andere Seite).
         goneFeed = null
-        if (lastNavAt > lastScrollAt) {
+        // YouTube nimmt seine Leiste schon weg, sobald der Finger zum Wischen aufliegt, noch bevor es "gescrollt"
+        // meldet: Die Berührung zählt darum schon als Scrollen. Ein Tipp (z. B. auf ein Video) meldet danach einen Klick.
+        val scrollAt = maxOf(lastScrollAt, lastTouchAt)
+        if (lastNavAt > scrollAt) {
             keepFail = "Tipp nach dem Scrollen"
             return false
         }
         // YouTube entfernt seine weggescrollte Leiste oft erst Sekunden später (z. B. ~8 s, wenn ein Video in der
         // Liste anläuft). Stand unsere wegen Scrollen allein da, ist es also trotzdem noch dieselbe Seite.
-        if (known == null && now - lastScrollAt > SCROLL_GONE_MS && !hiddenByScroll) {
+        if (known == null && now - scrollAt > SCROLL_GONE_MS && !hiddenByScroll) {
             keepFail = "nicht gescrollt"
             return false
         }
@@ -1014,6 +1037,7 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         if (kind == TabKind.CREATE) {
+            createTappedAt = SystemClock.uptimeMillis()
             // Plus öffnet die Kamera. Die erscheint erst ~300 ms später; bis dahin bleibt unsere Leiste stehen,
             // sonst sieht man so lange die echte mit Shorts-Knopf. Sie verschwindet, sobald die echte Leiste
             // aus YouTube verschwindet (siehe updateBar). Dafür ab jetzt jedes Bild prüfen.
@@ -1263,6 +1287,7 @@ class FuckShortsService : AccessibilityService() {
         private const val SHELF_HIDE_INTERVAL_MS = 60_000L
         private const val SHELF_MENU_TIMEOUT_MS = 1_500L
         private const val PRE_SHOW_HOLD_MS = 700L
+        private const val CREATE_HOLD_MS = 1_500L
         private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
 
         @Volatile
