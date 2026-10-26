@@ -638,6 +638,14 @@ class FuckShortsService : AccessibilityService() {
         return !hasVisibleContent(root)
     }
 
+    /** Ist das Fenster mit der Leiste vorne? Ein kleines Popup (⋮), das die Leiste nicht ganz abdeckt, zählt nicht. */
+    private fun isBarWindowInFront(): Boolean {
+        val front = foregroundWindow() ?: return false
+        if (front.id == barWindowId) return true
+        val rest = restBounds ?: return false
+        return front.root?.packageName?.toString() == selectors.youtubePackage && !windowBounds(front.id).contains(rest)
+    }
+
     private fun hasVisibleContent(root: AccessibilityNodeInfo): Boolean {
         val r = Rect()
         for (i in 0 until root.childCount) {
@@ -876,7 +884,8 @@ class FuckShortsService : AccessibilityService() {
             return false
         }
         val known = goneFeed
-        if (known != null && scanner.isFeedStillThere(known, screen)) {
+        val barWindowFront = isBarWindowInFront()
+        if (known != null && known.windowId == barWindowId && barWindowFront && scanner.isFeedStillThere(known, screen)) {
             feedKeptAt = now
             return true
         }
@@ -896,8 +905,13 @@ class FuckShortsService : AccessibilityService() {
             keepFail = "nicht gescrollt"
             return false
         }
-        val root = youTubeMainRoot()
-        goneFeed = root?.let { scanner.findFeed(it, screen) }
+        // Nur eine Liste im Fenster der Leiste zählt (die YouTube-Einstellungen sind ein eigenes Fenster mit Liste).
+        val root = youTubeMainRoot()?.takeIf { it.windowId == barWindowId && barWindowFront }
+        if (root == null) {
+            keepFail = "anderes Fenster vorne"
+            return false
+        }
+        goneFeed = scanner.findFeed(root, screen)
         if (goneFeed != null) {
             feedKeptAt = now
             return true
