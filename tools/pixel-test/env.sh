@@ -19,20 +19,34 @@ center() { tr '>' '\n' < rec/$1.xml | grep -E "(content-desc|text)=\"$2\"" | hea
 recstart() { adb shell rm -f /sdcard/r.mp4; (adb shell screenrecord --bit-rate 16000000 --time-limit $1 /sdcard/r.mp4 >/dev/null 2>&1 &) ; sleep 1.2; }
 recpull() { local i=0; while adb shell pidof screenrecord >/dev/null 2>&1 && [ $i -lt 60 ]; do sleep 1; i=$((i+1)); done; sleep 0.5; adb pull /sdcard/r.mp4 rec/$1.mp4 >/dev/null 2>&1; ls -la rec/$1.mp4 | awk '{print $5, $NF}'; }
 
-# analyze NAME : pro Bild Anteil heller Pixel (Pixel 9, 1080x2424, Leiste oben bei y=2217):
+# analyze NAME : pro Bild Anteil "Zeichen"-Pixel (Pixel 9, 1080x2424, Leiste oben bei y=2217):
 #   S = Stelle des echten Shorts-Knopfs, E = echter Erstellen-Knopf (bei unserer Leiste beide leer),
 #   U = rechter Teil unseres Startseite-Icons (bei der echten Leiste leer, unsere ≈ 20).
+#   Hell und dunkel: Pro Bild wird der Hintergrund der Leiste gemessen (B, Streifen über den Icons).
+#   Dunkler Hintergrund -> helle Pixel zählen, heller Hintergrund -> dunkle Pixel zählen.
+#   "~" = Streifen nicht einfarbig (dort ist keine Leiste, z. B. Video-Seite). ECHT nur bei einfarbigem Streifen,
+#   Zeichen bei S und E und leerem U. Ein schmaler Streifen der echten Leiste fällt so NICHT auf: strips ansehen!
 analyze() {
-  local n=$1 th="lutyuv=y='if(gt(val,165),255,0)',signalstats"
+  local n=$1 hi="lutyuv=y='if(gt(val,165),255,0)',signalstats" lo="lutyuv=y='if(lt(val,90),255,0)',signalstats"
+  local m="metadata=print:key=lavfi.signalstats.YAVG:file=rec"
   ffmpeg -loglevel fatal -y -i rec/$n.mp4 -fps_mode passthrough -filter_complex \
-   "[0:v]split=3[a][b][c];\
-    [a]crop=70:199:290:2225,$th,metadata=print:key=lavfi.signalstats.YAVG:file=rec/a.txt[ao];\
-    [b]crop=90:100:490:2238,$th,metadata=print:key=lavfi.signalstats.YAVG:file=rec/b.txt[bo];\
-    [c]crop=18:50:150:2245,$th,metadata=print:key=lavfi.signalstats.YAVG:file=rec/c.txt[co]" \
-   -map "[ao]" -f null - -map "[bo]" -f null - -map "[co]" -f null -
+   "[0:v]split=7[a][b][c][d][e][f][g];\
+    [a]crop=70:199:290:2225,$hi,$m/a.txt[ao];\
+    [b]crop=90:100:490:2238,$hi,$m/b.txt[bo];\
+    [c]crop=18:50:150:2245,$hi,$m/c.txt[co];\
+    [d]crop=70:199:290:2225,$lo,$m/d.txt[do];\
+    [e]crop=90:100:490:2238,$lo,$m/e.txt[eo];\
+    [f]crop=18:50:150:2245,$lo,$m/f.txt[fo];\
+    [g]crop=1000:10:40:2224,signalstats,metadata=print:file=rec/g.txt[go]" \
+   -map "[ao]" -f null - -map "[bo]" -f null - -map "[co]" -f null - \
+   -map "[do]" -f null - -map "[eo]" -f null - -map "[fo]" -f null - -map "[go]" -f null -
+  local v; v() { grep -o 'YAVG=[0-9.]*' rec/$1.txt | cut -d= -f2; }
   paste <(grep -o 'frame:[0-9]* *pts:[0-9]* *pts_time:[0-9.]*' rec/a.txt | awk '{split($1,a,":");split($3,c,":");printf "%d %.3f\n",a[2],c[2]}') \
-        <(grep -o 'YAVG=[0-9.]*' rec/a.txt | cut -d= -f2) <(grep -o 'YAVG=[0-9.]*' rec/b.txt | cut -d= -f2) <(grep -o 'YAVG=[0-9.]*' rec/c.txt | cut -d= -f2) \
-   | awk '{printf "%4d %7.3f  S=%5.1f E=%5.1f U=%5.1f%s\n",$1,$2,$3/2.55,$4/2.55,$5/2.55, ($3>5 && $4>5)?"  <<< ECHT?":""}' > rec/$n.ana
+        <(v a) <(v b) <(v c) <(v d) <(v e) <(v f) <(v g) \
+        <(grep -o 'YLOW=[0-9.]*' rec/g.txt | cut -d= -f2) <(grep -o 'YHIGH=[0-9.]*' rec/g.txt | cut -d= -f2) \
+   | awk '{ light=($9>128); s=light?$6:$3; e=light?$7:$4; u=light?$8:$5; flat=($11-$10<=12);
+            printf "%4d %7.3f  S=%5.1f E=%5.1f U=%5.1f B=%3d%s%s\n",$1,$2,s/2.55,e/2.55,u/2.55,$9, flat?"":" ~",
+              (s>5 && e>5 && u<5 && flat)?"  <<< ECHT?":"" }' > rec/$n.ana
   grep -c ECHT rec/$n.ana
 }
 # Bereiche mit (vielleicht) echter Leiste / ohne unsere Leiste. Immer mit frames/strips nachsehen!

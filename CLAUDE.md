@@ -101,6 +101,18 @@ Gefunden und behoben:
   Berührung-als-Scrollen-Regel hielt deren Liste für die Startseite. Jetzt zählt nur eine Liste im Fenster der
   Leiste (`barWindowId`), und das muss vorne sein (`isBarWindowInFront`, kleine Popups ausgenommen).
 
+### Nachtrag 26.10.2026, ~12:20 (Pixel 9, Android 17, YouTube 21.42.243, hell)
+- `analyze` (tools/pixel-test/env.sh) taugt jetzt für hell UND dunkel: misst pro Bild den Hintergrund der Leiste
+  (B) und zählt dann dunkle bzw. helle Pixel. "~" = Streifen nicht einfarbig (keine Leiste, z. B. Video-Seite).
+  Ein schmaler Streifen der echten Leiste fällt nicht auf: immer `strips` ansehen.
+- Video verlassen gemessen (hell): Wischen nach unten sauber. **Zurück-Taste: 1 Bild schmaler Streifen** (Icons-
+  Oberkante). Protokoll (vorübergehendes Trace): ~65 ms bevor wir zeigen, kommt von YouTube
+  TYPE_WINDOW_STATE_CHANGED mit contentChangeTypes=16 (PANE_APPEARED), Player schon 6 px tiefer (173→179, unter
+  unserer 4-dp-Schwelle). Danach hängt jede Abfrage ~65 ms (YouTube beschäftigt). Beim Öffnen kommt ch=32.
+  **Nächster Schritt:** Bei PANE_APPEARED während Video offen sofort (ohne Abfrage) unsere Leiste zeigen. Vorher
+  prüfen, ob Kommentare/Beschreibung auf der Video-Seite auch PANE_APPEARED melden (dann zusätzlich Player-Lage).
+- Erster Zurück auf einer Video-Seite mit Werbe-Panel schliesst nur das Panel: dabei keine echte Leiste (ok).
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 26.10.2026)
 
 Muss:
