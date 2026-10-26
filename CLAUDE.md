@@ -39,8 +39,8 @@ sonst "could not get idle state").
 
 ## Nächste Aufgaben (Wunsch des Nutzers, 26.10.2026)
 
-- "Man darf die alte Leiste nie sehen" – noch übrig: abgedunkelte Wortreste hinter offenem ⋮-Menü,
-  2 schwache Bilder beim Schliessen der Kamera, evtl. 1 Bild ein 1-mm-Streifen beim Video-Verlassen.
+- "Man darf die alte Leiste nie sehen" – Stand siehe "Noch offen" weiter unten (26.10.2026, Nachmittag).
+  ⋮-Menü und Kamera sind inzwischen sauber.
 - App auf dem Pixel zu einem fertigen Produkt machen (Stabilität, Sonderfälle, Startseiten-Regal-Ausblenden
   noch ungetestet). Andere Handys und schöneres Aussehen kommen **später**.
 
@@ -63,15 +63,27 @@ Gefunden und behoben:
   reicht mit seinem Schatten bis y=2320 und streift so die Leiste.
 - **Premium-Werbung** (eigenes Vollbild-Fenster über der Startseite): unsere lag darüber. Jetzt Regel
   "anderes YouTube-Fenster über der Leiste" (`coverWindowId`), nur wenn das Fenster die **ganze** Leiste enthält.
-- **Plus → Kamera öffnen:** YouTube nahm seine Leiste weg, bevor die Kamera zu sehen war (3 Bilder echte
-  Leiste). `waitingForCamera`: unsere bleibt, bis das Kamera-Fenster Inhalt hat (Android meldet es schon vorne,
-  bevor es gezeichnet ist). Schliessen-Knopf heisst jetzt "Kamera schließen" (`closesBarlessPage`).
+- **Plus → Kamera öffnen / Tipp auf Werbung → Chrome:** YouTube nahm seine Leiste weg, bevor das neue Fenster
+  zu sehen war (1–3 Bilder echte Leiste). `waitingForNewWindow`: Nach einem Tipp (Plus 1,5 s, sonst 0,8 s)
+  bleibt unsere, bis das neue Fenster Inhalt hat (Android meldet es schon vorne, bevor es gezeichnet ist).
+  Schliessen-Knopf heisst jetzt "Kamera schließen" (`closesBarlessPage`).
 - **Suche:** Nach "Suchen" blendet die Tastatur ~0,3 s aus, Android meldet sie bis zum Ende → dahinter sah man
   ~16 Bilder die echte Leiste. `isKeyboardOpen`: Fokus aus dem Suchfeld weg = Tastatur gilt als zu.
 - **Verstecken = durchsichtig** (`alpha 0` + nicht berührbar) statt `INVISIBLE`: erscheint beim Wiederzeigen
   ohne Neueinrichten des Fensters (Video verlassen: vorher 1 Bild Rand der echten Leiste).
-- In Ordnung: 15 Knopf-Tipps (Abos/Mein YouTube/Startseite je 5×) alle richtig; Abos- und Mein-YouTube-Seite
-  scrollen; Kamera schliessen mit X, Zurück-Geste und Zurück-Taste; Video verlassen per Zurück und Wischen.
+- Endstand Version 0.1.28, ohne echte Leiste und mit unserer Leiste immer da: Startseite scrollen (inkl. 10 s
+  warten, bis ein Video in der Liste anläuft); Kamera 4× öffnen und schliessen (X, Zurück-Geste, Zurück-Taste);
+  normales ⋮ 2×; 15 Knopf-Tipps (Abos/Mein YouTube/Startseite je 5×, alle "ausgewählt"); Abos- und
+  Mein-YouTube-Seite scrollen; Suche mit "Suchen"; YouTube verlassen zum Startbildschirm.
+
+**Noch offen (gemessen mit 0.1.28):**
+- Video verlassen: 1–2 Bilder ein schmaler Streifen (Oberkante der echten Leiste, die von unten hochfährt).
+  YouTube meldet während der Animation ~100 ms keine neuen Lagen; Player und Leiste melden gleich spät.
+- Tastatur mit **Zurück** schliessen (Fokus bleibt im Suchfeld): ~3 Bilder schimmert die echte Leiste
+  schwach durch die ausblendende Tastatur.
+- Werbe-Menü (Panel) nach der Korrektur nicht nochmals getestet (oben stand keine Werbung mit ⋮).
+- Nach einem Neustart unseres Dienstes (z. B. App-Update) auf weggescrollter Startseite fehlt unsere Leiste,
+  bis die echte einmal wieder auftaucht (wir kennen ihre Lage dann noch nicht).
 
 **Test-Fallen (wichtig!):**
 - `uiautomator dump` schaltet **andere Bedienungshilfen ab**, solange es läuft (~2 s) → unsere Leiste weg, die
@@ -146,6 +158,10 @@ Mit `adb shell screenrecord` + ffmpeg Bild für Bild geprüft:
 
 ## Testen auf dem Pixel (adb)
 
+Fertige Werkzeuge: `tools/pixel-test/env.sh` (Aufnehmen, Bild-für-Bild-Auswertung mit ffmpeg: erkennt die echte
+Leiste an den hellen Stellen von Shorts-/Erstellen-Knopf) und `tools/pixel-test/suite.sh` (Tests `t_scroll`,
+`t_menu`, `t_cam`, `t_video`, `t_tabs`, `t_pages`). Verdächtige Bilder immer mit `frames`/`strips` ansehen.
+
 ```
 ./gradlew assembleDebug            # oder APK aus GitHub-Release nehmen
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -166,5 +182,7 @@ GitHub Actions (`.github/workflows/build-apk.yml`) baut bei jedem Push eine APK 
 (`releases/latest/download/FuckShorts.apk`). Lokal: JDK 17 + Android SDK, `./gradlew assembleDebug`.
 Auf dem Windows-PC des Nutzers installiert: JDK unter `C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot`,
 SDK unter `%LOCALAPPDATA%\Android\Sdk` (`local.properties`), adb über winget (Google.PlatformTools).
+Auf dem Arbeits-PC (A023985, 26.10.2026) gibt es kein JDK: dort nur über GitHub bauen. adb und ffmpeg liegen
+ohne Admin-Rechte unter `%USERPROFILE%\tools` (platform-tools, ffmpeg-master-latest-win64-gpl).
 Lokale Builds haben versionCode 1 → `adb install -r -d`.
 Arbeits-Branch: `claude/intelligent-volta-4lochv`.
