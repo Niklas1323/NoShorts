@@ -343,6 +343,12 @@ class FuckShortsService : AccessibilityService() {
         }
         val youTubeInFront = foreground?.packageName?.toString() == selectors.youtubePackage
         if (!youTubeInFront) leftYouTube = true
+        if (foreground != null && !youTubeInFront && overlay.isShowing && waitingForNewWindow(now)) {
+            // Andere App (z. B. Chrome nach Tipp auf Werbung) ist gemeldet, aber noch nicht zu sehen.
+            reason("Tipp, warte auf neues Fenster")
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return
+        }
         if (foreground == null || !youTubeInFront || isKeyboardOpen()) {
             reason("YouTube nicht vorne (${foreground?.packageName})")
             youTubeActive = false
@@ -404,7 +410,7 @@ class FuckShortsService : AccessibilityService() {
         // (Die Kamera ist anders: Dort ist das Hauptfenster gar nicht da, siehe barlessWindowId.)
         if (foreground.windowId == root.windowId) coverWindowId = -1
         if (foreground.windowId != root.windowId && foreground.windowId != barlessWindowId &&
-            now - preShownAt >= PRE_SHOW_HOLD_MS && !waitingForCamera(now)
+            now - preShownAt >= PRE_SHOW_HOLD_MS && !waitingForNewWindow(now)
         ) {
             val rest = restBounds
             // Nur wenn es die ganze Leiste abdeckt: Das ⋮-Popup (YouTube 21.42) streift sie bloss mit seinem Schatten.
@@ -556,7 +562,7 @@ class FuckShortsService : AccessibilityService() {
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
                 return
             }
-            if (now - preShownAt < PRE_SHOW_HOLD_MS || waitingForCamera(now)) {
+            if (now - preShownAt < PRE_SHOW_HOLD_MS || waitingForNewWindow(now)) {
                 // Kamera fährt noch weg bzw. kommt gleich: unsere Leiste stehen lassen, gleich nochmal nachsehen.
                 handler.postDelayed({ scheduleScan() }, POLL_MS)
                 return
@@ -615,13 +621,15 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /**
-     * Nach einem Tipp auf Plus nimmt YouTube seine Leiste schon weg, bevor die Kamera erscheint (3 Bilder lang
-     * sah man sonst die echte Leiste). Unsere bleibt stehen, bis die Kamera wirklich da ist: Android meldet ihr
-     * Fenster schon als vorne, bevor es gezeichnet ist – erst wenn es Inhalt hat, ist es zu sehen.
+     * Nach einem Tipp, der ein neues Fenster öffnet (Plus → Kamera, Werbung → Chrome), nimmt YouTube seine Leiste
+     * schon weg, bevor das neue Fenster zu sehen ist (1–3 Bilder lang sah man sonst die echte Leiste). Unsere
+     * bleibt stehen, bis es wirklich da ist: Android meldet das Fenster schon als vorne, bevor es gezeichnet ist –
+     * erst wenn es Inhalt hat, ist es zu sehen.
      */
-    private fun waitingForCamera(now: Long): Boolean {
-        if (now - createTappedAt > CREATE_HOLD_MS) return false
-        val front = foregroundWindow() ?: return true
+    private fun waitingForNewWindow(now: Long, front: AccessibilityWindowInfo? = foregroundWindow()): Boolean {
+        val held = now - createTappedAt <= CREATE_HOLD_MS || (now - lastNavAt <= NAV_HOLD_MS && !watchPageOpen)
+        if (!held) return false
+        if (front == null) return true
         if (front.id == barWindowId) return true
         val root = front.root ?: return true
         return !hasVisibleContent(root)
@@ -794,8 +802,8 @@ class FuckShortsService : AccessibilityService() {
                 return
             }
             if (now - preShownAt < PRE_SHOW_HOLD_MS) return
-            if (waitingForCamera(now)) {
-                reason("Plus getippt, warte auf Kamera")
+            if (waitingForNewWindow(now)) {
+                reason("Tipp, warte auf neues Fenster")
                 return
             }
             // Die Leiste gibt es nicht mehr (anderer Bildschirm, z. B. Kamera nach Plus): sofort weg.
@@ -1319,6 +1327,7 @@ class FuckShortsService : AccessibilityService() {
         private const val SHELF_MENU_TIMEOUT_MS = 1_500L
         private const val PRE_SHOW_HOLD_MS = 700L
         private const val CREATE_HOLD_MS = 1_500L
+        private const val NAV_HOLD_MS = 800L
         private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
 
         @Volatile

@@ -44,7 +44,43 @@ sonst "could not get idle state").
 - App auf dem Pixel zu einem fertigen Produkt machen (Stabilität, Sonderfälle, Startseiten-Regal-Ausblenden
   noch ungetestet). Andere Handys und schöneres Aussehen kommen **später**.
 
-## Neu am 26.10.2026 (Cloud-Sitzung, NOCH NICHT am Pixel getestet)
+## Neu am 26.10.2026, Nachmittag (am Pixel 9 getestet, YouTube 21.42.243, Version 0.1.2x)
+
+Getestet mit `screenrecord` + ffmpeg, Bild für Bild (Werkzeuge siehe "Testen auf dem Pixel").
+Gefunden und behoben:
+- **Startseite, unsere Leiste verschwand** nach dem Runterscrollen: (a) YouTube entfernt die weggescrollte
+  Leiste manchmal erst Sekunden später (z. B. wenn ein Video in der Liste anläuft); (b) dabei ist die Liste
+  `results` kurz nicht abfragbar; (c) YouTube nimmt die Leiste schon beim **Fingerauflegen** weg, vor
+  TYPE_VIEW_SCROLLED. Lösung in `keepWhileScrolledAway`: Berührung (`TouchWatcher` → `lastTouchAt`) zählt als
+  Scroll-Beginn, `hiddenByScroll` erlaubt späte Suche, `FEED_GRACE_MS` überbrückt kurze Aussetzer.
+  Das Protokoll nennt jetzt den Grund ("keine Leiste gefunden (Tipp nach dem Scrollen)" usw.).
+- **⋮ bei Werbung** öffnet kein Menü-Fenster, sondern ein Panel im YouTube-Fenster (`app_engagement_panel`,
+  "Mein Anzeigen-Center"). Solange es offen ist, gibt YouTube seine Leiste nicht heraus. `handlePanel`:
+  unsere weg, solange offen; beim Runterfahren/Zu sofort zeigen (`preShownAt`), sonst 2 Bilder echte Leiste.
+- **Normales ⋮** ist in 21.42 ein kleines Popup (`PopupWindow`, ty=APPLICATION_PANEL) in der Bildmitte, deckt
+  die Leiste nicht ab → unsere bleibt einfach stehen. (Das Menü von unten mit Abdunkelung gibt es dort nicht
+  mehr; `showUnderMenu`/`measureMenuDim` greifen nur noch, falls es zurückkommt.) Achtung: das Popup-Fenster
+  reicht mit seinem Schatten bis y=2320 und streift so die Leiste.
+- **Premium-Werbung** (eigenes Vollbild-Fenster über der Startseite): unsere lag darüber. Jetzt Regel
+  "anderes YouTube-Fenster über der Leiste" (`coverWindowId`), nur wenn das Fenster die **ganze** Leiste enthält.
+- **Plus → Kamera öffnen:** YouTube nahm seine Leiste weg, bevor die Kamera zu sehen war (3 Bilder echte
+  Leiste). `waitingForCamera`: unsere bleibt, bis das Kamera-Fenster Inhalt hat (Android meldet es schon vorne,
+  bevor es gezeichnet ist). Schliessen-Knopf heisst jetzt "Kamera schließen" (`closesBarlessPage`).
+- **Suche:** Nach "Suchen" blendet die Tastatur ~0,3 s aus, Android meldet sie bis zum Ende → dahinter sah man
+  ~16 Bilder die echte Leiste. `isKeyboardOpen`: Fokus aus dem Suchfeld weg = Tastatur gilt als zu.
+- **Verstecken = durchsichtig** (`alpha 0` + nicht berührbar) statt `INVISIBLE`: erscheint beim Wiederzeigen
+  ohne Neueinrichten des Fensters (Video verlassen: vorher 1 Bild Rand der echten Leiste).
+- In Ordnung: 15 Knopf-Tipps (Abos/Mein YouTube/Startseite je 5×) alle richtig; Abos- und Mein-YouTube-Seite
+  scrollen; Kamera schliessen mit X, Zurück-Geste und Zurück-Taste; Video verlassen per Zurück und Wischen.
+
+**Test-Fallen (wichtig!):**
+- `uiautomator dump` schaltet **andere Bedienungshilfen ab**, solange es läuft (~2 s) → unsere Leiste weg, die
+  echte sichtbar. Nie während einer Aufnahme dumpen; Koordinaten vorher holen.
+- Das Pixel lag quer mit Auto-Drehen → Videos gingen ins Querformat. Zum Testen `settings put system
+  accelerometer_rotation 0` (danach zurückstellen). Wach halten: `svc power stayon usb` (danach `false`).
+- Oben auf der Startseite steht oft Werbung; ein Tipp darauf öffnet Chrome oder ein Werbevideo.
+
+## Neu am 26.10.2026, Vormittag (Cloud-Sitzung)
 
 - **⋮-Menü:** Statt unsere Leiste zu verstecken (dann sah man abgedunkelte Wortreste der echten), zeigt
   `BottomBarOverlay.showUnderMenu` sie abgedunkelt (`BarUiState.dim`) mit einem durchsichtigen Loch, wo das
