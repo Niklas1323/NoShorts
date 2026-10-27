@@ -103,6 +103,8 @@ class FuckShortsService : AccessibilityService() {
     private var savedBarState: String? = null
     /** Lage der Leiste kommt aus dem Speicher (Neustart), die echte wurde seither noch nicht gesehen. */
     private var restoredState = false
+    /** Lage und Aussehen der ruhenden Leiste je Bildschirmgrösse (Hoch-/Querformat), fürs Drehen. */
+    private val restBySize = HashMap<String, Pair<Rect, BarUiState>>()
     private var themeChangedAt = 0L
     /** Benachrichtigungen wurden über YouTube aufgezogen (siehe handleShade). */
     private var shadeOverYouTube = false
@@ -272,10 +274,37 @@ class FuckShortsService : AccessibilityService() {
             scheduleScan()
             return
         }
-        restBounds = null
+        // Gedreht: Kennen wir die Lage der Leiste in der neuen Ausrichtung schon, springt unsere sofort dorthin.
+        // Versteckt man sie bis zur neuen Suche, zeigt die Dreh-Animation 4–5 Bilder die echte Leiste.
+        val newScreen = screenBounds()
+        val known = restBySize[sizeKey(newScreen)]
+        val wasShowing = overlay.isShowing
+        screen = newScreen
+        if (known != null && state != null) {
+            restBounds = Rect(known.first)
+            lastUiState = known.second.copy(
+                selected = state.selected,
+                subscriptionsBadge = state.subscriptionsBadge,
+                style = currentStyle(),
+            )
+            lastObservedTop = -1
+            goneFeed = null
+            if (wasShowing && !watchPageOpen) {
+                reason("gedreht, unsere an bekannter Stelle")
+                preShownAt = SystemClock.uptimeMillis()
+                hiddenByScroll = false
+                overlay.show(known.first.top, known.first, lastUiState!!)
+                scheduleScan()
+                return
+            }
+        } else {
+            restBounds = null
+        }
         hideAll()
         scheduleScan()
     }
+
+    private fun sizeKey(r: Rect) = "${r.width()}x${r.height()}"
 
     override fun onDestroy() {
         running = false
@@ -670,7 +699,14 @@ class FuckShortsService : AccessibilityService() {
             restoredState = false
             val previous = lastUiState
             lastUiState = if (atRest || previous == null) {
-                buildUiState(bar).also { saved -> restBounds?.let { if (atRest) saveBarState(it, saved) } }
+                buildUiState(bar).also { saved ->
+                    restBounds?.let {
+                        if (atRest) {
+                            saveBarState(it, saved)
+                            restBySize[sizeKey(screen)] = Rect(it) to saved
+                        }
+                    }
+                }
             } else {
                 previous.copy(
                     selected = bar.tabs.values.firstOrNull { it.selected }?.kind ?: previous.selected,
@@ -960,6 +996,7 @@ class FuckShortsService : AccessibilityService() {
                 showHandle = rest.bottom >= screen.bottom - 2,
                 style = currentStyle(),
             )
+            restBySize[sizeKey(screen)] = Rect(rest) to lastUiState!!
             savedBarState = text
             restoredState = true
             Log.d(TAG, "Leiste: gespeicherte Lage geladen ${rest.toShortString()}")
