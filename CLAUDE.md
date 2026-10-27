@@ -146,6 +146,10 @@ Noch offen (gefunden 27.10.):
   verschwommen hinter dem Schleier (wir verstecken bei systemui sofort). Ideen: bei systemui nicht verstecken,
   solange YouTube darunter das Hauptfenster ist (aber unsere liegt dann über der Benachrichtigungsleiste) –
   oder Lage des NOTIFICATION_SHADE-Fensters/Inhalts beobachten und beim Zuklappen früh zeigen.
+  Versuch 14:25 (verworfen, nicht gepusht): in `scanInternal` bei Vordergrund `com.android.systemui` den untersten
+  sichtbaren Knoten der Benachrichtigungen suchen und unsere zeigen, wenn er über der Leiste endet. Griff nie
+  (kein Protokoll-Eintrag) – vermutlich `youTubeMainRoot()` null bzw. ≠ `barWindowId`, solange die
+  Benachrichtigungen vorne sind. Nächstes Mal zuerst mit Log prüfen, was `windows` dann liefert.
 - **App-Übersicht:** Beim Rein-Gehen zeigt die verkleinerte YouTube-Karte 1–2 Bilder die echte Leiste (Vorschau
   ist YouTubes eigenes Bild; schwer lösbar).
 - **Tastatur (Punkt 2):** auch nach "Suchen"/Enter 3 Bilder echte Leiste durch die ausblendende Tastatur
