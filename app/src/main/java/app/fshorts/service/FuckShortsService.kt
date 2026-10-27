@@ -111,6 +111,8 @@ class FuckShortsService : AccessibilityService() {
     private var splitBounds: Rect? = null
     /** Die weggescrollte Liste, aus der ein Video geöffnet wurde (unsere Leiste stand dort). */
     private var feedBeforeVideo: AccessibilityNodeInfo? = null
+    /** Unsere Leiste wurde eben an eine neue Stelle gesetzt (Drehen): erst zeichnen lassen, dann scannen. */
+    private var movedAt = 0L
     /** Zuletzt war unsere Leiste zu sehen (Dialog: nur dann abgedunkelt zeigen). */
     private var ourShownAt = 0L
     /** Unsere Leiste ist gerade wie hinter einem Dialog abgedunkelt. */
@@ -323,6 +325,7 @@ class FuckShortsService : AccessibilityService() {
             goneFeed = null
             if (wasShowing && !watchPageOpen) {
                 reason("gedreht, unsere an bekannter Stelle")
+                movedAt = SystemClock.uptimeMillis()
                 preShownAt = SystemClock.uptimeMillis()
                 hiddenByScroll = false
                 overlay.show(known.first.top, known.first, lastUiState!!)
@@ -380,7 +383,7 @@ class FuckShortsService : AccessibilityService() {
         val interval = if (now < fastUntil) POLL_MS else MIN_SCAN_INTERVAL_MS
         // Unsere Leiste ist eben erst sichtbar geworden: erst zeichnen lassen. Ein Scan blockiert sonst bis 500 ms
         // (Video verlassen: so lange sah man die echte Leiste).
-        val drawFirst = overlay.shownAt + DRAW_FIRST_MS - now
+        val drawFirst = maxOf(overlay.shownAt, movedAt) + DRAW_FIRST_MS - now
         val delay = maxOf(lastScanAt + interval - now, drawFirst, 0)
         handler.postDelayed(scanRunnable, delay)
     }
@@ -433,6 +436,7 @@ class FuckShortsService : AccessibilityService() {
         watchPageOpen = false
         watchNode = null
         reason("Video verlassen (Pane, top $watchTop→$top)")
+        preShownAt = SystemClock.uptimeMillis()
         hiddenByScroll = false
         overlay.show(rest.top, rest, state.copy(style = currentStyle()))
         continueScanSoon()
@@ -724,6 +728,7 @@ class FuckShortsService : AccessibilityService() {
             val state = lastUiState
             if (open == false && rest != null && state != null) {
                 reason("Video verlassen (Scan)")
+                preShownAt = SystemClock.uptimeMillis()
                 hiddenByScroll = false
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
                 // Erst zeichnen lassen, dann weitersuchen: Die volle Suche blockiert sonst das Zeichnen.
@@ -1252,6 +1257,7 @@ class FuckShortsService : AccessibilityService() {
             watchPageOpen = false
             watchNode = null
             reason("Video verlassen")
+            preShownAt = SystemClock.uptimeMillis()
             hiddenByScroll = false
             overlay.show(rest.top, rest, state.copy(style = currentStyle()))
             scheduleScan()
