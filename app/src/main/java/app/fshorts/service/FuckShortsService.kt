@@ -130,6 +130,8 @@ class FuckShortsService : AccessibilityService() {
     private var shadeTouchAt = 0L
     /** Farbe des Benachrichtigungs-Schleiers über der Leiste, gemessen (siehe measureShadeVeil). */
     private var shadeVeil: Int? = null
+    /** Gemessene Schleierfarbe je hell/dunkel (bleibt beim Wechseln erhalten). */
+    private val shadeVeils = HashMap<Int, Int>()
     private var veilMeasuring = false
 
     // Short per Link (z. B. aus WhatsApp): Genau dieser eine darf laufen, weiterwischen nicht.
@@ -284,7 +286,7 @@ class FuckShortsService : AccessibilityService() {
         if (night != nightMode) {
             nightMode = night
             sampler.reset()
-            shadeVeil = null
+            shadeVeil = shadeVeils[night]
             themeChangedAt = SystemClock.uptimeMillis()
         }
         // Nur hell/dunkel gewechselt (gleiche Bildschirmgrösse): YouTube baut sich neu auf und blendet über.
@@ -958,7 +960,7 @@ class FuckShortsService : AccessibilityService() {
             // Android verwischt YouTube hinter dem Schleier, die echte Leiste schimmert durch. Darum dort eine ruhige
             // Fläche in Schleierfarbe, bis die Benachrichtigungen unten ankommen (bleibt unten frei: solange offen).
             reason("Benachrichtigungen offen, Fläche über der Leiste")
-            overlay.showVeiled(rest, state, shadeVeil ?: DEFAULT_VEIL)
+            overlay.showVeiled(rest, state, shadeVeil ?: defaultVeil())
         } else {
             reason("Benachrichtigungen offen")
             hideAll()
@@ -977,9 +979,11 @@ class FuckShortsService : AccessibilityService() {
         shadeTouchAt = SystemClock.uptimeMillis()
         val rest = restBounds ?: return
         val state = lastUiState ?: return
-        if (shadeTouchAt - shadeClosingAt >= SHADE_GAP_MS) overlay.showVeiled(rest, state, shadeVeil ?: DEFAULT_VEIL)
+        if (shadeTouchAt - shadeClosingAt >= SHADE_GAP_MS) overlay.showVeiled(rest, state, shadeVeil ?: defaultVeil())
         scheduleScan()
     }
+
+    private fun defaultVeil() = if (nightMode == Configuration.UI_MODE_NIGHT_YES) DEFAULT_VEIL else DEFAULT_VEIL_LIGHT
 
     /** Reichen die Benachrichtigungen (fertig aufgezogen) bis über die Leiste? Dann decken sie sie selbst ab. */
     private fun shadeCoversBar(shade: AccessibilityNodeInfo, rest: Rect): Boolean {
@@ -1025,6 +1029,7 @@ class FuckShortsService : AccessibilityService() {
                             bitmap.recycle()
                             if (n > 0) {
                                 shadeVeil = android.graphics.Color.rgb((r / n).toInt(), (g / n).toInt(), (b / n).toInt())
+                                shadeVeils[night] = shadeVeil!!
                                 Log.d(TAG, "Schleierfarbe gemessen: #${Integer.toHexString(shadeVeil!!)}")
                             }
                         }
@@ -1929,6 +1934,8 @@ class FuckShortsService : AccessibilityService() {
         private const val SHADE_MEASURE_MS = 600L
         private const val WATCH_RELEARN_MS = 1_500L
         private val DEFAULT_VEIL = android.graphics.Color.rgb(0x1B, 0x25, 0x30)
+        /** Schleier im hellen Design (Pixel 9 gemessen). */
+        private val DEFAULT_VEIL_LIGHT = android.graphics.Color.rgb(0xC9, 0xD2, 0xDC)
         private const val SYSTEM_UI = "com.android.systemui"
         private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
 
