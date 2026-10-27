@@ -166,6 +166,8 @@ Noch offen (gefunden 27.10.):
   echte Leiste, nur unsere; `plus5.mp4` 326–327).
 - **Drehen:** Zurück ins Hochformat zeigt die Dreh-Animation kurz echte Leiste neben unserer (wir verstecken in
   `onConfigurationChanged` bei Grössenwechsel). Video-Vollbild quer nicht getestet (`videopos` fand kein Video).
+- 14:43: Startseite 18× gescrollt, kein einziges Shorts-Regal (kein "Shorts-Regale"-Protokoll) – YouTube zeigt nach
+  früherem "Kein Interesse" wohl keine mehr. Regal-Test auf Abos versuchen oder später wiederholen.
 - Nicht getestet: Werbe-Panel (Punkt 4, keine Werbung mit ⋮ oben), Shorts-Regal wegklicken, Short per Link,
   Anruf, Split-Screen (Nutzer fragen!).
 - Test-Falle: `videopos`/`t_video` erwischt oft eine Werbe-Karte (öffnet Werbe-Video/Panel) → Ergebnis prüfen.
