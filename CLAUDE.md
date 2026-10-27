@@ -113,7 +113,54 @@ Gefunden und behoben:
   prüfen, ob Kommentare/Beschreibung auf der Video-Seite auch PANE_APPEARED melden (dann zusätzlich Player-Lage).
 - Erster Zurück auf einer Video-Seite mit Werbe-Panel schliesst nur das Panel: dabei keine echte Leiste (ok).
 
-## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 26.10.2026)
+## Neu am 27.10.2026, 13:40–14:35 (Arbeits-PC A023985, Pixel 9, YouTube 21.42.243, hell)
+
+Werkzeuge jetzt ohne Admin unter `C:\Users\A023985\tools`: `jdk-17.0.20.1+1`, `android-sdk` (platforms;android-35,
+build-tools;35.0.0), platform-tools, ffmpeg. Lokal bauen: `JAVA_HOME=/c/Users/A023985/tools/jdk-17.0.20.1+1`,
+`local.properties` mit `sdk.dir=C:/Users/A023985/tools/android-sdk` (Schrägstriche!). Testordner `C:\Users\A023985\ptest`,
+dort `export T=/c/Users/A023985/tools` vor `. env.sh` (HOME ist hier H:). Wegen `MSYS_NO_PATHCONV=1` bei
+`adb install` Windows-Pfad nehmen ('C:\Users\...\app-debug.apk'). Handy-PIN kennt der Nutzer (entsperren:
+`KEYCODE_WAKEUP`, `KEYCODE_MENU`, `input text <PIN>`, `KEYCODE_ENTER`).
+
+Behoben (am Pixel Bild für Bild geprüft, gepusht):
+- **Video verlassen (Punkt 1):** Bei TYPE_WINDOW_STATE_CHANGED mit PANE_APPEARED und offenem Video sofort Player
+  nachsehen; steht er ≥2 px tiefer → unsere zeigen (`onWatchPaneAppeared`, Protokoll "Video verlassen (Pane, …)").
+  In 3 Verlassen-Fällen (Zurück-Taste, Wisch) kein Streifen der echten Leiste mehr. Rest: Auf *gescrollter*
+  Startseite (echte Leiste entfernt) kommt unsere 1–3 Bilder nach dem Wegrutschen der Video-Seite (nur Inhalt
+  sichtbar, keine echte Leiste).
+- **Lage speichern (Punkt 5):** `saveBarState`/`loadBarState` (Prefs `bar_state`, JSON mit Bildschirmgrösse, Lage,
+  Tabs). Nach Neustart (`restoredState`) auf gescrollter Startseite: Liste im vordersten Hauptfenster → unsere
+  bleibt. Geprüft: App-Update auf gescrollter Startseite → unsere sofort da ("gespeicherte Lage geladen").
+- **Hell↔dunkel umschalten:** `onConfigurationChanged` versteckte unsere Leiste → 6 (dunkel→hell) bzw. 12–15
+  (hell→dunkel) Bilder echte Leiste. Jetzt: gleiche Bildschirmgrösse → stehen lassen, neue Farben, und 1,5 s
+  (`THEME_HOLD_MS`) nicht verstecken, während YouTube neu aufbaut. Geprüft: beide Richtungen sauber.
+
+Geprüft, in Ordnung (hell): Plus 5× (Kamera, Zurück), alle Klicks ok, keine echte Leiste; alle Knöpfe je 5× auf
+gescrollter Startseite (25/25 "ausgewählt", unsere nie weg); Mini-Player auf Abos und Mein YouTube (liegt über
+unserer, Knöpfe gehen); ⋮-Menü (`t_menu`), Abos/Mein YouTube scrollen (`t_pages`); Querformat Startseite (unsere
+sitzt richtig); Bildschirm aus/an + Entsperren (unsere danach da); YouTube aus App-Übersicht zurück.
+
+Noch offen (gefunden 27.10.):
+- **Benachrichtigungen:** Beim *Zuklappen* (Zurück) 5 Bilder echte Leiste MIT Shorts-Knopf scharf (systemui gilt
+  noch als vorne, obwohl die Leiste schon weg ist; `special.mp4` Bild 588–592). Beim Aufziehen sieht man die echte
+  verschwommen hinter dem Schleier (wir verstecken bei systemui sofort). Ideen: bei systemui nicht verstecken,
+  solange YouTube darunter das Hauptfenster ist (aber unsere liegt dann über der Benachrichtigungsleiste) –
+  oder Lage des NOTIFICATION_SHADE-Fensters/Inhalts beobachten und beim Zuklappen früh zeigen.
+- **App-Übersicht:** Beim Rein-Gehen zeigt die verkleinerte YouTube-Karte 1–2 Bilder die echte Leiste (Vorschau
+  ist YouTubes eigenes Bild; schwer lösbar).
+- **Tastatur (Punkt 2):** auch nach "Suchen"/Enter 3 Bilder echte Leiste durch die ausblendende Tastatur
+  (`pages.mp4` 918–920). Key-Filter (`flagRequestFilterKeyEvents`) bewusst nicht eingebaut: Dienst müsste evtl. neu
+  eingeschaltet werden → vorher Nutzer fragen. Andere Idee: Insets/WindowInsetsAnimation in einem eigenen Fenster.
+- **Kamera öffnen (Plus):** unsere blitzt nach dem Verstecken 1–2 Bilder nochmals über der Kamera auf (keine
+  echte Leiste, nur unsere; `plus5.mp4` 326–327).
+- **Drehen:** Zurück ins Hochformat zeigt die Dreh-Animation kurz echte Leiste neben unserer (wir verstecken in
+  `onConfigurationChanged` bei Grössenwechsel). Video-Vollbild quer nicht getestet (`videopos` fand kein Video).
+- Nicht getestet: Werbe-Panel (Punkt 4, keine Werbung mit ⋮ oben), Shorts-Regal wegklicken, Short per Link,
+  Anruf, Split-Screen (Nutzer fragen!).
+- Test-Falle: `videopos`/`t_video` erwischt oft eine Werbe-Karte (öffnet Werbe-Video/Panel) → Ergebnis prüfen.
+  "ECHT?" schlägt im hellen Design auch bei dunkler Schrift im Inhalt an → immer `strips` ansehen.
+
+## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 26.10.2026, Nachtrag 27.10. oben)
 
 Muss:
 1. Video verlassen: 1–2 Bilder schmaler Streifen der echten Leiste (siehe "Noch offen"). Idee: während ein Video
