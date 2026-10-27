@@ -610,7 +610,8 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         menuOpen = false
-        popupFront(foreground)?.let { popup ->
+        // Nur wenn YouTube schon vorne war: Beim Zurückkommen ist kurz ein kleines Startfenster vorne.
+        if (youTubeActive && youTubeSince != 0L && now - youTubeSince > POPUP_AFTER_MS) popupFront(foreground)?.let { popup ->
             youTubeActive = true
             if (youTubeSince == 0L) youTubeSince = now
             val rest = restBounds
@@ -1284,6 +1285,14 @@ class FuckShortsService : AccessibilityService() {
                 updateBar(now, again)
                 return
             }
+            // Benachrichtigungen werden gerade aufgezogen: Das regelt der Scan (Fläche über der Leiste). Hier nicht
+            // verstecken, sonst sah man 2 Bilder die verwischte echte Leiste.
+            // (Beim Wechsel meldet Android kurz gar kein Fenster: ebenso dem Scan überlassen.)
+            val frontPkg = foregroundWindow()?.root?.packageName?.toString()
+            if (frontPkg == SYSTEM_UI || (frontPkg == null && now - lastTouchAt < SHADE_UNTOUCHED_MS)) {
+                scheduleScan()
+                return
+            }
             // Die Leiste gibt es nicht mehr (anderer Bildschirm, z. B. Kamera nach Plus): sofort weg.
             reason("Leiste nicht mehr da ($keepFail)")
             lastBar = null
@@ -1862,6 +1871,7 @@ class FuckShortsService : AccessibilityService() {
         /** So stark dunkelt Android hinter Dialogen ab (Standard, am Pixel gemessen: 255 → 102). */
         private const val DIALOG_DIM = 0.6f
         private const val DIALOG_SHOWN_MS = 1_000L
+        private const val POPUP_AFTER_MS = 1_000L
         private const val POLL_DURATION_MS = 500L
         private const val NAV_LINK_MS = 1_500L
         private const val VERIFY_MS = 400L
