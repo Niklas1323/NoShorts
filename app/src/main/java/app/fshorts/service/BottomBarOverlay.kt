@@ -111,6 +111,12 @@ class BottomBarOverlay(
     private var ignoreTapsUntil = 0L
 
     var isShowing = false
+        private set(value) {
+            if (value && !field) shownAt = SystemClock.uptimeMillis()
+            field = value
+        }
+    /** Wann unsere Leiste zuletzt sichtbar wurde (Android braucht danach ein paar ms, um sie zu zeichnen). */
+    var shownAt = 0L
         private set
 
     /** Oberkante unserer Leiste auf dem Bildschirm (nur gültig, wenn [isShowing]). */

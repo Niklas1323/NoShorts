@@ -378,7 +378,10 @@ class FuckShortsService : AccessibilityService() {
         scanPending = true
         val now = SystemClock.uptimeMillis()
         val interval = if (now < fastUntil) POLL_MS else MIN_SCAN_INTERVAL_MS
-        val delay = (lastScanAt + interval - now).coerceAtLeast(0)
+        // Unsere Leiste ist eben erst sichtbar geworden: erst zeichnen lassen. Ein Scan blockiert sonst bis 500 ms
+        // (Video verlassen: so lange sah man die echte Leiste).
+        val drawFirst = overlay.shownAt + DRAW_FIRST_MS - now
+        val delay = maxOf(lastScanAt + interval - now, drawFirst, 0)
         handler.postDelayed(scanRunnable, delay)
     }
 
@@ -1329,7 +1332,9 @@ class FuckShortsService : AccessibilityService() {
         // Startseite: unsere Leiste bleibt immer ganz da und fährt nie halb runter. Sie verschwindet erst,
         // wenn nach einem Tipp (Video geöffnet) die echte Leiste schon komplett weg ist.
         val onHome = state.selected == TabKind.HOME
-        val videoOpening = now - lastNavAt < NAV_LINK_MS && navFromRest
+        // Eben absichtlich vorab gezeigt (z. B. "Suchen"): Die echte Leiste kommt gleich von unten, nicht verstecken.
+        val held = now - preShownAt < PRE_SHOW_HOLD_MS
+        val videoOpening = now - lastNavAt < NAV_LINK_MS && navFromRest && !held
         if (onHome) {
             if (observedTop <= rest.top + 2) hiddenByScroll = false
             if (videoOpening && fullyGone) {
@@ -1350,7 +1355,7 @@ class FuckShortsService : AccessibilityService() {
         } else if (follow) {
             hiddenByScroll = false
         }
-        val top = if (hiddenByScroll) rest.top else observedTop.coerceAtLeast(rest.top)
+        val top = if (hiddenByScroll || held) rest.top else observedTop.coerceAtLeast(rest.top)
         if (top >= screen.bottom - 2) {
             overlay.hide()
         } else {
