@@ -102,7 +102,11 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
             if (!desc.isNullOrBlank()) {
                 node.getBoundsInScreen(r)
                 if (r.left < screen.width() / 2 && r.right < screen.width() * 0.9f && r.top > screen.height() / 2) {
-                    if (channel == null && node.className?.toString()?.endsWith("ImageView") == true) {
+                    // Kanalbild: klein und quadratisch. Bei Collab-Shorts ist es eine Gruppe ("Collab-Kanäle")
+                    // statt eines Bildes; breite Etiketten zählen so trotzdem nicht.
+                    val avatar = node.className?.toString()?.endsWith("ImageView") == true ||
+                        (kotlin.math.abs(r.width() - r.height()) <= 8 && r.width() < screen.width() / 6)
+                    if (channel == null && avatar) {
                         channel = desc
                         channelBottom = r.bottom
                     } else if (channel != null && r.top >= channelBottom - 2) {
