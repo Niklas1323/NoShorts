@@ -146,6 +146,13 @@ Noch offen (gefunden 27.10.):
   verschwommen hinter dem Schleier (wir verstecken bei systemui sofort). Ideen: bei systemui nicht verstecken,
   solange YouTube darunter das Hauptfenster ist (aber unsere liegt dann über der Benachrichtigungsleiste) –
   oder Lage des NOTIFICATION_SHADE-Fensters/Inhalts beobachten und beim Zuklappen früh zeigen.
+  **Update 14:40: Zuklappen behoben** (`handleShade`): Solange die Benachrichtigungen offen sind, meldet Android
+  NUR das systemui-Fenster (Typ 3, YouTube fehlt in `windows`), nach dem Zuklappen ~100 ms gar keins. Zeichen
+  fürs Zuklappen: `com.android.systemui:id/notificationShelf` wird unsichtbar und wandert nach oben (~300 ms
+  bevor YouTube wieder gemeldet wird) → unsere zeigen, 0,6 s halten (`SHADE_GAP_MS`), auch über die Lücke ohne
+  Fenster. Nur Wandern zählt nicht (Scrollen der Liste!). Geprüft: Zurück und Hochwischen sauber (nur der
+  verschwommene Schleier, dann unsere). Rest: Liste vorher gescrollt + Zurück → kein Zeichen, wie früher ~8 Bilder
+  echte Leiste; Aufziehen zeigt weiter die echte verschwommen. Sperrbildschirm ausgenommen (`isKeyguardLocked`).
   Versuch 14:25 (verworfen, nicht gepusht): in `scanInternal` bei Vordergrund `com.android.systemui` den untersten
   sichtbaren Knoten der Benachrichtigungen suchen und unsere zeigen, wenn er über der Leiste endet. Griff nie
   (kein Protokoll-Eintrag) – vermutlich `youTubeMainRoot()` null bzw. ≠ `barWindowId`, solange die

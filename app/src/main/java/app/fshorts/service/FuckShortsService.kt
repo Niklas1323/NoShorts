@@ -93,6 +93,10 @@ class FuckShortsService : AccessibilityService() {
     /** Lage der Leiste kommt aus dem Speicher (Neustart), die echte wurde seither noch nicht gesehen. */
     private var restoredState = false
     private var themeChangedAt = 0L
+    /** Benachrichtigungen wurden über YouTube aufgezogen (siehe handleShade). */
+    private var shadeOverYouTube = false
+    private var shadeMaxTop = -1
+    private var shadeClosingAt = 0L
 
     // Short per Link (z. B. aus WhatsApp): Genau dieser eine darf laufen, weiterwischen nicht.
     // Erkennung: YouTube kommt aus einer anderen App nach vorne und der Short geht auf, ohne dass in YouTube
@@ -387,6 +391,15 @@ class FuckShortsService : AccessibilityService() {
             handler.postDelayed({ scheduleScan() }, POLL_MS)
             return
         }
+        if (foreground != null && foreground.packageName?.toString() == SYSTEM_UI) {
+            if (handleShade(foreground, now)) return
+        } else if (foreground == null && now - shadeClosingAt < SHADE_GAP_MS) {
+            // Nach dem Zuklappen meldet Android kurz gar kein Fenster: unsere stehen lassen.
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return
+        } else {
+            shadeOverYouTube = false
+        }
         if (foreground == null || !youTubeInFront || isKeyboardOpen()) {
             reason("YouTube nicht vorne (${foreground?.packageName})")
             youTubeActive = false
@@ -678,7 +691,49 @@ class FuckShortsService : AccessibilityService() {
         return !hasVisibleContent(root)
     }
 
-    /** Ist das Fenster mit der Leiste vorne? Ein kleines Popup (⋮), das die Leiste nicht ganz abdeckt, zählt nicht. */
+    /**
+     * Benachrichtigungen über YouTube. Solange sie offen sind, meldet Android nur das systemui-Fenster. Beim
+     * Zuklappen meldet es YouTube erst ~400 ms später; dazwischen sah man 5 Bilder die echte Leiste. Früheres
+     * Zeichen: die Ablage (`notificationShelf`) wird unsichtbar oder wandert nach oben. Dann unsere schon zeigen.
+     * true = geregelt.
+     */
+    private fun handleShade(shade: AccessibilityNodeInfo, now: Long): Boolean {
+        if (youTubeActive && !watchPageOpen) {
+            shadeOverYouTube = true
+            shadeMaxTop = -1
+        }
+        val rest = restBounds
+        val state = lastUiState
+        if (!shadeOverYouTube || rest == null || state == null ||
+            getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
+        ) {
+            shadeOverYouTube = false
+            return false
+        }
+        youTubeActive = false
+        leftYouTube = true
+        val shelf = shade.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/notificationShelf").firstOrNull()
+        val r = Rect().also { shelf?.getBoundsInScreen(it) }
+        val visible = shelf?.isVisibleToUser == true
+        if (visible) shadeMaxTop = maxOf(shadeMaxTop, r.top)
+        // Nur Wandern reicht nicht: Scrollt man die Liste der Benachrichtigungen, wandert die Ablage auch.
+        val closing = shadeMaxTop > 0 && shelf != null && !visible && r.top > 0 &&
+            r.top < shadeMaxTop - CLOSING_DP * resources.displayMetrics.density
+        // Einmal am Zugehen: kurz stehen lassen, auch wenn die Ablage dabei wieder kurz sichtbar gemeldet wird.
+        if (closing || now - shadeClosingAt < SHADE_GAP_MS) {
+            reason("Benachrichtigungen gehen zu, unsere vorab zeigen")
+            if (closing && now - shadeClosingAt >= SHADE_GAP_MS) shadeClosingAt = now
+            hiddenByScroll = false
+            overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        } else {
+            reason("Benachrichtigungen offen")
+            hideAll()
+        }
+        handler.postDelayed({ scheduleScan() }, POLL_MS)
+        return true
+    }
+
+    /** Ist das Fenster mit der Leiste vorne?Ein kleines Popup (⋮), das die Leiste nicht ganz abdeckt, zählt nicht. */
     private fun isBarWindowInFront(): Boolean {
         val front = foregroundWindow() ?: return false
         if (front.id == barWindowId) return true
@@ -1451,6 +1506,8 @@ class FuckShortsService : AccessibilityService() {
         private const val CREATE_HOLD_MS = 1_500L
         private const val NAV_HOLD_MS = 800L
         private const val THEME_HOLD_MS = 1_500L
+        private const val SHADE_GAP_MS = 600L
+        private const val SYSTEM_UI = "com.android.systemui"
         private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
 
         @Volatile
