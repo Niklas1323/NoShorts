@@ -92,6 +92,7 @@ class FuckShortsService : AccessibilityService() {
     private var savedBarState: String? = null
     /** Lage der Leiste kommt aus dem Speicher (Neustart), die echte wurde seither noch nicht gesehen. */
     private var restoredState = false
+    private var themeChangedAt = 0L
 
     // Short per Link (z. B. aus WhatsApp): Genau dieser eine darf laufen, weiterwischen nicht.
     // Erkennung: YouTube kommt aus einer anderen App nach vorne und der Short geht auf, ohne dass in YouTube
@@ -223,6 +224,16 @@ class FuckShortsService : AccessibilityService() {
         if (night != nightMode) {
             nightMode = night
             sampler.reset()
+            themeChangedAt = SystemClock.uptimeMillis()
+        }
+        // Nur hell/dunkel gewechselt (gleiche Bildschirmgrösse): YouTube baut sich neu auf und blendet über.
+        // Unsere Leiste bleibt dabei stehen und nimmt nur die neuen Farben, sonst sah man 6–15 Bilder die echte.
+        val rest = restBounds
+        val state = lastUiState
+        if (screenBounds() == screen && rest != null && state != null) {
+            if (overlay.isShowing) overlay.show(overlay.top, rest, state.copy(style = currentStyle()))
+            scheduleScan()
+            return
         }
         restBounds = null
         hideAll()
@@ -594,7 +605,7 @@ class FuckShortsService : AccessibilityService() {
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
                 return
             }
-            if (now - preShownAt < PRE_SHOW_HOLD_MS || waitingForNewWindow(now)) {
+            if (now - preShownAt < PRE_SHOW_HOLD_MS || waitingForNewWindow(now) || now - themeChangedAt < THEME_HOLD_MS) {
                 // Kamera fährt noch weg bzw. kommt gleich: unsere Leiste stehen lassen, gleich nochmal nachsehen.
                 handler.postDelayed({ scheduleScan() }, POLL_MS)
                 return
@@ -882,6 +893,12 @@ class FuckShortsService : AccessibilityService() {
             else -> lastBar?.let { scanner.liveTop(it.container, screen) }
         }
         if (observedTop == null) {
+            if (now - themeChangedAt < THEME_HOLD_MS) {
+                // YouTube baut sich nach hell/dunkel neu auf, die Leiste fehlt kurz: unsere stehen lassen.
+                reason("Design gewechselt, YouTube baut neu auf")
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+                return
+            }
             if (keepWhileScrolledAway(now)) {
                 reason("echte weggescrollt und entfernt, unsere bleibt")
                 hiddenByScroll = true
@@ -1433,6 +1450,7 @@ class FuckShortsService : AccessibilityService() {
         private const val PRE_SHOW_HOLD_MS = 700L
         private const val CREATE_HOLD_MS = 1_500L
         private const val NAV_HOLD_MS = 800L
+        private const val THEME_HOLD_MS = 1_500L
         private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
 
         @Volatile
