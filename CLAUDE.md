@@ -212,36 +212,65 @@ die echte Leiste die GANZE Zeit (nicht nur 1–2 Bilder). Ginge nur, indem wir i
 bewegt sich, Knöpfe) – verworfen. Gleiches beim Öffnen per Link: Zoom-Animation zeigt 2 Bilder die kleine echte Leiste.
 Direkt nach einer Neuinstallation (`restoredState`) beim Öffnen per Link ~15 Bilder echte Leiste (selten).
 
-In Arbeit (nicht fertig getestet): **Video-Vollbild quer und zurück** – unsere blitzte nach dem Zurückdrehen über
-der Video-Seite auf / Video galt als verlassen. Ursachen: (1) Vollbild-Player füllt den Bildschirm, `isLargePlayer`
-verlangte ≤70 % Höhe → jetzt `fullscreen` erlaubt; (2) YouTube meldet beim Drehen Zwischenlagen (-740, 46) und den
-Player schon gedreht, bevor Android die neue Grösse meldet → `onScreenSizeChanged` (Scan, Bild-für-Bild, Android,
-was zuerst kommt) + `playerRotating` (Player so breit wie Bildschirm nach dem Drehen) → `watchRelearnUntil`
-(1,5 s nur sinnvolle Lagen lernen, nie "verlassen"). Noch ein "DBG leave"-Log drin. Testen mit Video per Link,
-`user_rotation 1`, `0`, dann Wisch nach unten.
+## Neu am 27.10.2026, Nacht 21:30–23:35 (Heim-PC "Admin", Pixel 9, YouTube 21.42.243, hell + dunkel)
 
-Noch nicht getestet: Shorts-Regal wegklicken (Startseite 35× gescrollt: kein einziges Regal, im Baum kein "Shorts";
-in Suchergebnissen gibt es Shorts-Raster mit anderer Überschrift, z. B. "Welpe" – die erkennt `findShelves` nicht),
-Anruf, Split-Screen (Nutzer fragen), Kamera-Aufblitzen, dunkles Design für die übrigen Fälle, `suite.sh` gesamt.
+Neue Test-Hilfe `shortsdet NAME` (in der Sitzung definiert): sucht in jeder Aufnahme das Shorts-Symbol der echten
+Leiste (Ausschnitt x 275–325, y 2258–2313 mit starkem Kontrast, daneben x 190–240 einfarbig). Findet echte Leisten,
+die `analyze` übersieht (z. B. auf Abos). Treffer immer mit `strips` ansehen (Werbe-Panels, Benachrichtigungs-Inhalt,
+Kamera-Knöpfe lösen falsch aus). Video per Link hängt manchmal im Ladeskelett (Pixel 540,1500 = (63,63,63)) → YouTube
+neu starten. Achtung: Auto-Drehen wurde während der Tests einmal wieder eingeschaltet (vermutlich Wischen über die
+Schnelleinstellungen) – vor Dreh-Tests `accelerometer_rotation` prüfen.
 
-## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 26.10.2026, Nachtrag 27.10. oben)
+Behoben (Bild für Bild geprüft, gepusht):
+- **Video-Vollbild quer und zurück:** kein falsches "Video verlassen" mehr (Vollbild-Player zählt, `watchRelearnUntil`
+  nach jeder Grössenänderung, `playerRotating`).
+- **Splitscreen** (YouTube oben oder unten, Tauschen, Trenner ziehen): `updateSplit` – YouTubes Fenster gilt als
+  `screen` (`screenBounds()`), YouTube gilt als vorne, auch wenn die andere App aktiv ist (`foregroundWindow`).
+  Scanner-Schwellen relativ zu `screen.top`. Tastatur der anderen App versteckt unsere nicht.
+- **Mini-Player baut um** (z. B. Werbung startet darin): `isBarCovered` erst nach 150 ms (`COVER_HOLD_MS`), vorher
+  ~7 Bilder echte Leiste.
+- **Video aus weggescrollter Startseite** öffnen und verlassen: vorher gar keine Leiste mehr; jetzt merkt
+  `feedBeforeVideo` die Liste, unsere kommt zurück.
+- **Benachrichtigungen:** Zuklappen per Finger: Fläche schon bei Berührung (`onShadeTouched`) → keine verwischte
+  Leiste mehr; per Zurück-Taste: 48 px Bewegung ohne Berührung = zu (Rest ~2 sehr schwache Bilder). Aufziehen:
+  `updateBar` versteckt unsere nicht mehr, wenn systemui (oder kurz nichts) vorne ist (vorher 2 Bilder). Schleierfarbe
+  je hell/dunkel gemerkt, heller Standard `DEFAULT_VEIL_LIGHT` (vorher dunkle Fläche im hellen Design).
+- **Abos scrollen:** YouTube baut die Leiste neu, unser gemerktes Element ist weg → vorher 1,5 s echte Leiste mit
+  Shorts. Jetzt vor dem Verstecken einmal neu suchen (`again` in `updateBar`).
+- **Popup-Menüs und Dialoge** (Suche: ⋮ oben rechts, "Suchfilter"): Solange ein Popup vorne ist, gibt Android das
+  Hauptfenster nicht heraus. `popupFront`: kleines Popup → unsere bleibt; grosser Dialog → unsere abgedunkelt
+  (`DIALOG_DIM` 0.6, gemessen 255→102) mit Loch, wo der Dialog liegt. Erst 1 s nachdem YouTube vorne ist
+  (`POPUP_AFTER_MS`: beim Zurückkommen ist kurz ein kleines Startfenster vorne).
+- **"Suchen":** jetzt kein einziges Bild echte Leiste (Tastatur offen → alle 16 ms prüfen; vorab gezeigte Leiste wird
+  nicht wieder versteckt, solange die echte unter dem Bildschirm ist – `held` in `updateBar`).
+- **Erst zeichnen, dann scannen:** `scheduleScan` wartet `DRAW_FIRST_MS` nach `overlay.shownAt`/`movedAt`. Vorher
+  blockierte ein 400-ms-Scan direkt nach "Video verlassen" das Zeichnen (z. B. nach Mini-Player aufklappen).
+- **Video verlassen** setzt `preShownAt` (unsere bleibt, während die echte reinfährt).
 
-Muss:
-1. Video verlassen: 1–2 Bilder schmaler Streifen der echten Leiste (siehe "Noch offen"). Idee: während ein Video
-   offen ist, unsere Leiste unsichtbar *bereithalten* und schon beim ersten Zeichen (Berührung + Wisch nach unten
-   auf dem Player, oder TYPE_WINDOW_STATE_CHANGED) zeigen; oder Leiste der Video-Seite selbst beobachten.
-2. Tastatur mit Zurück schliessen: ~3 Bilder echte Leiste durch die ausblendende Tastatur. Idee: Lage des
-   Tastatur-Fensters / Insets beobachten statt nur "Fenster da".
-3. Helles Design komplett testen (alle Tests aus `tools/pixel-test/suite.sh`), auch Umschalten hell↔dunkel.
-4. Werbe-Menü (⋮ bei Werbung, `app_engagement_panel`) nach der Korrektur testen.
-5. Nach Dienst-Neustart (App-Update) auf gescrollter Startseite fehlt unsere Leiste: `restBounds` und
-   letzten Zustand in `Prefs` speichern und beim Start laden.
-6. Plus 5× hintereinander und alle Knöpfe auch auf gescrollter Startseite (Leiste entfernt) 5× testen.
-7. Mini-Player: auf Abos/Mein YouTube und gescrollter Startseite prüfen (darf teilweise unter der Leiste sein).
-8. Querformat (Auto-Drehen an): Leiste, Video-Vollbild, Zurückdrehen.
-9. Sonderfälle: Benachrichtigungen runterziehen, App-Wechsel (Recents), Bildschirm aus/an, Anruf, Split-Screen,
-   Short per Link aus WhatsApp (unsere Leiste darf dabei nicht falsch stehen).
-10. Längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit `adb logcat -s FuckShorts` belegen.
+Geprüft, in Ordnung (hell UND dunkel, `shortsdet` + Bilder): Scrollen, ⋮-Menü, Kamera 4×, Video öffnen/verlassen,
+Tabs 15/15, Seiten + Suche, Benachrichtigungen auf/zu, Video aus gescrollter Startseite. Dazu: Video-Vollbild drehen,
+Startseite drehen, Splitscreen, Short in Suchergebnissen tippen (geht in 58 ms zu), Short per Link + Weiterwischen,
+Mini-Player aufklappen/zuklappen/schliessen, Einstellungen, eigener Kanal, Benachrichtigungs-Seite, Posteingang,
+App verlassen und zurück, Dialog/Popup in der Suche.
+
+Nicht lösbar (Systembilder ohne unsere Leiste): App-Übersicht-Karte, Dreh-Animation (~4 schwache Bilder), App-
+Öffnen-/Schliessen-Zoom (2–4 Bilder), Splitscreen-Grössenänderung.
+
+Noch offen (mit Ideen):
+- Video verlassen nach dem Drehen: in ~1 von 5 Fällen ~8 Bilder echte Leiste, weil gerade ein Scan ~150 ms an YouTube
+  hängt. Idee: während `watchPageOpen` keinen vollen Scan machen, nur den Player prüfen.
+- Kamera (Plus) öffnen: 1–2 Bilder unsere Leiste über der hochfahrenden Kamera (kosmetisch, nicht die echte).
+  Idee: nach dem Tipp auf Plus unsere schon nach ~100 ms weg, statt auf das Kamera-Fenster zu warten.
+- Shorts-Regal wegklicken: Startseite zeigt keine Regale mehr (nach früherem "Kein Interesse"), Video-Seite nur
+  manchmal (Regal "Shorts" unter dem Video in `watch_list`; dort läuft die Regal-Suche gar nicht, Scan endet bei
+  "Video offen"); auf Abos gefunden, hat aber kein eigenes ⋮. Ungetestet.
+- Dialog zu: unsere ~10 Bilder zu lange abgedunkelt (kosmetisch).
+- Anruf: auf Wunsch des Nutzers nicht getestet. Bildschirm aus/an nicht getestet.
+
+## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
+
+Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit
+`adb logcat -s FuckShorts` belegen.
 
 Später (bewusst nach hinten geschoben):
 - Aussehen mit Claude Design; andere Handys/Grössen, andere Sprachen (Beschriftungen in `selectors.json`).

@@ -63,3 +63,13 @@ strips() {
 # frames NAME N1 N2 ... : ganze Bilder nebeneinander
 frames() { local n=$1; shift; local sel=$(printf 'eq(n\\,%s)+' "$@"); sel=${sel%+}
   ffmpeg -loglevel error -y -i rec/$n.mp4 -fps_mode passthrough -vf "select='$sel',scale=400:-2,drawtext=fontfile='C\:/Windows/Fonts/arial.ttf':text='%{pts\:flt}':fontsize=24:fontcolor=yellow:box=1:boxcolor=black@0.7:x=4:y=40,tile=$#x1" -frames:v 1 rec/${n}_f.png; }
+
+# Shorts-Symbol der echten Leiste suchen (x 275–325 in der Icon-Reihe; bei unserer Leiste leer). Daneben (x 190–240)
+# ist bei beiden leer und muss einfarbig sein. Gibt verdächtige Bildbereiche aus – immer mit strips ansehen.
+shortsdet() {
+  ffmpeg -loglevel fatal -y -i rec/$1.mp4 -fps_mode passthrough -filter_complex "[0:v]split=2[a][b];[a]crop=50:55:275:2258,signalstats,metadata=print:file=rec/sd1.txt[ao];[b]crop=50:55:190:2258,signalstats,metadata=print:file=rec/sd2.txt[bo]" -map "[ao]" -f null - -map "[bo]" -f null -
+  paste <(grep -o 'frame:[0-9]* *pts:[0-9]* *pts_time:[0-9.]*' rec/sd1.txt | awk '{split($1,a,":");split($3,c,":");print a[2], c[2]}') \
+        <(grep -o 'YMIN=[0-9]*' rec/sd1.txt | cut -d= -f2) <(grep -o 'YMAX=[0-9]*' rec/sd1.txt | cut -d= -f2) \
+        <(grep -o 'YMIN=[0-9]*' rec/sd2.txt | cut -d= -f2) <(grep -o 'YMAX=[0-9]*' rec/sd2.txt | cut -d= -f2) \
+  | awk '{ if ($4-$3>90 && $6-$5<14) { if($1!=last+1){ if(s!="")print s"-"last" ("st"s)"; s=$1; st=$2 } last=$1 } } END{ if(s!="")print s"-"last" ("st"s)" }'
+}
