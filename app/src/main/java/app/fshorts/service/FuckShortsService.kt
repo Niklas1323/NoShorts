@@ -120,6 +120,8 @@ class FuckShortsService : AccessibilityService() {
     private var shadeHadKids = false
     private var shadeClosingAt = 0L
     private var shadeOpenedAt = 0L
+    /** Letzte Berührung, während die Benachrichtigungen über YouTube offen waren. */
+    private var shadeTouchAt = 0L
     /** Farbe des Benachrichtigungs-Schleiers über der Leiste, gemessen (siehe measureShadeVeil). */
     private var shadeVeil: Int? = null
     private var veilMeasuring = false
@@ -202,6 +204,7 @@ class FuckShortsService : AccessibilityService() {
             if (!touchedSinceEnter && youTubeActive) Log.d(TAG, "Berührung in YouTube")
             touchedSinceEnter = true
             lastTouchAt = SystemClock.uptimeMillis()
+            if (shadeOverYouTube) onShadeTouched()
         }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         menuDim = Prefs.menuDim(this)
@@ -896,15 +899,21 @@ class FuckShortsService : AccessibilityService() {
             .firstOrNull()?.childCount ?: -1
         if (kids > 0) shadeHadKids = true
         // Nur Wandern reicht nicht: Scrollt man die Liste der Benachrichtigungen, wandert die Ablage auch.
+        // Ohne Finger auf dem Bildschirm (z. B. Zurück-Taste) kann die Liste nicht gescrollt werden: Dann heisst schon
+        // ein kleines Stück nach oben "geht zu". Sonst merkte man es erst ~250 ms später (8 Bilder verwischte Leiste).
+        val untouched = now - maxOf(lastTouchAt, shadeOpenedAt) > SHADE_UNTOUCHED_MS
         val closing = (shadeMaxTop > 0 && shelf != null && !visible && r.top > 0 &&
-            r.top < shadeMaxTop - CLOSING_DP * resources.displayMetrics.density) || (shadeHadKids && kids == 0)
+            r.top < shadeMaxTop - CLOSING_DP * resources.displayMetrics.density) || (shadeHadKids && kids == 0) ||
+            (untouched && shadeMaxTop > 0 && shelf != null && r.top > 0 && r.top < shadeMaxTop - SHADE_MOVE_PX)
         // Einmal am Zugehen: kurz stehen lassen, auch wenn die Ablage dabei wieder kurz sichtbar gemeldet wird.
         if (closing || now - shadeClosingAt < SHADE_GAP_MS) {
             reason("Benachrichtigungen gehen zu, unsere vorab zeigen")
             if (closing && now - shadeClosingAt >= SHADE_GAP_MS) shadeClosingAt = now
             hiddenByScroll = false
             overlay.show(rest.top, rest, state.copy(style = currentStyle()))
-        } else if (now - shadeOpenedAt < SHADE_VEIL_MS || !shadeCoversBar(shade, rest)) {
+        } else if (now - shadeOpenedAt < SHADE_VEIL_MS || now - shadeTouchAt < SHADE_TOUCH_VEIL_MS ||
+            !shadeCoversBar(shade, rest)
+        ) {
             // Android verwischt YouTube hinter dem Schleier, die echte Leiste schimmert durch. Darum dort eine ruhige
             // Fläche in Schleierfarbe, bis die Benachrichtigungen unten ankommen (bleibt unten frei: solange offen).
             reason("Benachrichtigungen offen, Fläche über der Leiste")
@@ -916,6 +925,19 @@ class FuckShortsService : AccessibilityService() {
         if (shadeVeil == null && now - shadeOpenedAt > SHADE_MEASURE_MS) measureShadeVeil()
         handler.postDelayed({ scheduleScan() }, POLL_MS)
         return true
+    }
+
+    /**
+     * Finger auf den offenen Benachrichtigungen: Vielleicht schiebt er sie gleich hoch. Android meldet das Zugehen
+     * erst ~200 ms später, so lange sah man die verwischte echte Leiste. Darum die Fläche schon jetzt zeigen
+     * (Berührungen gehen durch sie hindurch); bleiben die Benachrichtigungen offen, verschwindet sie wieder.
+     */
+    private fun onShadeTouched() {
+        shadeTouchAt = SystemClock.uptimeMillis()
+        val rest = restBounds ?: return
+        val state = lastUiState ?: return
+        if (shadeTouchAt - shadeClosingAt >= SHADE_GAP_MS) overlay.showVeiled(rest, state, shadeVeil ?: DEFAULT_VEIL)
+        scheduleScan()
     }
 
     /** Reichen die Benachrichtigungen (fertig aufgezogen) bis über die Leiste? Dann decken sie sie selbst ab. */
@@ -1820,6 +1842,9 @@ class FuckShortsService : AccessibilityService() {
         private const val IME_CLOSING_PX = 8
         /** So lange nach dem Aufziehen braucht der Schleier, bis die Benachrichtigungen unten angekommen sind. */
         private const val SHADE_VEIL_MS = 180L
+        private const val SHADE_TOUCH_VEIL_MS = 700L
+        private const val SHADE_UNTOUCHED_MS = 600L
+        private const val SHADE_MOVE_PX = 48
         private const val SHADE_MEASURE_MS = 600L
         private const val WATCH_RELEARN_MS = 1_500L
         private val DEFAULT_VEIL = android.graphics.Color.rgb(0x1B, 0x25, 0x30)
