@@ -101,7 +101,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
             val desc = node.contentDescription?.toString()
             if (!desc.isNullOrBlank()) {
                 node.getBoundsInScreen(r)
-                if (r.left < screen.width() / 2 && r.right < screen.width() * 0.9f && r.top > screen.height() / 2) {
+                if (r.left < screen.width() / 2 && r.right < screen.width() * 0.9f && r.top > screen.centerY()) {
                     // Kanalbild: klein und quadratisch. Bei Collab-Shorts ist es eine Gruppe ("Collab-Kanäle")
                     // statt eines Bildes; breite Etiketten zählen so trotzdem nicht.
                     val avatar = node.className?.toString()?.endsWith("ImageView") == true ||
@@ -149,10 +149,10 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         if (!node.isVisibleToUser) return false
         val r = node.bounds()
         val wide = r.width() >= screen.width() * 0.9
-        val nearTop = r.top < screen.height() * 0.35
+        val nearTop = r.top - screen.top < screen.height() * 0.35
         val playerSized = r.height() >= 150 * density && r.height() <= screen.height() * 0.7
         // Vollbild (z. B. quer): Der Player füllt den ganzen Bildschirm, das Video ist weiter offen.
-        val fullscreen = r.top <= 2 && r.height() >= screen.height() * 0.95
+        val fullscreen = r.top <= screen.top + 2 && r.height() >= screen.height() * 0.95
         return wide && nearTop && (playerSized || fullscreen)
     }
 
@@ -165,7 +165,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         // Am schnellsten: die bekannten IDs (auf dem Pixel nachgesehen, YouTube 21.41).
         for (id in sel.miniPlayerIds) {
             for (node in root.findAccessibilityNodeInfosByViewId(sel.fullId(id))) {
-                if (node.isVisibleToUser && node.bounds().centerY() > screen.height() / 2) return true
+                if (node.isVisibleToUser && node.bounds().centerY() > screen.centerY()) return true
             }
         }
         // Schnell: kleine Knöpfe (Schliessen, Pause) unten rechts, wie beim Mini-Player.
@@ -175,7 +175,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
                 if (!hit.isVisibleToUser) continue
                 val b = hit.bounds()
                 val small = b.width() <= maxButton && b.height() <= maxButton
-                if (small && b.centerX() > screen.width() * 0.45 && b.centerY() > screen.height() * 0.45) return true
+                if (small && b.centerX() > screen.width() * 0.45 && b.centerY() - screen.top > screen.height() * 0.45) return true
             }
         }
         // Langsam (bis zu 300 ms, wenn YouTube gerade umbaut): nur ab und zu, falls YouTube die IDs ändert.
@@ -414,7 +414,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         if (!hit.isVisibleToUser) return null
         val r = Rect()
         hit.getBoundsInScreen(r)
-        if (r.top < screen.height() * 0.6) return null
+        if (r.top - screen.top < screen.height() * 0.6) return null
         var best: AccessibilityNodeInfo? = null
         var node: AccessibilityNodeInfo? = hit
         var depth = 0
@@ -447,7 +447,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         container.getBoundsInScreen(b)
         if (b.width() < screen.width() * 0.8) return null
         if (b.height() > maxBarHeight || b.height() < 24 * density) return null
-        if (b.top < screen.height() * 0.6) return null
+        if (b.top - screen.top < screen.height() * 0.6) return null
 
         val tabs = mutableMapOf<TabKind, TabInfo>()
         val nodes = mutableMapOf<TabKind, AccessibilityNodeInfo>()

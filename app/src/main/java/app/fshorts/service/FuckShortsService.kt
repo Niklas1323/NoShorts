@@ -107,6 +107,12 @@ class FuckShortsService : AccessibilityService() {
     private val restBySize = HashMap<String, Pair<Rect, BarUiState>>()
     /** Bis dann nach dem Drehen nur die neue Lage des Players lernen, nicht "Video verlassen" melden. */
     private var watchRelearnUntil = 0L
+    /** YouTube im Splitscreen (oben oder unten, volle Breite): sein Fenster. Sonst null (ganzer Bildschirm). */
+    private var splitBounds: Rect? = null
+    /** Die weggescrollte Liste, aus der ein Video geöffnet wurde (unsere Leiste stand dort). */
+    private var feedBeforeVideo: AccessibilityNodeInfo? = null
+    /** Seit wann der Player die echte Leiste überdeckt (0 = nicht). */
+    private var coveredSince = 0L
     private var themeChangedAt = 0L
     /** Benachrichtigungen wurden über YouTube aufgezogen (siehe handleShade). */
     private var shadeOverYouTube = false
@@ -321,7 +327,7 @@ class FuckShortsService : AccessibilityService() {
         hideAll()
     }
 
-    private fun sizeKey(r: Rect) = "${r.width()}x${r.height()}"
+    private fun sizeKey(r: Rect) = "${r.left},${r.top},${r.width()}x${r.height()}"
 
     /**
      * Beim Drehen meldet YouTube den Player schon in der neuen Ausrichtung, Android aber noch die alte
@@ -482,6 +488,7 @@ class FuckShortsService : AccessibilityService() {
             handleShelfMenu(now)
             return
         }
+        updateSplit()
         val foreground = foregroundWindow()?.root
         if (foreground == null && youTubeActive) {
             // Beim Fensterwechsel (z. B. Plus -> Kamera) meldet Android kurz gar kein Fenster. Nicht gleich alles
@@ -738,14 +745,23 @@ class FuckShortsService : AccessibilityService() {
         if (bar != null) {
             barSeenOnce = true
             goneFeed = null
+            feedBeforeVideo = null
             lastBar = bar
             rememberRestPosition(bar)
             barWindowId = root.windowId
+            // Der Player liegt über der Leiste. Kurz kommt das auch vor, wenn der Mini-Player umbaut (z. B. Werbung
+            // startet): Dann nicht verstecken, sonst sah man ~7 Bilder die echte Leiste. Erst wenn es so bleibt.
             if (scanner.isBarCovered(root, bar)) {
-                reason("verdeckt ${bar.bounds.toShortString()}")
-                hiddenOnPurpose = true
-                hideAll()
-                return
+                if (coveredSince == 0L) coveredSince = now
+                if (now - coveredSince >= COVER_HOLD_MS) {
+                    reason("verdeckt ${bar.bounds.toShortString()}")
+                    hiddenOnPurpose = true
+                    hideAll()
+                    return
+                }
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+            } else {
+                coveredSince = 0L
             }
             hiddenOnPurpose = false
             // Positionen nur von der ganz eingefahrenen Leiste übernehmen, sonst nur Auswahl und roten Punkt.
@@ -1117,7 +1133,7 @@ class FuckShortsService : AccessibilityService() {
                 barHeightPx = rest.height(),
                 iconCenterPx = (ICON_CENTER_DP * density).roundToInt(),
                 labelTopPx = (LABEL_TOP_DP * density).roundToInt(),
-                showHandle = rest.bottom >= screen.bottom - 2,
+                showHandle = rest.bottom >= displayBounds().bottom - 2,
                 style = currentStyle(),
             )
             restBySize[sizeKey(screen)] = Rect(rest) to lastUiState!!
@@ -1272,9 +1288,15 @@ class FuckShortsService : AccessibilityService() {
     /** Echte Leiste ist weg: Nur weil gescrollt wurde (dieselbe Liste ist noch da)? Dann bleibt unsere stehen. */
     private fun keepWhileScrolledAway(now: Long): Boolean {
         if (watchPageOpen) {
+            // Video aus der weggescrollten Liste geöffnet: Nach dem Verlassen ist es wieder dieselbe Liste.
+            if (hiddenByScroll && goneFeed != null) feedBeforeVideo = goneFeed
             goneFeed = null
             keepFail = "Video offen"
             return false
+        }
+        feedBeforeVideo?.let { before ->
+            feedBeforeVideo = null
+            if (before.windowId == barWindowId && scanner.isFeedStillThere(before, screen)) goneFeed = before
         }
         val known = goneFeed
         val barWindowFront = isBarWindowInFront()
@@ -1350,7 +1372,7 @@ class FuckShortsService : AccessibilityService() {
             barHeightPx = rest.height(),
             iconCenterPx = (ICON_CENTER_DP * density).roundToInt(),
             labelTopPx = (LABEL_TOP_DP * density).roundToInt(),
-            showHandle = rest.bottom >= screen.bottom - 2,
+            showHandle = rest.bottom >= displayBounds().bottom - 2,
             style = currentStyle(),
         )
     }
@@ -1654,13 +1676,40 @@ class FuckShortsService : AccessibilityService() {
     private fun foregroundWindow(): AccessibilityWindowInfo? {
         val all = windows
         val active = all.firstOrNull { it.isActive }
-        if (active != null && !isOurs(active)) return active
+        if (active != null && !isOurs(active)) {
+            // Splitscreen: Die andere App ist aktiv, YouTube aber daneben zu sehen – mit seiner Leiste.
+            if (splitBounds != null && active.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
+                active.root?.packageName?.toString() != selectors.youtubePackage
+            ) youTubeMainWindow(all)?.let { return it }
+            return active
+        }
         return all.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !isOurs(it) }.maxByOrNull { it.layer }
     }
 
     private fun isOurs(window: AccessibilityWindowInfo): Boolean =
         window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY ||
             window.root?.packageName?.toString() == packageName
+
+    private fun youTubeMainWindow(all: List<AccessibilityWindowInfo>): AccessibilityWindowInfo? {
+        val r = Rect()
+        return all
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.root?.packageName?.toString() == selectors.youtubePackage }
+            .maxByOrNull { it.getBoundsInScreen(r); r.width().toLong() * r.height() }
+    }
+
+    /**
+     * Splitscreen? YouTubes Hauptfenster ist dann so breit wie der Bildschirm, aber nur etwa halb so hoch. Dann gilt
+     * sein Fenster als "Bildschirm": Leiste, Player und Co. liegen darin wie sonst auf dem ganzen Bildschirm.
+     */
+    private fun updateSplit() {
+        val display = displayBounds()
+        val main = youTubeMainWindow(windows)
+        val b = main?.let { Rect().also { r -> it.getBoundsInScreen(r) } }
+        splitBounds = b?.takeIf {
+            !main.isInPictureInPictureMode && it.width() >= display.width() - 4 &&
+                it.height() in (display.height() / 4)..(display.height() * 85 / 100)
+        }
+    }
 
     /**
      * Das Hauptfenster von YouTube (das grösste). Dort liegen Leiste und Startseite, auch wenn ein Menü offen ist.
@@ -1701,6 +1750,8 @@ class FuckShortsService : AccessibilityService() {
         // Beim Zugehen (Zurück oder "Suchen") meldet Android das Tastatur-Fenster schon tiefer, bevor sie sichtbar
         // runterrutscht und ausblendet. Ab da gilt sie als zu: Sonst sah man 3–5 Bilder die echte Leiste durch.
         val top = Rect().also { ime.getBoundsInScreen(it) }.top
+        // Splitscreen, YouTube oben: Die Tastatur gehört zur App unten und deckt die Leiste nicht ab.
+        splitBounds?.let { if (top >= it.bottom - 2) return false }
         imeMinTop = minOf(imeMinTop, top)
         if (top > imeMinTop + IME_CLOSING_PX) return false
         // Fokus von einem Eingabefeld auf etwas anderes gewechselt ("Suchen"): zu. Ohne Fokus (kommt beim Tippen
@@ -1714,7 +1765,9 @@ class FuckShortsService : AccessibilityService() {
         return open
     }
 
-    private fun screenBounds(): Rect {
+    private fun screenBounds(): Rect = splitBounds?.let { Rect(it) } ?: displayBounds()
+
+    private fun displayBounds(): Rect {
         val display = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
@@ -1726,6 +1779,7 @@ class FuckShortsService : AccessibilityService() {
         private const val TAG = "FuckShorts"
         private const val MIN_SCAN_INTERVAL_MS = 40L
         private const val POLL_MS = 16L
+        private const val COVER_HOLD_MS = 150L
         private const val POLL_DURATION_MS = 500L
         private const val NAV_LINK_MS = 1_500L
         private const val VERIFY_MS = 400L
