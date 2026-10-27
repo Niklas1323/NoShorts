@@ -1242,6 +1242,15 @@ class FuckShortsService : AccessibilityService() {
                 reason("Tipp, warte auf neues Fenster")
                 return
             }
+            // YouTube baut die Leiste manchmal neu (z. B. beim Scrollen auf Abos): Dann ist nur unser gemerktes Element
+            // weg, die echte Leiste steht noch da. Einmal neu suchen, sonst sah man sie bis zum nächsten Scan (~1,5 s).
+            val main = youTubeMainRoot()?.takeIf { it.windowId == foregroundWindow()?.id }
+            val again = main?.let { scanner.findBar(it, screen) }
+            if (again != null && again.bounds.top <= rest.top + 2 && again.tabs[TabKind.SHORTS]?.selected != true) {
+                lastBar = again
+                updateBar(now, again)
+                return
+            }
             // Die Leiste gibt es nicht mehr (anderer Bildschirm, z. B. Kamera nach Plus): sofort weg.
             reason("Leiste nicht mehr da ($keepFail)")
             lastBar = null
