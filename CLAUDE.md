@@ -151,8 +151,8 @@ Noch offen (gefunden 27.10.):
   fürs Zuklappen: `com.android.systemui:id/notificationShelf` wird unsichtbar und wandert nach oben (~300 ms
   bevor YouTube wieder gemeldet wird) → unsere zeigen, 0,6 s halten (`SHADE_GAP_MS`), auch über die Lücke ohne
   Fenster. Nur Wandern zählt nicht (Scrollen der Liste!). Geprüft: Zurück und Hochwischen sauber (nur der
-  verschwommene Schleier, dann unsere). Rest: Liste vorher gescrollt + Zurück → kein Zeichen, wie früher ~8 Bilder
-  echte Leiste; Aufziehen zeigt weiter die echte verschwommen. Sperrbildschirm ausgenommen (`isKeyguardLocked`).
+  verschwommene Schleier, dann unsere). Liste vorher gescrollt + Zurück: Ablage ist weg, aber `notification_stack_scroller` hat dann 0 Kinder
+  (~280 ms vor YouTube) → auch das zählt (`shadeHadKids`), geprüft sauber (14:50). Rest: Aufziehen zeigt weiter die echte verschwommen. Sperrbildschirm ausgenommen (`isKeyguardLocked`).
   Versuch 14:25 (verworfen, nicht gepusht): in `scanInternal` bei Vordergrund `com.android.systemui` den untersten
   sichtbaren Knoten der Benachrichtigungen suchen und unsere zeigen, wenn er über der Leiste endet. Griff nie
   (kein Protokoll-Eintrag) – vermutlich `youTubeMainRoot()` null bzw. ≠ `barWindowId`, solange die

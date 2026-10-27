@@ -96,6 +96,7 @@ class FuckShortsService : AccessibilityService() {
     /** Benachrichtigungen wurden über YouTube aufgezogen (siehe handleShade). */
     private var shadeOverYouTube = false
     private var shadeMaxTop = -1
+    private var shadeHadKids = false
     private var shadeClosingAt = 0L
 
     // Short per Link (z. B. aus WhatsApp): Genau dieser eine darf laufen, weiterwischen nicht.
@@ -701,6 +702,7 @@ class FuckShortsService : AccessibilityService() {
         if (youTubeActive && !watchPageOpen) {
             shadeOverYouTube = true
             shadeMaxTop = -1
+            shadeHadKids = false
         }
         val rest = restBounds
         val state = lastUiState
@@ -716,9 +718,13 @@ class FuckShortsService : AccessibilityService() {
         val r = Rect().also { shelf?.getBoundsInScreen(it) }
         val visible = shelf?.isVisibleToUser == true
         if (visible) shadeMaxTop = maxOf(shadeMaxTop, r.top)
+        // Hat man die Liste vorher gescrollt, ist die Ablage weg. Dann zeigt eine leere Liste das Zugehen an.
+        val kids = shade.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/notification_stack_scroller")
+            .firstOrNull()?.childCount ?: -1
+        if (kids > 0) shadeHadKids = true
         // Nur Wandern reicht nicht: Scrollt man die Liste der Benachrichtigungen, wandert die Ablage auch.
-        val closing = shadeMaxTop > 0 && shelf != null && !visible && r.top > 0 &&
-            r.top < shadeMaxTop - CLOSING_DP * resources.displayMetrics.density
+        val closing = (shadeMaxTop > 0 && shelf != null && !visible && r.top > 0 &&
+            r.top < shadeMaxTop - CLOSING_DP * resources.displayMetrics.density) || (shadeHadKids && kids == 0)
         // Einmal am Zugehen: kurz stehen lassen, auch wenn die Ablage dabei wieder kurz sichtbar gemeldet wird.
         if (closing || now - shadeClosingAt < SHADE_GAP_MS) {
             reason("Benachrichtigungen gehen zu, unsere vorab zeigen")
