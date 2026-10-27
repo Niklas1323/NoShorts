@@ -163,7 +163,7 @@ Noch offen (gefunden 27.10.):
   (`pages.mp4` 918–920). Key-Filter (`flagRequestFilterKeyEvents`) bewusst nicht eingebaut: Dienst müsste evtl. neu
   eingeschaltet werden → vorher Nutzer fragen. Andere Idee: Insets/WindowInsetsAnimation in einem eigenen Fenster.
 - **Kamera öffnen (Plus):** unsere blitzt nach dem Verstecken 1–2 Bilder nochmals über der Kamera auf (keine
-  echte Leiste, nur unsere; `plus5.mp4` 326–327).
+  echte Leiste, nur unsere; `plus5.mp4` 326–327). Selten: 14:46 bei 4 weiteren Versuchen nicht mehr aufgetreten.
 - **Drehen:** Zurück ins Hochformat zeigt die Dreh-Animation kurz echte Leiste neben unserer (wir verstecken in
   `onConfigurationChanged` bei Grössenwechsel). Video-Vollbild quer nicht getestet (`videopos` fand kein Video).
 - 14:43: Startseite 18× gescrollt, kein einziges Shorts-Regal (kein "Shorts-Regale"-Protokoll) – YouTube zeigt nach
