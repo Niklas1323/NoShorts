@@ -111,6 +111,10 @@ class FuckShortsService : AccessibilityService() {
     private var splitBounds: Rect? = null
     /** Die weggescrollte Liste, aus der ein Video geöffnet wurde (unsere Leiste stand dort). */
     private var feedBeforeVideo: AccessibilityNodeInfo? = null
+    /** Zuletzt war unsere Leiste zu sehen (Dialog: nur dann abgedunkelt zeigen). */
+    private var ourShownAt = 0L
+    /** Unsere Leiste ist gerade wie hinter einem Dialog abgedunkelt. */
+    private var dialogDimmed = false
     /** Seit wann der Player die echte Leiste überdeckt (0 = nicht). */
     private var coveredSince = 0L
     private var themeChangedAt = 0L
@@ -492,6 +496,7 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         updateSplit()
+        if (overlay.isShowing) ourShownAt = now
         val foreground = foregroundWindow()?.root
         if (foreground == null && youTubeActive) {
             // Beim Fensterwechsel (z. B. Plus -> Kamera) meldet Android kurz gar kein Fenster. Nicht gleich alles
@@ -605,6 +610,29 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         menuOpen = false
+        popupFront(foreground)?.let { popup ->
+            youTubeActive = true
+            if (youTubeSince == 0L) youTubeSince = now
+            val rest = restBounds
+            val state = lastUiState
+            val big = popup.width().toLong() * popup.height() > screen.width().toLong() * screen.height() / 6
+            if (big && rest != null && state != null && now - ourShownAt < DIALOG_SHOWN_MS && !watchPageOpen) {
+                // Dialog (z. B. Suchfilter): Android dunkelt alles dahinter ab, auch die echte Leiste. Unsere genauso.
+                reason("Dialog vorne, unsere abgedunkelt")
+                dialogDimmed = true
+                overlay.showUnderMenu(rest, state.copy(style = currentStyle()), DIALOG_DIM, popup)
+            } else {
+                reason("kleines Menü vorne, unsere bleibt")
+            }
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return
+        }
+        if (dialogDimmed) {
+            dialogDimmed = false
+            val rest = restBounds
+            val state = lastUiState
+            if (rest != null && state != null && overlay.isShowing) overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        }
         // Ein anderes YouTube-Fenster liegt über der Seite mit der Leiste (z. B. Premium-Werbung): Es deckt die
         // echte Leiste ab, unsere läge darüber. Wie eine Seite ohne Leiste behandeln (Schliessen zeigt sie vorab).
         // (Die Kamera ist anders: Dort ist das Hauptfenster gar nicht da, siehe barlessWindowId.)
@@ -1191,6 +1219,7 @@ class FuckShortsService : AccessibilityService() {
         val state = lastUiState
         // Menü vorne oder Panel offen: Das regelt der Scan (Lage des Menüs), die Leiste ist nicht abfragbar.
         if (menuFront || panelMinTop != Int.MAX_VALUE || coverWindowId != -1) return
+        if (popupFront(foregroundWindow()?.root) != null) return
         if (rest == null || state == null || menuOpen) {
             overlay.hide()
             return
@@ -1391,6 +1420,20 @@ class FuckShortsService : AccessibilityService() {
     private fun coverLimit(): Int = if (overlay.isShowing) overlay.top else screen.bottom
 
     private fun currentStyle(): BarStyle = sampler.style(nightMode == Configuration.UI_MODE_NIGHT_YES)
+
+    /**
+     * Kleines Popup-Menü vorne (z. B. ⋮ oben rechts in der Suche). Solange es offen ist, gibt Android YouTubes
+     * Hauptfenster nicht heraus, die Leiste ist also nicht zu finden – sie steht aber unverändert da. Unsere
+     * darum genau so lassen, wie sie ist (vorher war sie weg und man sah die echte mit Shorts).
+     */
+    private fun popupFront(front: AccessibilityNodeInfo?): Rect? {
+        if (front == null || front.packageName?.toString() != selectors.youtubePackage) return null
+        if (menuWindows[front.windowId] == true) return null
+        val rest = restBounds ?: return null
+        val b = windowBounds(front.windowId)
+        if (b.contains(rest) || Rect.intersects(b, rest)) return null
+        return b.takeIf { it.width().toLong() * it.height() < screen.width().toLong() * screen.height() * 7 / 10 }
+    }
 
     private fun windowBounds(windowId: Int): Rect =
         windows.firstOrNull { it.id == windowId }?.let { w -> Rect().also { w.getBoundsInScreen(it) } } ?: Rect(screen)
@@ -1816,6 +1859,9 @@ class FuckShortsService : AccessibilityService() {
         private const val POLL_MS = 16L
         private const val COVER_HOLD_MS = 150L
         private const val KEYBOARD_FAST_MS = 100L
+        /** So stark dunkelt Android hinter Dialogen ab (Standard, am Pixel gemessen: 255 → 102). */
+        private const val DIALOG_DIM = 0.6f
+        private const val DIALOG_SHOWN_MS = 1_000L
         private const val POLL_DURATION_MS = 500L
         private const val NAV_LINK_MS = 1_500L
         private const val VERIFY_MS = 400L
