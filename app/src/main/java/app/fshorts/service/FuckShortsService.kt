@@ -523,7 +523,11 @@ class FuckShortsService : AccessibilityService() {
         }
         val keyboard = youTubeInFront && isKeyboardOpen()
         // Tastatur offen: jedes Bild nachsehen, ob sie zugeht (Android meldet das nicht immer sofort).
-        if (keyboard) handler.postDelayed({ scheduleScan() }, POLL_MS)
+        // Dafür die Scans nicht auf 40 ms drosseln: Nach "Suchen" sah man sonst 2 Bilder die echte Leiste.
+        if (keyboard) {
+            fastUntil = maxOf(fastUntil, now + KEYBOARD_FAST_MS)
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+        }
         if (foreground == null || !youTubeInFront || keyboard) {
             reason(if (keyboard) "Tastatur offen" else "YouTube nicht vorne (${foreground?.packageName})")
             // Unter der Tastatur ist eine andere Seite (Suchvorschläge): Danach die Lage der echten Leiste neu
@@ -1811,6 +1815,7 @@ class FuckShortsService : AccessibilityService() {
         private const val MIN_SCAN_INTERVAL_MS = 40L
         private const val POLL_MS = 16L
         private const val COVER_HOLD_MS = 150L
+        private const val KEYBOARD_FAST_MS = 100L
         private const val POLL_DURATION_MS = 500L
         private const val NAV_LINK_MS = 1_500L
         private const val VERIFY_MS = 400L
