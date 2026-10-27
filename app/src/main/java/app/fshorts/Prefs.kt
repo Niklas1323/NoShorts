@@ -10,6 +10,7 @@ object Prefs {
     private const val AUTO_HIDE_SHELF = "auto_hide_shelf"
     private const val SHELVES_HIDDEN = "shelves_hidden"
     private const val MENU_DIM = "menu_dim"
+    private const val BAR_STATE = "bar_state"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -34,4 +35,8 @@ object Prefs {
     fun menuDim(context: Context): Float? =
         prefs(context).getFloat(MENU_DIM, -1f).takeIf { it >= 0f }
     fun setMenuDim(context: Context, dim: Float) = prefs(context).edit().putFloat(MENU_DIM, dim).apply()
+
+    /** Lage und Inhalt der echten Leiste, damit unsere nach einem Neustart (App-Update) sofort steht. */
+    fun barState(context: Context): String? = prefs(context).getString(BAR_STATE, null)
+    fun setBarState(context: Context, value: String) = prefs(context).edit().putString(BAR_STATE, value).apply()
 }

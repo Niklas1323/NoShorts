@@ -89,6 +89,9 @@ class FuckShortsService : AccessibilityService() {
     private var lastObservedTop = -1
     private var pollUntil = 0L
     private var polling = false
+    private var savedBarState: String? = null
+    /** Lage der Leiste kommt aus dem Speicher (Neustart), die echte wurde seither noch nicht gesehen. */
+    private var restoredState = false
 
     // Short per Link (z. B. aus WhatsApp): Genau dieser eine darf laufen, weiterwischen nicht.
     // Erkennung: YouTube kommt aus einer anderen App nach vorne und der Short geht auf, ohne dass in YouTube
@@ -171,6 +174,7 @@ class FuckShortsService : AccessibilityService() {
         }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         menuDim = Prefs.menuDim(this)
+        loadBarState()
         connected = true
         running = true
         scheduleScan()
@@ -185,6 +189,9 @@ class FuckShortsService : AccessibilityService() {
                 when (event.eventType) {
                     AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                         debugDumpWanted = true
+                        if (watchPageOpen && youTubeActive &&
+                            event.contentChangeTypes and AccessibilityEvent.CONTENT_CHANGE_TYPE_PANE_APPEARED != 0
+                        ) onWatchPaneAppeared()
                         onNavigation()
                     }
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> {
@@ -267,6 +274,26 @@ class FuckShortsService : AccessibilityService() {
     private fun onNavigation() {
         lastNavAt = SystemClock.uptimeMillis()
         navFromRest = !hiddenByScroll
+    }
+
+    /**
+     * Video verlassen: YouTube meldet PANE_APPEARED ~65 ms bevor die Lage-Abfragen wieder antworten, der Player
+     * steht dann erst ein paar Pixel tiefer (unter der 4-dp-Schwelle). Ist er schon tiefer, sofort zeigen –
+     * sonst sah man 1 Bild die Oberkante der echten Leiste. Kommentare/Beschreibung bewegen den Player nicht.
+     */
+    private fun onWatchPaneAppeared() {
+        val node = watchNode ?: return
+        val rest = restBounds ?: return
+        val state = lastUiState ?: return
+        if (overlay.isShowing || !node.refresh()) return
+        val top = scanner.topOf(node)
+        if (top <= watchTop + 1) return
+        watchPageOpen = false
+        watchNode = null
+        reason("Video verlassen (Pane, top $watchTop→$top)")
+        hiddenByScroll = false
+        overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        continueScanSoon()
     }
 
     /** Tipp auf "Schliessen" in einem YouTube-Fenster ohne Leiste (z. B. Kamera nach Plus)? */
@@ -429,7 +456,8 @@ class FuckShortsService : AccessibilityService() {
             sampler.recheckSoon()
             val rest = restBounds
             val state = lastUiState
-            if (rest != null && state != null && !watchPageOpen) {
+            // Nicht mit gespeicherter Lage nach einem Neustart: Vielleicht ist gerade ein Video oder die Kamera offen.
+            if (rest != null && state != null && !watchPageOpen && !restoredState) {
                 youTubeActive = true
                 youTubeSince = now
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
@@ -549,9 +577,10 @@ class FuckShortsService : AccessibilityService() {
             // Positionen nur von der ganz eingefahrenen Leiste übernehmen, sonst nur Auswahl und roten Punkt.
             val atRest = bar.bounds == restBounds
             if (!atRest) restSince = 0L else if (restSince == 0L) restSince = now
+            restoredState = false
             val previous = lastUiState
             lastUiState = if (atRest || previous == null) {
-                buildUiState(bar)
+                buildUiState(bar).also { saved -> restBounds?.let { if (atRest) saveBarState(it, saved) } }
             } else {
                 previous.copy(
                     selected = bar.tabs.values.firstOrNull { it.selected }?.kind ?: previous.selected,
@@ -755,6 +784,53 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
+    /**
+     * Lage und Inhalt der ruhenden echten Leiste speichern. Nach einem Neustart unseres Dienstes (App-Update) auf
+     * weggescrollter Startseite gibt es sonst keine echte Leiste zum Abschauen, und unsere fehlte.
+     */
+    private fun saveBarState(rest: Rect, state: BarUiState) {
+        val json = org.json.JSONObject()
+            .put("screen", "${screen.width()}x${screen.height()}")
+            .put("rest", rest.flattenToString())
+            .put("selected", state.selected?.name ?: "")
+            .put("badge", state.subscriptionsBadge)
+            .put("create", state.hasCreate)
+            .put("labels", org.json.JSONObject(state.labels.mapKeys { it.key.name }))
+            .toString()
+        if (json == savedBarState) return
+        savedBarState = json
+        Prefs.setBarState(this, json)
+    }
+
+    private fun loadBarState() {
+        try {
+            val text = Prefs.barState(this) ?: return
+            val json = org.json.JSONObject(text)
+            screen = screenBounds()
+            if (json.getString("screen") != "${screen.width()}x${screen.height()}") return
+            val rest = Rect.unflattenFromString(json.getString("rest")) ?: return
+            val labels = json.getJSONObject("labels")
+            val density = resources.displayMetrics.density
+            restBounds = rest
+            lastUiState = BarUiState(
+                selected = json.getString("selected").takeIf { it.isNotEmpty() }?.let { TabKind.valueOf(it) },
+                labels = labels.keys().asSequence().associate { TabKind.valueOf(it) to labels.getString(it) },
+                subscriptionsBadge = json.getBoolean("badge"),
+                hasCreate = json.getBoolean("create"),
+                barHeightPx = rest.height(),
+                iconCenterPx = (ICON_CENTER_DP * density).roundToInt(),
+                labelTopPx = (LABEL_TOP_DP * density).roundToInt(),
+                showHandle = rest.bottom >= screen.bottom - 2,
+                style = currentStyle(),
+            )
+            savedBarState = text
+            restoredState = true
+            Log.d(TAG, "Leiste: gespeicherte Lage geladen ${rest.toShortString()}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Gespeicherte Leiste unlesbar", e)
+        }
+    }
+
     /** Merkt sich, wo die echte Leiste sitzt, wenn sie ganz eingefahren ist (höchste Lage, volle Höhe). */
     private fun rememberRestPosition(bar: FoundBar) {
         val rest = restBounds
@@ -901,6 +977,18 @@ class FuckShortsService : AccessibilityService() {
         }
         // YouTube entfernt seine weggescrollte Leiste oft erst Sekunden später (z. B. ~8 s, wenn ein Video in der
         // Liste anläuft). Stand unsere wegen Scrollen allein da, ist es also trotzdem noch dieselbe Seite.
+        // Neustart unseres Dienstes (App-Update) auf weggescrollter Startseite: Die echte Leiste gibt es nicht, ihre
+        // Lage kennen wir aus dem Speicher. Steht die Startseiten-Liste im vordersten YouTube-Fenster, bleibt unsere.
+        if (restoredState && barWindowId == -1 && lastUiState?.selected == TabKind.HOME) {
+            val main = youTubeMainRoot()
+            val feed = main?.takeIf { foregroundWindow()?.id == it.windowId }?.let { scanner.findFeed(it, screen) }
+            if (main != null && feed != null) {
+                barWindowId = main.windowId
+                goneFeed = feed
+                feedKeptAt = now
+                return true
+            }
+        }
         if (known == null && now - scrollAt > SCROLL_GONE_MS && !hiddenByScroll) {
             keepFail = "nicht gescrollt"
             return false
