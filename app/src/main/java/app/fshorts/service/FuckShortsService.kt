@@ -74,6 +74,17 @@ class FuckShortsService : AccessibilityService() {
     private var createTappedAt = 0L
     /** Die offene Tastatur hatte ein Eingabefeld mit Fokus (siehe isKeyboardOpen). */
     private var imeFocusSeen = false
+    /** Höchste Lage des Tastatur-Fensters, seit es da ist. Rutscht es tiefer, geht sie zu. */
+    private var imeMinTop = Int.MAX_VALUE
+    /** Die Tastatur hat YouTube verdeckt: Danach nicht blind an der alten Stelle zeigen (Seite vielleicht ohne Leiste). */
+    private var keyboardWasOpen = false
+    /** Die Tastatur ging zu, weil der Fokus auf eine neue Seite sprang ("Suchen" → Ergebnisse mit Leiste). */
+    private var keyboardToPage = false
+    /**
+     * Tastatur mit Zurück geschlossen, darunter die Suchvorschläge: Die echte Leiste liegt dort ganz unten raus.
+     * Unsere bleibt weg, bis die echte wieder hereinkommt (die Startseiten-Regel "immer da" gilt hier nicht).
+     */
+    private var barGoneAfterKeyboard = false
     /** Fenster, in dem die echte Leiste zuletzt gefunden wurde. */
     private var barWindowId = -1
     /** Warum die Liste zuletzt nicht als "dieselbe Seite" galt (nur fürs Protokoll). */
@@ -195,6 +206,27 @@ class FuckShortsService : AccessibilityService() {
                 when (event.eventType) {
                     AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                         debugDumpWanted = true
+                        // Tastatur offen und YouTube wechselt die Seite ("Suchen"): sofort nachsehen, nicht erst
+                        // beim nächsten Durchgang. Die echte Leiste kommt sonst 1–2 Bilder vor unserer hervor.
+                        if (keyboardWasOpen && !youTubeActive) {
+                            handler.removeCallbacks(scanRunnable)
+                            scanPending = false
+                            lastScanAt = SystemClock.uptimeMillis()
+                            scan()
+                        }
+                        // Seitenwechsel nach Zurück von den Suchvorschlägen: Die Seite darunter (Ergebnisse, Startseite)
+                        // hat eine Leiste und fährt mit ihr herein. Unsere sofort zeigen, die Suche danach ist zu langsam.
+                        if (barGoneAfterKeyboard && youTubeActive) {
+                            barGoneAfterKeyboard = false
+                            val rest = restBounds
+                            val state = lastUiState
+                            if (rest != null && state != null && !watchPageOpen && !overlay.isShowing) {
+                                reason("Seitenwechsel nach Tastatur, unsere vorab zeigen")
+                                preShownAt = SystemClock.uptimeMillis()
+                                hiddenByScroll = false
+                                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                            }
+                        }
                         if (watchPageOpen && youTubeActive &&
                             event.contentChangeTypes and AccessibilityEvent.CONTENT_CHANGE_TYPE_PANE_APPEARED != 0
                         ) onWatchPaneAppeared()
@@ -401,14 +433,38 @@ class FuckShortsService : AccessibilityService() {
         } else {
             shadeOverYouTube = false
         }
-        if (foreground == null || !youTubeInFront || isKeyboardOpen()) {
-            reason("YouTube nicht vorne (${foreground?.packageName})")
+        val keyboard = youTubeInFront && isKeyboardOpen()
+        // Tastatur offen: jedes Bild nachsehen, ob sie zugeht (Android meldet das nicht immer sofort).
+        if (keyboard) handler.postDelayed({ scheduleScan() }, POLL_MS)
+        if (foreground == null || !youTubeInFront || keyboard) {
+            reason(if (keyboard) "Tastatur offen" else "YouTube nicht vorne (${foreground?.packageName})")
+            // Unter der Tastatur ist eine andere Seite (Suchvorschläge): Danach die Lage der echten Leiste neu
+            // ansehen, nicht "weggescrollt" von vorher weiterführen (sonst stand unsere auf den Vorschlägen).
+            if (keyboard) hiddenByScroll = false
             youTubeActive = false
             menuFront = false
             menuOpen = false
             youTubeSince = 0L
             hideAll()
             return
+        }
+        // "Suchen": Die Ergebnisse haben eine Leiste, die gleich hinter der ausblendenden Tastatur hervorkommt.
+        // Unsere sofort zeigen, noch vor jeder weiteren Abfrage (YouTube ist beim Laden langsam).
+        if (keyboardToPage && !youTubeActive) {
+            keyboardToPage = false
+            keyboardWasOpen = false
+            val rest = restBounds
+            val state = lastUiState
+            if (rest != null && state != null && !watchPageOpen) {
+                reason("Suchen: unsere sofort")
+                youTubeActive = true
+                youTubeSince = now
+                preShownAt = now
+                hiddenByScroll = false
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                continueScanSoon()
+                return
+            }
         }
         val root = youTubeMainRoot() ?: foreground
         if (leftYouTube) {
@@ -482,7 +538,16 @@ class FuckShortsService : AccessibilityService() {
             val rest = restBounds
             val state = lastUiState
             // Nicht mit gespeicherter Lage nach einem Neustart: Vielleicht ist gerade ein Video oder die Kamera offen.
-            if (rest != null && state != null && !watchPageOpen && !restoredState) {
+            // Nach Zurück aus der Tastatur auch nicht: Die Suchvorschläge haben keine Leiste. Die Suche unten zeigt
+            // unsere, wenn die echte da ist. Nach "Suchen" aber sofort: YouTube baut die Ergebnisse auf und antwortet
+            // bis 400 ms nicht, die echte Leiste kommt schon vorher hinter der Tastatur hervor.
+            val afterKeyboard = keyboardWasOpen && !keyboardToPage
+            if (keyboardToPage) preShownAt = now
+            keyboardWasOpen = false
+            keyboardToPage = false
+            barGoneAfterKeyboard = afterKeyboard
+            if (rest != null && state != null && !watchPageOpen && !restoredState && !afterKeyboard) {
+                reason("YouTube wieder vorne, unsere sofort")
                 youTubeActive = true
                 youTubeSince = now
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
@@ -613,7 +678,7 @@ class FuckShortsService : AccessibilityService() {
                 )
             }
         } else if (lastBar == null) {
-            if (rest != null && state != null && keepWhileScrolledAway(now)) {
+            if (rest != null && state != null && !barGoneAfterKeyboard && keepWhileScrolledAway(now)) {
                 reason("echte weggescrollt und entfernt, unsere bleibt")
                 hiddenByScroll = true
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
@@ -960,7 +1025,7 @@ class FuckShortsService : AccessibilityService() {
                 handler.postDelayed({ scheduleScan() }, POLL_MS)
                 return
             }
-            if (keepWhileScrolledAway(now)) {
+            if (!barGoneAfterKeyboard && keepWhileScrolledAway(now)) {
                 reason("echte weggescrollt und entfernt, unsere bleibt")
                 hiddenByScroll = true
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
@@ -996,12 +1061,18 @@ class FuckShortsService : AccessibilityService() {
             overlay.hide()
             return
         }
+        val fullyGone = observedTop >= screen.bottom - 2
+        if (!fullyGone) barGoneAfterKeyboard = false
+        if (barGoneAfterKeyboard) {
+            reason("nach Tastatur, echte ganz weg")
+            overlay.hide()
+            return
+        }
         reason("normal (top=$observedTop)")
         // Startseite: unsere Leiste bleibt immer ganz da und fährt nie halb runter. Sie verschwindet erst,
         // wenn nach einem Tipp (Video geöffnet) die echte Leiste schon komplett weg ist.
         val onHome = state.selected == TabKind.HOME
         val videoOpening = now - lastNavAt < NAV_LINK_MS && navFromRest
-        val fullyGone = observedTop >= screen.bottom - 2
         if (onHome) {
             if (observedTop <= rest.top + 2) hiddenByScroll = false
             if (videoOpening && fullyGone) {
@@ -1453,15 +1524,26 @@ class FuckShortsService : AccessibilityService() {
      * Suchfeld: Ist er weg, gilt die Tastatur schon als zu.
      */
     private fun isKeyboardOpen(): Boolean {
-        if (windows.none { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }) {
+        val ime = windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+        if (ime == null) {
             imeFocusSeen = false
+            imeMinTop = Int.MAX_VALUE
             return false
         }
-        if (findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.isEditable == true) {
-            imeFocusSeen = true
-            return true
-        }
-        return !imeFocusSeen
+        // Beim Zugehen (Zurück oder "Suchen") meldet Android das Tastatur-Fenster schon tiefer, bevor sie sichtbar
+        // runterrutscht und ausblendet. Ab da gilt sie als zu: Sonst sah man 3–5 Bilder die echte Leiste durch.
+        val top = Rect().also { ime.getBoundsInScreen(it) }.top
+        imeMinTop = minOf(imeMinTop, top)
+        if (top > imeMinTop + IME_CLOSING_PX) return false
+        // Fokus von einem Eingabefeld auf etwas anderes gewechselt ("Suchen"): zu. Ohne Fokus (kommt beim Tippen
+        // kurz vor) oder mit Fokus in der Tastatur selbst bleibt sie offen, sonst lag unsere Leiste einzelne Bilder
+        // über der Tastatur.
+        val focus = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            ?.takeIf { it.packageName?.toString() == selectors.youtubePackage }
+        if (focus?.isEditable == true) imeFocusSeen = true
+        val open = focus == null || focus.isEditable || !imeFocusSeen
+        if (open) keyboardWasOpen = true else if (keyboardWasOpen) keyboardToPage = true
+        return open
     }
 
     private fun screenBounds(): Rect {
@@ -1513,6 +1595,7 @@ class FuckShortsService : AccessibilityService() {
         private const val NAV_HOLD_MS = 800L
         private const val THEME_HOLD_MS = 1_500L
         private const val SHADE_GAP_MS = 600L
+        private const val IME_CLOSING_PX = 8
         private const val SYSTEM_UI = "com.android.systemui"
         private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
 
