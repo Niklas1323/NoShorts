@@ -173,6 +173,57 @@ Noch offen (gefunden 27.10.):
 - Test-Falle: `videopos`/`t_video` erwischt oft eine Werbe-Karte (öffnet Werbe-Video/Panel) → Ergebnis prüfen.
   "ECHT?" schlägt im hellen Design auch bei dunkler Schrift im Inhalt an → immer `strips` ansehen.
 
+## Neu am 27.10.2026, Abend (Heim-PC "Admin", Pixel 9, YouTube 21.42.243, dunkel)
+
+Werkzeuge hier: JDK `C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot`, SDK `%LOCALAPPDATA%\Android\Sdk`, adb und
+ffmpeg über winget (im PATH). Test-Hilfe: `env.sh`/`suite.sh` mit `T=/nonexistent` laden (Werkzeuge sind im PATH).
+Alter, nie gepushter WIP-Commit vom 26.10. liegt lokal im Zweig `backup/wip-26-10` (vom gepushten Stand überholt).
+Auto-Drehen war an und das Handy lag quer: Zum Testen `accelerometer_rotation 0` + `user_rotation 0` (Nutzer hat
+erlaubt), danach wieder `accelerometer_rotation 1`. Drehen testen: `settings put system user_rotation 1/0`.
+`analyze`/`gone` taugen im dunklen Design für "unsere weg" NICHT (unsere U≈8.7 < Schwelle 10): Bilder ansehen.
+Achtung: Auf dem Handy ist auch **ScreenZen** (Bedienungshilfe) an. Etwas schreibt "shorts " ins leere Suchfeld
+(Tastatur geht dabei zu und wieder auf) – nicht unsere App (kein setText im Code), vermutlich ScreenZen.
+Ein Video zum Testen öffnen: `am start -a VIEW -d 'https://www.youtube.com/watch?v=6YMh40vQSgU'` (videopos findet
+wegen grosser Werbekarten oft nichts). Short-IDs: von `youtube.com/@YouTube/shorts` per curl.
+
+Behoben (Bild für Bild geprüft, gepusht):
+- **Tastatur:** Tastatur-Fenster wird beim Zugehen tiefer gemeldet (`imeMinTop`) = zu. Fokus kurz leer oder in der
+  Tastatur selbst (Gboard meldet sich als Fokus!) = bleibt offen – vorher lag unsere Leiste einzelne Bilder ÜBER der
+  Tastatur. "Suchen": unsere sofort vor jeder Abfrage (`keyboardToPage`, Scan direkt beim STATE_CHANGED). Zurück auf
+  den Suchvorschlägen: unsere bleibt weg (`barGoneAfterKeyboard`, vorher stand sie dort wegen der Startseiten-Regel);
+  beim Seitenwechsel danach sofort zeigen (vorher 6–18 Bilder echte Leiste). Rest: nach "Suchen" 2 sehr schwache
+  Bilder echte Leiste durch die ausblendende Tastatur (Android meldet nichts früher).
+- **Drehen:** Lage der Leiste je Bildschirmgrösse (`restBySize`), unsere springt beim Drehen sofort hin.
+  Rest (nicht lösbar): Androids Dreh-Animation blendet ein Foto des alten Bildes OHNE unsere Leiste darüber
+  (~4 schwache Bilder Shorts-Knopf, in beide Richtungen).
+- **Benachrichtigungen aufziehen:** unsere wird zur Fläche in Schleierfarbe (`showVeiled`, Farbe einmal per
+  Bildschirmfoto oben gemessen, `measureShadeVeil`), Berührungen gehen durch; weg, sobald Benachrichtigungen unten
+  ankommen (`shadeCoversBar`, mind. `SHADE_VEIL_MS`). Keine verwischte echte Leiste mehr beim Aufziehen. Rest: Fläche
+  verdeckt ~0,2 s die unterste Symbol-Reihe, die hereinfährt. Zuklappen: ~6–8 Bilder verwischte echte Leiste (Android
+  meldet das Verschwinden der Benachrichtigungen ~0,1 s zu spät). Idee: beim Zuklappen sofort Fläche statt nichts.
+- **Short per Link:** Collab-Shorts ("Collab-Kanäle" = Gruppe statt Bild) wurden nicht erkannt, der weitergewischte
+  galt dann als geteilter. Jetzt: kleines quadratisches Element = Kanalbild. Geprüft: Weiterwischen wird zurückgewischt.
+
+Geprüft, in Ordnung (dunkel): Werbe-Menü (⋮ bei Werbung, Panel hoch/runter, 2×); Short per Link (läuft, unsere über
+der echten, Weiterwischen zurück); Suche (`t_pages`) nach dem Tastatur-Umbau.
+
+Nicht lösbar / Systembild: **App-Übersicht** – die Karte ist Androids Foto von YouTube ohne unsere Leiste und zeigt
+die echte Leiste die GANZE Zeit (nicht nur 1–2 Bilder). Ginge nur, indem wir in die App-Übersicht zeichnen (Karte
+bewegt sich, Knöpfe) – verworfen. Gleiches beim Öffnen per Link: Zoom-Animation zeigt 2 Bilder die kleine echte Leiste.
+Direkt nach einer Neuinstallation (`restoredState`) beim Öffnen per Link ~15 Bilder echte Leiste (selten).
+
+In Arbeit (nicht fertig getestet): **Video-Vollbild quer und zurück** – unsere blitzte nach dem Zurückdrehen über
+der Video-Seite auf / Video galt als verlassen. Ursachen: (1) Vollbild-Player füllt den Bildschirm, `isLargePlayer`
+verlangte ≤70 % Höhe → jetzt `fullscreen` erlaubt; (2) YouTube meldet beim Drehen Zwischenlagen (-740, 46) und den
+Player schon gedreht, bevor Android die neue Grösse meldet → `onScreenSizeChanged` (Scan, Bild-für-Bild, Android,
+was zuerst kommt) + `playerRotating` (Player so breit wie Bildschirm nach dem Drehen) → `watchRelearnUntil`
+(1,5 s nur sinnvolle Lagen lernen, nie "verlassen"). Noch ein "DBG leave"-Log drin. Testen mit Video per Link,
+`user_rotation 1`, `0`, dann Wisch nach unten.
+
+Noch nicht getestet: Shorts-Regal wegklicken (Startseite 35× gescrollt: kein einziges Regal, im Baum kein "Shorts";
+in Suchergebnissen gibt es Shorts-Raster mit anderer Überschrift, z. B. "Welpe" – die erkennt `findShelves` nicht),
+Anruf, Split-Screen (Nutzer fragen), Kamera-Aufblitzen, dunkles Design für die übrigen Fälle, `suite.sh` gesamt.
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 26.10.2026, Nachtrag 27.10. oben)
 
 Muss:
