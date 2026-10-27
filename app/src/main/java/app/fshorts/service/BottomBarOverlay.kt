@@ -80,6 +80,11 @@ data class BarUiState(
     val dim: Float = 0f,
     /** Wo das Menü über unserer Leiste liegt (Fensterkoordinaten): dort ist unsere Leiste durchsichtig. */
     val hole: Rect? = null,
+    /**
+     * Benachrichtigungen werden über YouTube aufgezogen: Android verwischt und tönt alles darunter. Statt der
+     * verwischten echten Leiste zeigen wir dort eine ruhige Fläche in dieser Farbe (ARGB). null = normal.
+     */
+    val veil: Int? = null,
 )
 
 /**
@@ -135,7 +140,16 @@ class BottomBarOverlay(
      */
     fun show(top: Int, rest: Rect, state: BarUiState) {
         underMenu = false
-        place(top, rest, state.copy(dim = 0f, hole = null))
+        place(top, rest, state.copy(dim = 0f, hole = null, veil = null))
+    }
+
+    /**
+     * Benachrichtigungen offen: nur eine Fläche in der Farbe des Schleiers, Berührungen gehen durch (sie gehören
+     * dann den Benachrichtigungen).
+     */
+    fun showVeiled(rest: Rect, state: BarUiState, veil: Int) {
+        underMenu = true
+        place(rest.top, rest, state.copy(dim = 0f, hole = null, veil = veil))
     }
 
     /**
@@ -146,7 +160,7 @@ class BottomBarOverlay(
     fun showUnderMenu(rest: Rect, state: BarUiState, dim: Float, sheet: Rect) {
         underMenu = true
         val hole = Rect(sheet).apply { offset(-rest.left, -rest.top) }
-        place(rest.top, rest, state.copy(dim = dim, hole = hole))
+        place(rest.top, rest, state.copy(dim = dim, hole = hole, veil = null))
     }
 
     private fun place(top: Int, rest: Rect, state: BarUiState) {
@@ -341,6 +355,10 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
     val density = LocalDensity.current
     val barHeight = with(density) { state.barHeightPx.toDp() }
     val holeRadius = with(density) { 16.dp.toPx() }
+    state.veil?.let { veil ->
+        Box(Modifier.fillMaxSize().background(Color(veil)))
+        return
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()

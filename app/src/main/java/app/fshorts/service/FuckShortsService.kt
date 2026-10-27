@@ -111,6 +111,10 @@ class FuckShortsService : AccessibilityService() {
     private var shadeMaxTop = -1
     private var shadeHadKids = false
     private var shadeClosingAt = 0L
+    private var shadeOpenedAt = 0L
+    /** Farbe des Benachrichtigungs-Schleiers über der Leiste, gemessen (siehe measureShadeVeil). */
+    private var shadeVeil: Int? = null
+    private var veilMeasuring = false
 
     // Short per Link (z. B. aus WhatsApp): Genau dieser eine darf laufen, weiterwischen nicht.
     // Erkennung: YouTube kommt aus einer anderen App nach vorne und der Short geht auf, ohne dass in YouTube
@@ -263,6 +267,7 @@ class FuckShortsService : AccessibilityService() {
         if (night != nightMode) {
             nightMode = night
             sampler.reset()
+            shadeVeil = null
             themeChangedAt = SystemClock.uptimeMillis()
         }
         // Nur hell/dunkel gewechselt (gleiche Bildschirmgrösse): YouTube baut sich neu auf und blendet über.
@@ -804,6 +809,7 @@ class FuckShortsService : AccessibilityService() {
             shadeOverYouTube = true
             shadeMaxTop = -1
             shadeHadKids = false
+            shadeOpenedAt = now
         }
         val rest = restBounds
         val state = lastUiState
@@ -832,12 +838,80 @@ class FuckShortsService : AccessibilityService() {
             if (closing && now - shadeClosingAt >= SHADE_GAP_MS) shadeClosingAt = now
             hiddenByScroll = false
             overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        } else if (now - shadeOpenedAt < SHADE_VEIL_MS || !shadeCoversBar(shade, rest)) {
+            // Android verwischt YouTube hinter dem Schleier, die echte Leiste schimmert durch. Darum dort eine ruhige
+            // Fläche in Schleierfarbe, bis die Benachrichtigungen unten ankommen (bleibt unten frei: solange offen).
+            reason("Benachrichtigungen offen, Fläche über der Leiste")
+            overlay.showVeiled(rest, state, shadeVeil ?: DEFAULT_VEIL)
         } else {
             reason("Benachrichtigungen offen")
             hideAll()
         }
+        if (shadeVeil == null && now - shadeOpenedAt > SHADE_MEASURE_MS) measureShadeVeil()
         handler.postDelayed({ scheduleScan() }, POLL_MS)
         return true
+    }
+
+    /** Reichen die Benachrichtigungen (fertig aufgezogen) bis über die Leiste? Dann decken sie sie selbst ab. */
+    private fun shadeCoversBar(shade: AccessibilityNodeInfo, rest: Rect): Boolean {
+        val stack = shade.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/notification_stack_scroller")
+            .firstOrNull() ?: return true
+        val r = Rect()
+        var bottom = 0
+        for (i in 0 until stack.childCount) {
+            val child = stack.getChild(i) ?: continue
+            if (!child.isVisibleToUser) continue
+            child.getBoundsInScreen(r)
+            bottom = maxOf(bottom, r.bottom)
+        }
+        return bottom > rest.top
+    }
+
+    /**
+     * Farbe des Schleiers messen: Bildschirmfoto, oben in der Mitte (dort liegt nur der verwischte Kopf von YouTube,
+     * der etwa die Farbe der Leiste hat). Einmal je hell/dunkel.
+     */
+    private fun measureShadeVeil() {
+        if (veilMeasuring || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return
+        veilMeasuring = true
+        val night = nightMode
+        try {
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                    try {
+                        val buffer = result.hardwareBuffer
+                        val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
+                            ?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                        buffer.close()
+                        if (bitmap != null && night == nightMode && shadeOverYouTube) {
+                            var r = 0L; var g = 0L; var b = 0L; var n = 0
+                            val x0 = (bitmap.width * 0.42f).toInt()
+                            val x1 = (bitmap.width * 0.62f).toInt()
+                            val y1 = (12 * resources.displayMetrics.density).roundToInt()
+                            for (y in 2 until y1 step 2) for (x in x0 until x1 step 4) {
+                                val p = bitmap.getPixel(x, y)
+                                r += android.graphics.Color.red(p); g += android.graphics.Color.green(p)
+                                b += android.graphics.Color.blue(p); n++
+                            }
+                            bitmap.recycle()
+                            if (n > 0) {
+                                shadeVeil = android.graphics.Color.rgb((r / n).toInt(), (g / n).toInt(), (b / n).toInt())
+                                Log.d(TAG, "Schleierfarbe gemessen: #${Integer.toHexString(shadeVeil!!)}")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Schleierfarbe messen fehlgeschlagen", e)
+                    }
+                    veilMeasuring = false
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    veilMeasuring = false
+                }
+            })
+        } catch (e: Exception) {
+            veilMeasuring = false
+        }
     }
 
     /** Ist das Fenster mit der Leiste vorne?Ein kleines Popup (⋮), das die Leiste nicht ganz abdeckt, zählt nicht. */
@@ -1633,6 +1707,10 @@ class FuckShortsService : AccessibilityService() {
         private const val THEME_HOLD_MS = 1_500L
         private const val SHADE_GAP_MS = 600L
         private const val IME_CLOSING_PX = 8
+        /** So lange nach dem Aufziehen braucht der Schleier, bis die Benachrichtigungen unten angekommen sind. */
+        private const val SHADE_VEIL_MS = 180L
+        private const val SHADE_MEASURE_MS = 600L
+        private val DEFAULT_VEIL = android.graphics.Color.rgb(0x1B, 0x25, 0x30)
         private const val SYSTEM_UI = "com.android.systemui"
         private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
 
