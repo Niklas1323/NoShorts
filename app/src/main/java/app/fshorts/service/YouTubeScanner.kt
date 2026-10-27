@@ -151,7 +151,9 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
         val wide = r.width() >= screen.width() * 0.9
         val nearTop = r.top < screen.height() * 0.35
         val playerSized = r.height() >= 150 * density && r.height() <= screen.height() * 0.7
-        return wide && nearTop && playerSized
+        // Vollbild (z. B. quer): Der Player füllt den ganzen Bildschirm, das Video ist weiter offen.
+        val fullscreen = r.top <= 2 && r.height() >= screen.height() * 0.95
+        return wide && nearTop && (playerSized || fullscreen)
     }
 
     /**

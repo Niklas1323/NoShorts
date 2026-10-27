@@ -105,6 +105,8 @@ class FuckShortsService : AccessibilityService() {
     private var restoredState = false
     /** Lage und Aussehen der ruhenden Leiste je Bildschirmgrösse (Hoch-/Querformat), fürs Drehen. */
     private val restBySize = HashMap<String, Pair<Rect, BarUiState>>()
+    /** Bis dann nach dem Drehen nur die neue Lage des Players lernen, nicht "Video verlassen" melden. */
+    private var watchRelearnUntil = 0L
     private var themeChangedAt = 0L
     /** Benachrichtigungen wurden über YouTube aufgezogen (siehe handleShade). */
     private var shadeOverYouTube = false
@@ -279,9 +281,21 @@ class FuckShortsService : AccessibilityService() {
             scheduleScan()
             return
         }
-        // Gedreht: Kennen wir die Lage der Leiste in der neuen Ausrichtung schon, springt unsere sofort dorthin.
-        // Versteckt man sie bis zur neuen Suche, zeigt die Dreh-Animation 4–5 Bilder die echte Leiste.
-        val newScreen = screenBounds()
+        onScreenSizeChanged(screenBounds())
+        scheduleScan()
+    }
+
+    /**
+     * Gedreht (gemerkt beim Scan oder von Android, was zuerst kommt). Kennen wir die Lage der Leiste in der neuen
+     * Ausrichtung schon, springt unsere sofort dorthin. Versteckt man sie bis zur neuen Suche, zeigt die
+     * Dreh-Animation 4–5 Bilder die echte Leiste.
+     */
+    private fun onScreenSizeChanged(newScreen: Rect) {
+        if (newScreen == screen) return
+        val state = lastUiState
+        // Auch wenn gerade kein Video als offen gilt: Der volle Scan findet es vielleicht gleich an einer
+        // Zwischen-Lage der Dreh-Animation.
+        watchRelearnUntil = SystemClock.uptimeMillis() + WATCH_RELEARN_MS
         val known = restBySize[sizeKey(newScreen)]
         val wasShowing = overlay.isShowing
         screen = newScreen
@@ -299,17 +313,43 @@ class FuckShortsService : AccessibilityService() {
                 preShownAt = SystemClock.uptimeMillis()
                 hiddenByScroll = false
                 overlay.show(known.first.top, known.first, lastUiState!!)
-                scheduleScan()
                 return
             }
         } else {
             restBounds = null
         }
         hideAll()
-        scheduleScan()
     }
 
     private fun sizeKey(r: Rect) = "${r.width()}x${r.height()}"
+
+    /**
+     * Beim Drehen meldet YouTube den Player schon in der neuen Ausrichtung, Android aber noch die alte
+     * Bildschirmgrösse: Ist der Player genau so breit wie der Bildschirm *nach* dem Drehen, wird gerade gedreht.
+     * (Der Mini-Player beim Verlassen ist viel schmaler.)
+     */
+    private fun playerRotating(node: AccessibilityNodeInfo): Boolean {
+        if (!node.refresh()) return false
+        val w = Rect().also { node.getBoundsInScreen(it) }.width()
+        return kotlin.math.abs(w - screen.width()) > 4 && kotlin.math.abs(w - screen.height()) <= 4
+    }
+
+    /**
+     * Ist das Video noch offen? Nach dem Drehen (Vollbild quer ↔ hoch) steht der Player woanders, das ist kein
+     * Verlassen: eine Weile nur seine neue Lage lernen (sonst blitzte unsere Leiste über der Video-Seite auf).
+     */
+    private fun watchStillOpen(node: AccessibilityNodeInfo, now: Long): Boolean? {
+        if (playerRotating(node)) watchRelearnUntil = now + WATCH_RELEARN_MS
+        if (now < watchRelearnUntil) {
+            // null = YouTube hat den Player neu gebaut: der volle Scan sucht ihn neu.
+            if (!node.refresh()) return null
+            val top = scanner.topOf(node)
+            // Während der Dreh-Animation meldet YouTube unsinnige Lagen (z. B. -740): nur sinnvolle lernen.
+            if (top >= 0 && top < screen.height() * 0.35f) watchTop = top
+            return true
+        }
+        return scanner.isStillLargePlayer(node, watchTop, screen)
+    }
 
     override fun onDestroy() {
         running = false
@@ -367,7 +407,11 @@ class FuckShortsService : AccessibilityService() {
         val node = watchNode ?: return
         val rest = restBounds ?: return
         val state = lastUiState ?: return
-        if (overlay.isShowing || !node.refresh()) return
+        if (overlay.isShowing || SystemClock.uptimeMillis() < watchRelearnUntil || !node.refresh()) return
+        if (playerRotating(node)) {
+            watchRelearnUntil = SystemClock.uptimeMillis() + WATCH_RELEARN_MS
+            return
+        }
         val top = scanner.topOf(node)
         if (top <= watchTop + 1) return
         watchPageOpen = false
@@ -608,11 +652,6 @@ class FuckShortsService : AccessibilityService() {
                 return
             }
         }
-        val newScreen = screenBounds()
-        if (newScreen != screen) {
-            screen = newScreen
-            restBounds = null
-        }
         // Gerade getippt: Zuerst nur nachsehen, ob ein Short aufgeht, damit er so schnell wie möglich wieder zugeht.
         if (now < fastUntil && !linkShortActive && scanner.isShortsPlayerOpen(root, screen) && !shortAllowed(root, now)) {
             onShortsOpen()
@@ -621,9 +660,11 @@ class FuckShortsService : AccessibilityService() {
 
         // Video offen: nur den Player nachsehen (eine Abfrage). Eine volle Suche dauert, während YouTube die
         // Video-Seite wegschiebt, bis zu 500 ms und hält so die Bild-für-Bild-Prüfung auf.
+        onScreenSizeChanged(screenBounds())
         val openWatch = watchNode
         if (watchPageOpen && openWatch != null) {
-            if (scanner.isStillLargePlayer(openWatch, watchTop, screen)) {
+            val open = watchStillOpen(openWatch, now)
+            if (open == true) {
                 // Beim Öffnen fährt der Player noch hoch: immer die höchste Lage merken.
                 watchTop = minOf(watchTop, scanner.topOf(openWatch))
                 reason("Video offen")
@@ -631,11 +672,11 @@ class FuckShortsService : AccessibilityService() {
                 return
             }
             // Video geht gerade zu: unsere Leiste sofort zeigen, die volle Suche unten prüft danach alles.
-            watchPageOpen = false
+            watchPageOpen = open == null
             watchNode = null
             val rest = restBounds
             val state = lastUiState
-            if (rest != null && state != null) {
+            if (open == false && rest != null && state != null) {
                 reason("Video verlassen (Scan)")
                 hiddenByScroll = false
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
@@ -648,7 +689,16 @@ class FuckShortsService : AccessibilityService() {
         // Reihenfolge ist wichtig: Erst alles, was nötig ist, damit unsere Leiste richtig steht. Langsames
         // (Mini-Player, Profilbild, Regale) danach, sonst sieht man beim Verlassen eines Videos die echte Leiste.
         val bar = scanner.findBar(root, screen)
-        watchNode = scanner.findWatchPlayer(root, screen)?.also { watchTop = scanner.topOf(it) }
+        val player = scanner.findWatchPlayer(root, screen)
+        if (watchPageOpen && now < watchRelearnUntil) {
+            // Gerade gedreht: Der Player hat kurz eine ungewohnte Grösse oder wird neu gebaut. Video bleibt offen.
+            player?.let { watchNode = it; watchTop = scanner.topOf(it) }
+            reason("Video offen (gedreht)")
+            hideAll()
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return
+        }
+        watchNode = player?.also { watchTop = scanner.topOf(it) }
         watchPageOpen = watchNode != null
 
         if (bar == null && !watchPageOpen && handlePanel(root, now)) return
@@ -1110,8 +1160,15 @@ class FuckShortsService : AccessibilityService() {
         // weggescrollt war). Das Verlassen merkt man darum nicht an ihr, sondern daran, dass der grosse Player
         // nach unten wegrutscht. YouTube meldet dabei ~100 ms lang nichts; darum bei jedem Bild selbst nachsehen.
         if (watchPageOpen && fresh == null) {
+            onScreenSizeChanged(screenBounds())
             val node = watchNode
-            if (node != null && scanner.isStillLargePlayer(node, watchTop, screen)) {
+            if (node == null && now < watchRelearnUntil) {
+                reason("Video offen (gedreht)")
+                overlay.hide()
+                scheduleScan()
+                return
+            }
+            if (node != null && watchStillOpen(node, now) != false) {
                 watchTop = minOf(watchTop, scanner.topOf(node))
                 reason("Video offen")
                 overlay.hide()
@@ -1710,6 +1767,7 @@ class FuckShortsService : AccessibilityService() {
         /** So lange nach dem Aufziehen braucht der Schleier, bis die Benachrichtigungen unten angekommen sind. */
         private const val SHADE_VEIL_MS = 180L
         private const val SHADE_MEASURE_MS = 600L
+        private const val WATCH_RELEARN_MS = 1_500L
         private val DEFAULT_VEIL = android.graphics.Color.rgb(0x1B, 0x25, 0x30)
         private const val SYSTEM_UI = "com.android.systemui"
         private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
