@@ -198,6 +198,20 @@ class BottomBarOverlay(
     /** Fährt gerade weg (Scans blockieren das Zeichnen, darum solange keine). */
     val isSliding: Boolean get() = slide != null
 
+    /**
+     * Versteckte Leiste schon an die neue Stelle legen (z. B. gedreht, während ein Video offen ist). Auf dem Tablet
+     * dauerte das Neu-Einrichten beim Wiederzeigen sonst ~350 ms, so lange sah man die echte.
+     */
+    fun prepare(rest: Rect, state: BarUiState) {
+        val v = view ?: return
+        if (isShowing) return
+        stopSlide()
+        val next = state.copy(dim = 0f, hole = null, veil = null)
+        if (next != uiState) uiState = next
+        target.set(rest.left, rest.top, rest.right, rest.top + rest.height())
+        if (applyBounds()) windowManager.updateViewLayout(v, params)
+    }
+
     private fun stopSlide() {
         slide?.cancel()
         slide = null

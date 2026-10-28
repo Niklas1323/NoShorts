@@ -366,6 +366,7 @@ class FuckShortsService : AccessibilityService() {
                 overlay.show(known.first.top, known.first, lastUiState!!)
                 return
             }
+            if (isTablet) overlay.prepare(known.first, lastUiState!!)
         } else {
             restBounds = null
         }
@@ -404,6 +405,14 @@ class FuckShortsService : AccessibilityService() {
      * Verlassen: eine Weile nur seine neue Lage lernen (sonst blitzte unsere Leiste über der Video-Seite auf).
      */
     private fun watchStillOpen(node: AccessibilityNodeInfo, now: Long): Boolean? {
+        if (isTablet && !node.refresh()) {
+            // Tablet: Beim Drehen baut YouTube den Player neu (quer zwei Spalten). Neu suchen statt "verlassen",
+            // sonst stand unsere ~0,3 s über dem Video. Nach Zurück ist keiner mehr da.
+            val again = youTubeMainRoot()?.let { scanner.findWatchPlayer(it, screen) } ?: return false
+            watchNode = again
+            watchTop = scanner.topOf(again)
+            return true
+        }
         if (playerRotating(node)) watchRelearnUntil = now + WATCH_RELEARN_MS
         if (now < watchRelearnUntil) {
             // null = YouTube hat den Player neu gebaut: der volle Scan sucht ihn neu.
