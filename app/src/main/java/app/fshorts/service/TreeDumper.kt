@@ -21,7 +21,7 @@ class TreeDumper(private val context: Context) {
 
     fun dump(root: AccessibilityNodeInfo, windows: List<AccessibilityWindowInfo>, reason: String): File? = try {
         val text = buildString {
-            appendLine("Fuck Shorts – Struktur")
+            appendLine("F*ck Shorts – Struktur")
             appendLine("Grund: $reason")
             appendLine("Zeit: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(Date())}")
             appendLine("App: ${BuildConfig.VERSION_NAME}")

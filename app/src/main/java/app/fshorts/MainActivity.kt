@@ -97,7 +97,7 @@ private fun MainScreen() {
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Fuck Shorts", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+            Text("F*ck Shorts", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
             Text(
                 "Lange Videos ja. Shorts nein.",
                 style = MaterialTheme.typography.bodyLarge,
@@ -174,7 +174,7 @@ private fun StatusCard(enabled: Boolean, blocked: Int) {
                 if (enabled) {
                     "Öffne YouTube. Unten gibt es keinen Shorts-Knopf mehr."
                 } else {
-                    "YouTube zeigt gerade noch Shorts. Schalte Fuck Shorts unten ein."
+                    "YouTube zeigt gerade noch Shorts. Schalte F*ck Shorts unten ein."
                 },
             )
             if (blocked > 0) Text("Shorts weggeklickt: $blocked")
@@ -188,7 +188,7 @@ private fun DisclosureCard(onAccept: () -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Bevor es losgeht", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Damit Fuck Shorts funktioniert, braucht die App die Berechtigung \"Bedienungshilfen\".",
+                "Damit F*ck Shorts funktioniert, braucht die App die Berechtigung \"Bedienungshilfen\".",
             )
             Text("Damit kann die App:")
             Text("• sehen, wo in der YouTube-App welche Knöpfe sind")
@@ -211,7 +211,7 @@ private fun SetupCard(context: Context) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("So schaltest du es ein", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("1. Tippe auf \"Bedienungshilfen öffnen\".")
-            Text("2. Schalte \"Fuck Shorts\" ein.")
+            Text("2. Schalte \"F*ck Shorts\" ein.")
             Button(onClick = { openAccessibilitySettings(context) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Bedienungshilfen öffnen")
             }
@@ -273,7 +273,7 @@ private fun isServiceEnabled(context: Context): Boolean {
     }
 }
 
-/** Öffnet direkt die Seite von Fuck Shorts in den Bedienungshilfen (spart einen Schritt), sonst die Liste. */
+/** Öffnet direkt die Seite von F*ck Shorts in den Bedienungshilfen (spart einen Schritt), sonst die Liste. */
 private fun openAccessibilitySettings(context: Context) {
     val component = ComponentName(context, FuckShortsService::class.java).flattenToString()
     val details = Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS")
@@ -307,7 +307,7 @@ private fun shareDumps(context: Context) {
     val send = Intent(Intent.ACTION_SEND_MULTIPLE)
         .setType("*/*")
         .putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-        .putExtra(Intent.EXTRA_SUBJECT, "Fuck Shorts – Struktur")
+        .putExtra(Intent.EXTRA_SUBJECT, "F*ck Shorts – Struktur")
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     context.startActivity(Intent.createChooser(send, "Struktur teilen"))
 }
