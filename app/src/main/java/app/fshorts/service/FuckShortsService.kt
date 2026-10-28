@@ -158,6 +158,8 @@ class FuckShortsService : AccessibilityService() {
     private val menuWindows = HashMap<Int, Boolean>()
     /** YouTube-Fenster, in dem es keine Leiste gab (z. B. Kamera). -1 = keins. */
     private var barlessWindowId = -1
+    /** YouTube ging nach hinten, während eine Seite ohne Leiste offen war (nur Tablet, siehe scanInternal). */
+    private var leftWithoutBar = false
     /** Anderes YouTube-Fenster (z. B. Premium-Werbung) über der Seite mit der Leiste. -1 = keins. */
     private var coverWindowId = -1
     /** Höchste Lage eines offenen Panels im YouTube-Fenster (z. B. Werbe-Menü). MAX_VALUE = keins offen. */
@@ -562,6 +564,9 @@ class FuckShortsService : AccessibilityService() {
             // Unter der Tastatur ist eine andere Seite (Suchvorschläge): Danach die Lage der echten Leiste neu
             // ansehen, nicht "weggescrollt" von vorher weiterführen (sonst stand unsere auf den Vorschlägen).
             if (keyboard) hiddenByScroll = false
+            // Tablet: Seite ohne Leiste (z. B. Kamera nach Plus), dann fragt Android nach Fotos-Zugriff. Danach
+            // nicht unsere vorab zeigen, sonst stand sie ~2 s über den Knöpfen der Kamera-Seite.
+            if (youTubeActive && !keyboard) leftWithoutBar = isTablet && !overlay.isShowing && lastBar == null
             youTubeActive = false
             menuFront = false
             menuOpen = false
@@ -691,7 +696,9 @@ class FuckShortsService : AccessibilityService() {
             keyboardWasOpen = false
             keyboardToPage = false
             barGoneAfterKeyboard = afterKeyboard
-            if (rest != null && state != null && !watchPageOpen && !restoredState && !afterKeyboard) {
+            val wasBarless = leftWithoutBar
+            leftWithoutBar = false
+            if (rest != null && state != null && !watchPageOpen && !restoredState && !afterKeyboard && !wasBarless) {
                 reason("YouTube wieder vorne, unsere sofort")
                 youTubeActive = true
                 youTubeSince = now
@@ -1232,7 +1239,12 @@ class FuckShortsService : AccessibilityService() {
     private fun rememberRestPosition(bar: FoundBar) {
         val rest = restBounds
         val b = bar.bounds
-        if (rest == null || b.height() > rest.height() + 2 || (b.height() >= rest.height() - 2 && b.top < rest.top)) {
+        // Tablet: Beim Schliessen der Kamera meldet YouTube die Leiste kurz 32 px zu hoch (Unterkante über der
+        // gewohnten). Das ist keine neue Ruhelage, sonst stand unsere danach zu hoch und hell, darunter "Shorts".
+        if (isTablet && rest != null && b.bottom < rest.bottom - 2) return
+        // Tablet: Steht die ganze Leiste tiefer als die gemerkte Lage, war diese falsch (auch gespeichert): neu lernen.
+        val wrongRest = isTablet && rest != null && b.height() >= rest.height() - 2 && b.bottom > rest.bottom + 2
+        if (rest == null || wrongRest || b.height() > rest.height() + 2 || (b.height() >= rest.height() - 2 && b.top < rest.top)) {
             restBounds = Rect(b)
         }
     }
