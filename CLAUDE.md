@@ -325,7 +325,18 @@ Filter einmal als Blatt von unten über die Leiste zeigt. Sonst sähe man beim W
 - Suchfilter durch Tipp daneben geschlossen: unsere ~0,3 s zu lange abgedunkelt (Dialog bleibt bis Ende der
   Ausblend-Animation gemeldet). Nur Optik, echte Leiste nie sichtbar.
 - System-Animationen: Entsperren, Splitscreen tauschen (0,35 s), Pop-up maximieren (0,6 s), Drehen, App-Übersicht.
-- Shorts-Regale: YouTube zeigte keine (nicht erzwingbar), Entfernen per "Nicht interessiert" darum am Tablet ungeprüft.
+- Shorts-Regale: siehe unten (Abos-Regal am Handy jetzt gelöst).
+
+### Shorts-Regal auf "Abos" (28.10., 14:00, Handy geprüft)
+Das Regal auf "Abos" hat kein eigenes ⋮, nur jede Karte ("Mehr Aktionen" → Teilen / **Ausblenden** / Feedback).
+Wunsch des Nutzers: jede Karte einzeln ausblenden. `Shelf.cardMenuButtons` (nur ⋮ in der seitlich scrollbaren
+Kartenreihe, nie "… abspielen"), alle 1,5 s eine Karte, für Karten NUR `cardHideLabels` ("Ausblenden" in ~25
+Sprachen), nie "Kein Interesse". 3 Fehlklicks → Sitzung aus. Geprüft: alle Karten weg, nur "Shorts >" bleibt,
+normale Videos unberührt.
+Dabei zwei alte Fehler behoben: `findMenuButton` nahm eine Short-Karte rechts als ⋮ (öffnete den Short; jetzt klein
+in beiden Richtungen und kein "abspielen"), `shelfFor` stürzte ab, wenn die Liste beim Scrollen Kinder verlor.
+Suchfilter-Wegfahren am Handy erzwungen geprüft: 300 ms sanft, unsere stand danach ganz unten weg, die echte blieb
+unter dem Dialog-Schleier (sah man nur, weil der Dialog die Leiste nicht abdeckt – darum nur bei `coversBar` aktiv).
 
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 

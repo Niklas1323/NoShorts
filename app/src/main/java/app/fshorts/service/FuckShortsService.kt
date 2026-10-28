@@ -177,6 +177,9 @@ class FuckShortsService : AccessibilityService() {
     // Shorts-Regale und automatisches "Nicht interessiert".
     private var shelves: List<Shelf> = emptyList()
     private var shelfMenuOpenedAt = 0L
+    /** Das offene Menü gehört zu einer einzelnen Short-Karte (nicht zum ganzen Regal). */
+    private var shelfMenuForCard = false
+    private var cardClickFails = 0
     private var lastShelfHideAt = 0L
     private var shelfHideBroken = false
 
@@ -1614,21 +1617,35 @@ class FuckShortsService : AccessibilityService() {
     /** Tippt auf ⋮ beim Shorts-Regal. Den Menüpunkt "Nicht interessiert" wählt [handleShelfMenu]. */
     private fun tryHideShelf(shelves: List<Shelf>, now: Long) {
         if (shelfHideBroken || !Prefs.autoHideShelf(this)) return
-        if (now - lastShelfHideAt < SHELF_HIDE_INTERVAL_MS) return
-        val button = shelves.firstNotNullOfOrNull { it.menuButton } ?: return
+        val header = shelves.firstNotNullOfOrNull { it.menuButton }
+        // Regal ohne eigenes ⋮ (z. B. "Abos"): Karten einzeln über ihr ⋮ → "Ausblenden" (Wunsch des Nutzers).
+        val card = if (header == null) shelves.firstNotNullOfOrNull { it.cardMenuButtons.firstOrNull() } else null
+        val interval = if (card != null) CARD_HIDE_INTERVAL_MS else SHELF_HIDE_INTERVAL_MS
+        if (now - lastShelfHideAt < interval) return
+        val button = header ?: card ?: return
         lastShelfHideAt = now
         if (button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
             shelfMenuOpenedAt = now
+            shelfMenuForCard = card != null && header == null
             handler.postDelayed({ scheduleScan() }, 150)
+        } else if (card != null && ++cardClickFails >= CARD_CLICK_FAILS_MAX) {
+            // Karten-⋮ reagiert nicht: in dieser Sitzung nicht weiter probieren (kein Dauertippen).
+            shelfHideBroken = true
         }
     }
 
     private fun handleShelfMenu(now: Long) {
         val roots = windows.mapNotNull { it.root }.filter { it.packageName?.toString() == selectors.youtubePackage }
-        val item = scanner.findMenuItem(roots, selectors.shelfHideLabels)
+        // Karte: nur "Ausblenden" (nimmt den einen Short raus). Nie "Kein Interesse": Das gäbe es auch im Menü
+        // eines normalen Videos, falls doch einmal das falsche ⋮ getroffen wurde.
+        val labels = if (shelfMenuForCard) selectors.cardHideLabels else selectors.shelfHideLabels
+        val item = scanner.findMenuItem(roots, labels)
         if (item != null) {
             shelfMenuOpenedAt = 0L
-            if (click(item)) Prefs.incrementShelvesHidden(this)
+            cardClickFails = 0
+            val ok = click(item)
+            if (ok) Prefs.incrementShelvesHidden(this)
+            Log.d(TAG, "Regal: ${if (shelfMenuForCard) "Karte" else "Regal"} ausblenden: ${item.text ?: item.contentDescription} ($ok)")
             scheduleScan()
             return
         }
@@ -1637,6 +1654,7 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         // Menüpunkt nicht gefunden: Menü schliessen, Aufbau speichern, in dieser Sitzung nicht mehr probieren.
+        Log.d(TAG, "Regal: Menüpunkt nicht gefunden, aufgegeben")
         shelfMenuOpenedAt = 0L
         shelfHideBroken = true
         val active = foregroundWindow()?.root
@@ -2059,6 +2077,8 @@ class FuckShortsService : AccessibilityService() {
         private const val AUTO_DUMP_INTERVAL_MS = 20_000L
         private const val DEBUG_DUMP_INTERVAL_MS = 3_000L
         private const val SHELF_HIDE_INTERVAL_MS = 60_000L
+        private const val CARD_HIDE_INTERVAL_MS = 1_500L
+        private const val CARD_CLICK_FAILS_MAX = 3
         private const val SHELF_MENU_TIMEOUT_MS = 1_500L
         private const val PRE_SHOW_HOLD_MS = 700L
         private const val CREATE_HOLD_MS = 1_500L

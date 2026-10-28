@@ -24,6 +24,10 @@ data class Selectors(
     val badgeTextHints: List<String>,
     val shelfHeaderLabels: List<String>,
     val shelfHideLabels: List<String>,
+    /** Menüpunkt auf einer einzelnen Short-Karte, der sie aus dem Feed nimmt ("Ausblenden"). */
+    val cardHideLabels: List<String>,
+    /** Teil der Beschreibung einer Karte, die beim Tippen ein Video/Short öffnet ("Short abspielen"). */
+    val playHints: List<String>,
     val miniPlayerLabels: List<String>,
     val miniPlayerIds: List<String>,
     val feedIds: List<String>,
@@ -57,6 +61,8 @@ data class Selectors(
                 badgeTextHints = o.getJSONArray("badgeTextHints").toList(),
                 shelfHeaderLabels = o.optJSONArray("shelfHeaderLabels")?.toList() ?: listOf("Shorts"),
                 shelfHideLabels = o.optJSONArray("shelfHideLabels")?.toList().orEmpty(),
+                cardHideLabels = o.optJSONArray("cardHideLabels")?.toList().orEmpty(),
+                playHints = o.optJSONArray("playHints")?.toList().orEmpty().map { it.lowercase() },
                 miniPlayerLabels = o.optJSONArray("miniPlayerLabels")?.toList().orEmpty(),
                 miniPlayerIds = o.optJSONArray("miniPlayerIds")?.toList().orEmpty(),
                 feedIds = o.optJSONArray("feedIds")?.toList().orEmpty(),

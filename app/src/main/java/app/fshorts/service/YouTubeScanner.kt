@@ -25,6 +25,8 @@ class Shelf(
     val menuButton: AccessibilityNodeInfo?,
     val parts: List<AccessibilityNodeInfo>,
     val feed: AccessibilityNodeInfo,
+    /** ⋮ der einzelnen Short-Karten (Regal ohne eigenes ⋮, z. B. auf "Abos": Karten einzeln ausblenden). */
+    val cardMenuButtons: List<AccessibilityNodeInfo> = emptyList(),
 )
 
 // Shorts-Player von YouTube 21.41 (am Pixel nachgesehen): eine Seite pro Short in einer senkrechten Liste.
@@ -309,8 +311,9 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
         val bounds = item.bounds()
         if (bounds.height() < 160 * density) {
             // Überschrift und Karten sind getrennte Einträge in der Liste: den nächsten Eintrag dazunehmen.
-            val index = (0 until feed.childCount).firstOrNull { feed.getChild(it) == item }
-            index?.let { feed.getChild(it + 1) }?.let {
+            // Die Liste ändert sich beim Scrollen laufend: Kinder können zwischen Zählen und Abfragen wegfallen.
+            val index = (0 until feed.childCount).firstOrNull { runCatching { feed.getChild(it) }.getOrNull() == item }
+            index?.let { runCatching { feed.getChild(it + 1) }.getOrNull() }?.let {
                 bounds.union(it.bounds())
                 parts += it
             }
@@ -320,7 +323,49 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
         if (bounds.bottom > limitBottom) bounds.bottom = limitBottom
         if (bounds.height() <= 0) return null
 
-        return Shelf(bounds, findMenuButton(item, headerBounds, screen, 0), parts, feed)
+        limitBottomForCards = limitBottom
+        val menu = findMenuButton(item, headerBounds, screen, 0)
+        val cardMenus = if (menu == null) {
+            mutableListOf<AccessibilityNodeInfo>().also { out ->
+                parts.forEach { findCardMenus(it, headerBounds, screen, 0, false, out) }
+            }
+        } else {
+            emptyList()
+        }
+        return Shelf(bounds, menu, parts, feed, cardMenus)
+    }
+
+    /** Karten-⋮ nur über unserer Leiste (darunter liegt nichts Tippbares von uns). */
+    private var limitBottomForCards = Int.MAX_VALUE
+
+    private fun opensVideo(node: AccessibilityNodeInfo): Boolean {
+        val d = node.contentDescription?.toString()?.lowercase() ?: return false
+        return sel.playHints.any { d.contains(it) }
+    }
+
+    /** Kleine ⋮-Knöpfe auf den Karten unter der Überschrift (ganz sichtbar, nicht hinter unserer Leiste). */
+    private fun findCardMenus(
+        node: AccessibilityNodeInfo,
+        header: Rect,
+        screen: Rect,
+        depth: Int,
+        inRow: Boolean,
+        out: MutableList<AccessibilityNodeInfo>,
+    ) {
+        val r = node.bounds()
+        val small = r.width() in 1..(72 * density).toInt() && r.height() in 1..(72 * density).toInt()
+        // Nur in der seitlich scrollbaren Kartenreihe des Regals: Das ⋮ eines normalen Videos darunter gehört nie dazu.
+        if (inRow && node.isClickable && small && node.isVisibleToUser && r.top > header.bottom &&
+            r.right <= screen.right && r.bottom <= limitBottomForCards && !opensVideo(node)
+        ) {
+            out += node
+            return
+        }
+        if (depth >= 10) return
+        val row = inRow || (node.isScrollable && r.width() >= screen.width() / 2 && r.height() < screen.height() / 2)
+        for (i in 0 until node.childCount) {
+            runCatching { node.getChild(i) }.getOrNull()?.let { findCardMenus(it, header, screen, depth + 1, row, out) }
+        }
     }
 
     /** Neue Position eines bekannten Regals, ohne den ganzen Bildschirm neu zu durchsuchen (fürs Scrollen). */
@@ -386,7 +431,10 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
         // Muss in der Zeile der Überschrift beginnen: Das ⋮ der ersten Short-Karte direkt darunter zählt nicht
         // (Regal auf "Abos" hat gar kein eigenes ⋮).
         val nearHeader = r.centerY() in (header.top - tolerance)..(header.bottom + tolerance) && r.top < header.bottom
-        if (node.isClickable && nearHeader && r.centerX() > screen.width() * 0.8 && r.width() <= 72 * density) {
+        // Klein in beide Richtungen und kein "… abspielen" (sonst wurde eine Short-Karte rechts als ⋮ getippt).
+        if (node.isClickable && nearHeader && r.centerX() > screen.width() * 0.8 && r.width() <= 72 * density &&
+            r.height() <= 72 * density && !opensVideo(node)
+        ) {
             return node
         }
         if (depth >= 8) return null
