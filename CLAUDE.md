@@ -313,6 +313,11 @@ Tablet geprüft, in Ordnung: Startseite hoch/quer, Scrollen, Tabs (je 6/6), ⋮-
 - **Test-Sicherheit:** `safetap`/`leavevideo` in `tab.sh` – nie auf Feed-Stellen tippen, solange ein Video offen ist
   (ein Tipp landete einmal auf "Melden"; Fenster ohne Auswahl wieder geschlossen, nichts gemeldet).
 
+**Handy danach geprüft (28.10., 13:40, Pixel 9, dunkel), alles in Ordnung:** Scrollen, Tabs 15/15, Kamera 3×, Seiten +
+Suche, ⋮-Menü, Video öffnen/Zurück. Suchfilter ist auch auf dem Handy (YouTube 21.42) ein Dialog in der Mitte, der die
+Leiste NICHT abdeckt → unsere bleibt abgedunkelt wie bisher, das Wegfahren (`slideDown`) greift nur, wenn YouTube den
+Filter einmal als Blatt von unten über die Leiste zeigt. Sonst sähe man beim Wegfahren die echte Leiste.
+
 **Tablet: nichts Lösbares mehr offen.** Nicht lösbar (Android/YouTube), mit Grund:
 - Video verlassen (Zurück-Wischen/Taste): 0–4 Bilder, bei laufender Werbung bis ~10. YouTube meldet die neue Seite
   erst so spät; vorher gibt es kein Zeichen (auch kein System-Fenster für die Geste).
