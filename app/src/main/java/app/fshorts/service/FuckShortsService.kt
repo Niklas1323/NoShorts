@@ -1662,7 +1662,8 @@ class FuckShortsService : AccessibilityService() {
         if (button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
             shelfMenuOpenedAt = now
             shelfMenuForCard = card != null && header == null
-            handler.postDelayed({ scheduleScan() }, 150)
+            // So schnell wie möglich den Menüpunkt tippen: Das Menü soll man kaum sehen.
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
         } else if (card != null && ++cardClickFails >= CARD_CLICK_FAILS_MAX) {
             // Karten-⋮ reagiert nicht: in dieser Sitzung nicht weiter probieren (kein Dauertippen).
             shelfHideBroken = true
@@ -1685,7 +1686,7 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         if (now - shelfMenuOpenedAt < SHELF_MENU_TIMEOUT_MS) {
-            handler.postDelayed({ scheduleScan() }, 100)
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
             return
         }
         // Menüpunkt nicht gefunden: Menü schliessen, Aufbau speichern, in dieser Sitzung nicht mehr probieren.

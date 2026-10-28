@@ -327,6 +327,16 @@ Filter einmal als Blatt von unten über die Leiste zeigt. Sonst sähe man beim W
 - System-Animationen: Entsperren, Splitscreen tauschen (0,35 s), Pop-up maximieren (0,6 s), Drehen, App-Übersicht.
 - Shorts-Regale: siehe unten (Abos-Regal am Handy jetzt gelöst).
 
+### 28.10. Nachmittag: Rückmeldung vom Handy
+- **Lücken** links (1 px) und unten (2 Zeilen): gemerkte Lage war 1 px verschoben (Animation) → `snapToEdges`
+  (Rand ±3 px = Rand, auch beim Laden), `applyBounds` nimmt ganze Breite ab `width >= Bildschirm - 6`.
+- **Wegfahren statt Verschwinden** (Wunsch): `overlay.slideAway(450 ms)` bei Suche (Start beim Tipp auf die Lupe,
+  `SEARCH_LABELS`; die Tastatur meldet Android erst ganz offen, Klick kommt ~0,8 s nach dem Finger) und Video öffnen.
+  Während des Wegfahrens kein `show` und keine Abfragen (`drawPending`), sonst stoppte/ruckelte es.
+- **Leiste verschwindet beim Scrollen:** 75 s gemischtes Scrollen (2249 Bilder) ohne Fehlen – nicht nachgestellt;
+  vermutlich die 1-px-Lage. Beobachten.
+- **Regal-Menü** wird jetzt im nächsten Bild bedient (vorher 100–150 ms Abstand), Menü kaum sichtbar.
+
 ### Shorts-Regal auf "Abos" (28.10., 14:00, Handy geprüft)
 Das Regal auf "Abos" hat kein eigenes ⋮, nur jede Karte ("Mehr Aktionen" → Teilen / **Ausblenden** / Feedback).
 Wunsch des Nutzers: jede Karte einzeln ausblenden. `Shelf.cardMenuButtons` (nur ⋮ in der seitlich scrollbaren
