@@ -412,6 +412,15 @@ class FuckShortsService : AccessibilityService() {
     private fun drawPending(): Boolean = isTablet && overlay.isShowing && overlay.drawnAt < overlay.shownAt &&
         SystemClock.uptimeMillis() - overlay.shownAt < TABLET_DRAW_WAIT_MS
 
+    private fun snapToEdges(r: Rect): Rect {
+        val s = screenBounds()
+        val out = Rect(r)
+        if (kotlin.math.abs(out.left - s.left) <= EDGE_SNAP_PX) out.left = s.left
+        if (kotlin.math.abs(out.right - s.right) <= EDGE_SNAP_PX) out.right = s.right
+        if (kotlin.math.abs(out.bottom - s.bottom) <= EDGE_SNAP_PX) out.offset(0, s.bottom - out.bottom)
+        return out
+    }
+
     private fun sizeKey(r: Rect) = "${r.left},${r.top},${r.width()}x${r.height()}"
 
     /**
@@ -1318,7 +1327,7 @@ class FuckShortsService : AccessibilityService() {
             val json = org.json.JSONObject(text)
             screen = screenBounds()
             if (json.getString("screen") != "${screen.width()}x${screen.height()}") return
-            val rest = Rect.unflattenFromString(json.getString("rest")) ?: return
+            val rest = Rect.unflattenFromString(json.getString("rest"))?.let { snapToEdges(it) } ?: return
             val labels = json.getJSONObject("labels")
             val density = resources.displayMetrics.density
             restBounds = rest
@@ -1344,8 +1353,11 @@ class FuckShortsService : AccessibilityService() {
 
     /** Merkt sich, wo die echte Leiste sitzt, wenn sie ganz eingefahren ist (höchste Lage, volle Höhe). */
     private fun rememberRestPosition(bar: FoundBar) {
+        // Bei Animationen (z. B. Zurück-Geste) meldet YouTube die Leiste kurz 1 px verschoben. So gemerkt, stand
+        // unsere 1 px daneben: links ein Strich, unten 2 Zeilen Inhalt sichtbar. Fast am Rand = genau am Rand.
+        restBounds?.let { r -> snapToEdges(r).takeIf { it != r }?.let { restBounds = it } }
         val rest = restBounds
-        val b = bar.bounds
+        val b = snapToEdges(bar.bounds)
         // Tablet: Beim Schliessen der Kamera meldet YouTube die Leiste kurz 32 px zu hoch (Unterkante über der
         // gewohnten). Das ist keine neue Ruhelage, sonst stand unsere danach zu hoch und hell, darunter "Shorts".
         if (isTablet && rest != null && b.bottom < rest.bottom - 2) return
@@ -2052,6 +2064,7 @@ class FuckShortsService : AccessibilityService() {
         private const val MINI_CHECK_MS = 400L
         private const val MINI_WALK_MS = 5_000L
         private const val DRAW_FIRST_MS = 50L
+        private const val EDGE_SNAP_PX = 3
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L
         private const val FEED_GRACE_MS = 600L

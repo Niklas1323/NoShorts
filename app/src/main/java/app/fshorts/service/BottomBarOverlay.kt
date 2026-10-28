@@ -306,7 +306,8 @@ class BottomBarOverlay(
         } else {
             service.resources.displayMetrics.widthPixels
         }
-        val fullWidth = target.left <= 0 && target.right >= displayWidth - 2
+        // Fast ganze Breite = ganze Breite (gemeldete Lage kann 1 px daneben liegen: sonst Strich am Rand).
+        val fullWidth = target.width() >= displayWidth - 6
         val x = if (fullWidth) 0 else target.left
         val width = if (fullWidth) WindowManager.LayoutParams.MATCH_PARENT else target.width()
         val y = target.top
