@@ -348,6 +348,15 @@ in beiden Richtungen und kein "abspielen"), `shelfFor` stürzte ab, wenn die Lis
 Suchfilter-Wegfahren am Handy erzwungen geprüft: 300 ms sanft, unsere stand danach ganz unten weg, die echte blieb
 unter dem Dialog-Schleier (sah man nur, weil der Dialog die Leiste nicht abdeckt – darum nur bei `coversBar` aktiv).
 
+### 28.10. Abend (Cloud, NICHT am Handy getestet): Leiste fuhr beim Scrollen manchmal runter
+Nutzer meldet: Startseite, einfach scrollen → unsere Leiste fährt manchmal runter. Vermutete Ursache: Jedes
+TYPE_WINDOW_STATE_CHANGED von YouTube zählte als "Navigation" (`onNavigation`), auch beim Scrollen (Video in der
+Liste läuft an) → "Tipp nach dem Scrollen" bzw. `videoOpening` → `hideSmooth`. Jetzt: STATE_CHANGED zählt nur
+nach einem Tipp (`looksLikeTap`: Berührung < 800 ms, seither nicht gescrollt); `videoOpening` nur ohne neue
+Berührung nach dem Tipp; Liste kurz nicht abfragbar direkt nach dem Scrollen → 600 ms nachsehen statt verstecken
+(`feedMissSince`). **Am Pixel prüfen:** Startseite lange scrollen (`adb logcat -s FuckShorts`, "Leiste nicht mehr
+da (…)" darf nicht kommen), Video öffnen (unsere fährt weiter weg), Plus/Kamera, Suche.
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit

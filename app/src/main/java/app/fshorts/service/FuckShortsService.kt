@@ -71,6 +71,8 @@ class FuckShortsService : AccessibilityService() {
     private var lastScrollAt = 0L
     private var feedKeptAt = 0L
     private var lastTouchAt = 0L
+    /** Seit wann die Startseiten-Liste nach dem Scrollen nicht zu finden ist (0 = gefunden). */
+    private var feedMissSince = 0L
 
     /** Tablet (ab 600 dp): Ein paar Abläufe sind dort anders als auf dem Handy, z. B. der schwebende Mini-Player. */
     private val isTablet get() = resources.configuration.smallestScreenWidthDp >= 600
@@ -310,7 +312,9 @@ class FuckShortsService : AccessibilityService() {
                         if (watchPageOpen && youTubeActive &&
                             event.contentChangeTypes and AccessibilityEvent.CONTENT_CHANGE_TYPE_PANE_APPEARED != 0
                         ) onWatchPaneAppeared()
-                        onNavigation()
+                        // Ein Seitenwechsel zählt nur nach einem Tipp als "Navigation". YouTube meldet solche Wechsel
+                        // auch beim Scrollen (z. B. ein Video in der Liste läuft an) – dann fuhr unsere Leiste runter.
+                        if (looksLikeTap(SystemClock.uptimeMillis())) onNavigation()
                     }
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                         if (closesBarlessPage(event)) showBeforeBarlessCloses()
@@ -514,6 +518,9 @@ class FuckShortsService : AccessibilityService() {
         lastNavAt = SystemClock.uptimeMillis()
         navFromRest = !hiddenByScroll
     }
+
+    /** Finger kurz vorher aufgelegt und seither nicht gescrollt: ein Tipp, kein Wischen. */
+    private fun looksLikeTap(now: Long) = now - lastTouchAt < TAP_STATE_MS && lastScrollAt < lastTouchAt
 
     /**
      * Video verlassen: YouTube meldet PANE_APPEARED ~65 ms bevor die Lage-Abfragen wieder antworten, der Player
@@ -1514,7 +1521,8 @@ class FuckShortsService : AccessibilityService() {
         val onHome = state.selected == TabKind.HOME
         // Eben absichtlich vorab gezeigt (z. B. "Suchen"): Die echte Leiste kommt gleich von unten, nicht verstecken.
         val held = now - preShownAt < PRE_SHOW_HOLD_MS
-        val videoOpening = now - lastNavAt < NAV_LINK_MS && navFromRest && !held
+        // Finger nach dem Tipp wieder aufgelegt (z. B. Tipp auf "Ton aus", dann gescrollt): kein Video, unsere bleibt.
+        val videoOpening = now - lastNavAt < NAV_LINK_MS && navFromRest && !held && lastTouchAt <= lastNavAt
         if (onHome) {
             if (observedTop <= rest.top + 2) hiddenByScroll = false
             if (videoOpening && fullyGone) {
@@ -1599,11 +1607,14 @@ class FuckShortsService : AccessibilityService() {
         goneFeed = scanner.findFeed(root, screen)
         if (goneFeed != null) {
             feedKeptAt = now
+            feedMissSince = 0L
             return true
         }
-        // Läuft ein Video in der Liste an, baut YouTube die Liste um und sie ist kurz nicht abfragbar.
-        // Dann nicht gleich verstecken, sondern gleich nochmal nachsehen.
-        if (hiddenByScroll && now - feedKeptAt < FEED_GRACE_MS) {
+        // Läuft ein Video in der Liste an, baut YouTube die Liste um und sie ist kurz nicht abfragbar (auch mitten
+        // im Wischen). Dann nicht gleich verstecken, sondern gleich nochmal nachsehen.
+        if (feedMissSince == 0L || now - feedMissSince > SCROLL_GONE_MS) feedMissSince = now
+        val justScrolled = now - scrollAt < SCROLL_GONE_MS && now - feedMissSince < FEED_GRACE_MS
+        if ((hiddenByScroll && now - feedKeptAt < FEED_GRACE_MS) || justScrolled) {
             handler.postDelayed({ scheduleScan() }, POLL_MS)
             return true
         }
@@ -2093,6 +2104,7 @@ class FuckShortsService : AccessibilityService() {
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L
         private const val FEED_GRACE_MS = 600L
+        private const val TAP_STATE_MS = 800L
         private const val FOREGROUND_GAP_MS = 500L
         private const val SLOW_SCAN_MS = 150L
         private const val REVEAL_POLL_MS = 50L
