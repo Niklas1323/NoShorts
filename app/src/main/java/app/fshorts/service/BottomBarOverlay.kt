@@ -299,15 +299,22 @@ class BottomBarOverlay(
 
     private fun applyBounds(): Boolean {
         // Immer über die ganze Bildschirmbreite ab dem linken Rand: So kann die Leiste nie seitlich verrutschen.
+        // Ausser YouTube ist schmaler (Tablet: Pop-up-Ansicht, Splitscreen nebeneinander): dann genau so breit.
+        val displayWidth = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.bounds.width()
+        } else {
+            service.resources.displayMetrics.widthPixels
+        }
+        val fullWidth = target.left <= 0 && target.right >= displayWidth - 2
+        val x = if (fullWidth) 0 else target.left
+        val width = if (fullWidth) WindowManager.LayoutParams.MATCH_PARENT else target.width()
         val y = target.top
-        if (params.x == 0 && params.y == y && params.width == WindowManager.LayoutParams.MATCH_PARENT &&
-            params.height == target.height()
-        ) {
+        if (params.x == x && params.y == y && params.width == width && params.height == target.height()) {
             return false
         }
-        params.x = 0
+        params.x = x
         params.y = y
-        params.width = WindowManager.LayoutParams.MATCH_PARENT
+        params.width = width
         params.height = target.height()
         return true
     }

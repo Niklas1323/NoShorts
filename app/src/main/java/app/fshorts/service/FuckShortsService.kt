@@ -1897,9 +1897,16 @@ class FuckShortsService : AccessibilityService() {
         val display = displayBounds()
         val main = youTubeMainWindow(windows)
         val b = main?.let { Rect().also { r -> it.getBoundsInScreen(r) } }
+        val minSide = 300 * resources.displayMetrics.density
         splitBounds = b?.takeIf {
             !main.isInPictureInPictureMode && it.width() >= display.width() - 4 &&
                 it.height() in (display.height() / 4)..(display.height() * 85 / 100)
+        } ?: b?.takeIf {
+            // Tablet: Splitscreen nebeneinander (quer) oder Pop-up-Ansicht (schwebendes Fenster). Vorher galt das
+            // Fenster als Dialog: unsere lag abgedunkelt unten am Bildschirm, im Fenster die echte mit Shorts.
+            isTablet && !main.isInPictureInPictureMode &&
+                (it.width() < display.width() - 4 || it.height() < display.height() * 85 / 100) &&
+                it.width() >= minSide && it.height() >= minSide
         }
     }
 
