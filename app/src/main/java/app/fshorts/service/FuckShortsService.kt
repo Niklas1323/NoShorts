@@ -962,7 +962,7 @@ class FuckShortsService : AccessibilityService() {
             restoredState = false
             val previous = lastUiState
             lastUiState = if (atRest || previous == null) {
-                buildUiState(bar).also { saved ->
+                buildUiState(bar, root, previous?.selected).also { saved ->
                     restBounds?.let {
                         if (atRest) {
                             saveBarState(it, saved)
@@ -972,7 +972,7 @@ class FuckShortsService : AccessibilityService() {
                 }
             } else {
                 previous.copy(
-                    selected = bar.tabs.values.firstOrNull { it.selected }?.kind ?: previous.selected,
+                    selected = selectedTab(bar, root, previous.selected) ?: previous.selected,
                     subscriptionsBadge = bar.tabs[TabKind.SUBSCRIPTIONS]?.badge ?: previous.subscriptionsBadge,
                 )
             }
@@ -1643,12 +1643,30 @@ class FuckShortsService : AccessibilityService() {
     private fun windowBounds(windowId: Int): Rect =
         windows.firstOrNull { it.id == windowId }?.let { w -> Rect().also { w.getBoundsInScreen(it) } } ?: Rect(screen)
 
-    private fun buildUiState(bar: FoundBar): BarUiState {
+    /**
+     * Welcher Tab gewählt ist. Melden mehrere "gewählt" (auf Mein YouTube kam Abos dazwischen, unsere sprang hin und
+     * her), gewinnt Mein YouTube, dann Startseite. Im neuen Design liegt Abos oben als Reiter auf der Startseite.
+     */
+    private fun selectedTab(bar: FoundBar, root: AccessibilityNodeInfo, previous: TabKind?): TabKind? {
+        val marked = bar.tabs.values.filter { it.selected }.map { it.kind }
+        var pick = when {
+            marked.size <= 1 -> marked.firstOrNull()
+            else -> listOf(TabKind.YOU, TabKind.HOME, TabKind.SUBSCRIPTIONS, TabKind.SHORTS).firstOrNull { it in marked }
+        }
+        if (pick == null || pick == TabKind.HOME) {
+            val top = scanner.findTopTab(root, screen, TabKind.SUBSCRIPTIONS, bar.tabs[TabKind.SUBSCRIPTIONS]?.label)
+            if (top != null && scanner.isSelectedNear(top)) pick = TabKind.SUBSCRIPTIONS
+        }
+        if (pick != previous) Log.d(TAG, "Tab gewählt: $pick (Leiste meldet $marked)")
+        return pick
+    }
+
+    private fun buildUiState(bar: FoundBar, root: AccessibilityNodeInfo, previous: TabKind?): BarUiState {
         // Feste Abstände wie im Vorlagenbild (ab Oberkante der Leiste).
         val density = resources.displayMetrics.density
         val rest = restBounds ?: bar.bounds
         return BarUiState(
-            selected = bar.tabs.values.firstOrNull { it.selected }?.kind,
+            selected = selectedTab(bar, root, previous),
             labels = bar.tabs.mapNotNull { (kind, tab) -> tab.label?.let { kind to it } }.toMap(),
             subscriptionsBadge = bar.tabs[TabKind.SUBSCRIPTIONS]?.badge == true,
             hasCreate = TabKind.CREATE in bar.tabs,
@@ -1822,6 +1840,14 @@ class FuckShortsService : AccessibilityService() {
             revealBarThenClick(kind, root)
             return
         }
+        if (node == null && kind == TabKind.SUBSCRIPTIONS) {
+            val top = scanner.findTopTab(root, screen, kind, null)
+            if (top != null && click(top)) {
+                tapLog("$kind: nicht in der Leiste, Reiter oben geklickt")
+                scheduleScan()
+                return
+            }
+        }
         if (node == null) {
             tapLog("$kind: Tab nicht gefunden (Leiste da)")
             dumper.dump(root, windows, "tab-$kind-nicht-gefunden")
@@ -1897,9 +1923,17 @@ class FuckShortsService : AccessibilityService() {
     private fun verifyTab(kind: TabKind) {
         val root = youTubeMainRoot() ?: return
         val bar = scanner.findBar(root, screen) ?: return
-        if (bar.tabs[kind]?.selected == true) {
+        if (selectedTab(bar, root, null) == kind) {
             tapLog("$kind: ausgewählt")
             return
+        }
+        // Neues Design: Abos ist oben ein Reiter der Startseite, der Knopf unten tut dann nichts.
+        if (kind == TabKind.SUBSCRIPTIONS) {
+            val top = scanner.findTopTab(root, screen, kind, bar.tabs[kind]?.label)
+            if (top != null && click(top)) {
+                tapLog("$kind: Reiter oben geklickt")
+                return
+            }
         }
         tapLog("$kind: nach Klick nicht ausgewählt, versuche Finger-Tipp")
         tapThroughIfVisible(kind)

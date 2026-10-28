@@ -357,6 +357,18 @@ Berührung nach dem Tipp; Liste kurz nicht abfragbar direkt nach dem Scrollen �
 (`feedMissSince`). **Am Pixel prüfen:** Startseite lange scrollen (`adb logcat -s FuckShorts`, "Leiste nicht mehr
 da (…)" darf nicht kommen), Video öffnen (unsere fährt weiter weg), Plus/Kamera, Suche.
 
+### 28.10. Abend (Cloud, NICHT am Handy getestet): Profilbild-Ring, Abos-Auswahl
+Video vom Nutzer (YouTube mit neuem Design: oben Reiter "Startseite | Abos | Musik | Live | Mehr"; unsere Leiste
+zeigt englische Ersatztexte → echte Leiste hat wohl keinen Text bzw. ist umgebaut):
+- Profilbild hatte immer einen weissen Ring (Ausschnitt wurde abgeschaut, als Mein YouTube gewählt war). Jetzt
+  Rand immer weggeschnitten (`AVATAR_INSET`), Ring nur selbst gezeichnet, wenn gewählt; Sampler nimmt kein
+  gewähltes Profilbild mehr, wenn schon eins da ist.
+- Auf Mein YouTube sprang die Auswahl auf Abos und zurück: `selectedTab` – melden mehrere "gewählt", gewinnt
+  Mein YouTube, dann Startseite. Abos-Reiter oben gewählt → Abos.
+- Tipp auf Abos tat nichts (Seite blieb Startseite): Ersatz `findTopTab` → Reiter "Abos" oben anklicken.
+**Am Pixel prüfen + Struktur holen** (`uiautomator dump` auf Startseite und Mein YouTube): Wie sieht die neue Leiste
+aus (Texte, `isSelected`)? Logcat "Tab gewählt: … (Leiste meldet …)".
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit

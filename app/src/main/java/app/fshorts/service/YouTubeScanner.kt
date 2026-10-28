@@ -394,6 +394,35 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
     }
 
     /**
+     * Neues YouTube-Design: "Startseite | Abos | …" als Reiter oben auf der Startseite statt Abos in der Leiste.
+     * Sucht den Reiter (sichtbarer Text, oberes Drittel des Bildschirms).
+     */
+    fun findTopTab(root: AccessibilityNodeInfo, screen: Rect, kind: TabKind, barLabel: String?): AccessibilityNodeInfo? {
+        val words = (listOfNotNull(barLabel) + sel.labels[kind].orEmpty().take(2)).distinct()
+        val r = Rect()
+        for (word in words) {
+            val hits = runCatching { root.findAccessibilityNodeInfosByText(word) }.getOrNull() ?: continue
+            for (n in hits) {
+                if (!n.text?.toString()?.trim().equals(word, ignoreCase = true) || !n.isVisibleToUser) continue
+                n.getBoundsInScreen(r)
+                if (r.top >= screen.top && r.bottom < screen.top + screen.height() / 3) return n
+            }
+        }
+        return null
+    }
+
+    /** Reiter gewählt? Das steht am Text selbst oder an einem der zwei Elemente darüber. */
+    fun isSelectedNear(node: AccessibilityNodeInfo): Boolean {
+        var n: AccessibilityNodeInfo? = node
+        repeat(3) {
+            val cur = n ?: return false
+            if (cur.isSelected) return true
+            n = cur.parent
+        }
+        return false
+    }
+
+    /**
      * Die grosse senkrechte Liste der aktuellen Seite (Startseite, Abos ...). Solange es sie noch gibt, sind wir
      * auf derselben Seite, auch wenn YouTube seine Leiste beim Scrollen ganz entfernt hat.
      */

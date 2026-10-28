@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -581,14 +582,18 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                     } else {
                         Modifier
                     }
-                    Image(
-                        bitmap = avatar,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(size)
-                            .clip(CircleShape)
-                            .then(ring),
-                    )
+                    // Der Ausschnitt kann YouTubes weissen Ring enthalten (abgeschaut, als Mein YouTube gewählt war):
+                    // den Rand darum immer wegschneiden. Den Ring zeichnen wir selbst, nur wenn der Tab gewählt ist.
+                    Box(Modifier.size(size).then(ring), contentAlignment = Alignment.Center) {
+                        Image(
+                            bitmap = avatar,
+                            contentDescription = null,
+                            contentScale = ContentScale.None,
+                            modifier = Modifier
+                                .size(size - AVATAR_INSET * 2)
+                                .clip(CircleShape),
+                        )
+                    }
                 } else {
                     TabIcon(Icons.Filled.AccountCircle, style.content)
                 }
@@ -700,6 +705,7 @@ private fun Label(text: String, color: Color, modifier: Modifier = Modifier) {
 
 /** Schriftgrösse wie die echte Leiste (gemessen: "Startseite" ist dort 129 px breit bei Dichte 2,875). */
 private const val LABEL_DP = 10.5f
+private val AVATAR_INSET = 2.5.dp
 
 @Composable
 private fun TabIcon(icon: ImageVector, tint: Color) {

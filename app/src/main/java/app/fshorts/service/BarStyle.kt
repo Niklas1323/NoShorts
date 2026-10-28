@@ -161,7 +161,8 @@ class BarStyleSampler(private val service: AccessibilityService) {
             ?.centerY()?.minus(dy) ?: return
 
         // Icons zeichnen wir selbst (sauberer als abgeschaute Masken), nur das Profilbild wird übernommen.
-        bar.tabs[TabKind.YOU]?.let { tab ->
+        // Gewählt hat das Profilbild einen weissen Ring: dann nur nehmen, wenn wir noch keins haben.
+        bar.tabs[TabKind.YOU]?.takeIf { !it.selected || avatar == null }?.let { tab ->
             val cut = cropAvatar(bitmap, tab.bounds.centerX() - dx, iconCenterY)
             if (cut != null) {
                 avatar = cut.asImageBitmap()
