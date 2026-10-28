@@ -218,6 +218,12 @@ class FuckShortsService : AccessibilityService() {
                 polling = false
                 return
             }
+            // Tablet: Unsere eben gezeigte Leiste ist noch nicht gezeichnet. Jede Abfrage an YouTube wartet dort bis
+            // 200 ms und hielt das Zeichnen auf (Video verlassen: 0,3 s echte Leiste). Erst zeichnen lassen.
+            if (drawPending()) {
+                handler.postDelayed(this, POLL_MS)
+                return
+            }
             try {
                 updateBar(now, null)
                 if (now < fastUntil) scheduleScan()
@@ -265,6 +271,13 @@ class FuckShortsService : AccessibilityService() {
         if (!connected) return
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return
+        // Tablet: Unsere Leiste wartet aufs Zeichnen. YouTube schickt beim Seitenwechsel viele Meldungen, jede
+        // Abfrage dazu hielt das Zeichnen ~0,4 s auf. Nur später nachsehen lassen.
+        if (drawPending()) {
+            if (pkg == selectors.youtubePackage) touchedSinceEnter = touchedSinceEnter || event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
+            scheduleScan()
+            return
+        }
         when {
             pkg == selectors.youtubePackage -> {
                 when (event.eventType) {
@@ -392,6 +405,9 @@ class FuckShortsService : AccessibilityService() {
             overlay.show(rest.top, rest, state.copy(style = currentStyle()))
         }
     }
+
+    private fun drawPending(): Boolean = isTablet && overlay.isShowing && overlay.drawnAt < overlay.shownAt &&
+        SystemClock.uptimeMillis() - overlay.shownAt < TABLET_DRAW_WAIT_MS
 
     private fun sizeKey(r: Rect) = "${r.left},${r.top},${r.width()}x${r.height()}"
 
