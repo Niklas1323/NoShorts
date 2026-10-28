@@ -71,6 +71,9 @@ class FuckShortsService : AccessibilityService() {
     private var lastScrollAt = 0L
     private var feedKeptAt = 0L
     private var lastTouchAt = 0L
+
+    /** Tablet (ab 600 dp): Ein paar Abläufe sind dort anders als auf dem Handy, z. B. der schwebende Mini-Player. */
+    private val isTablet get() = resources.configuration.smallestScreenWidthDp >= 600
     private var createTappedAt = 0L
     /** Die offene Tastatur hatte ein Eingabefeld mit Fokus (siehe isKeyboardOpen). */
     private var imeFocusSeen = false
@@ -173,6 +176,15 @@ class FuckShortsService : AccessibilityService() {
 
     private val scanRunnable = Runnable {
         scanPending = false
+        // Tablet: Ein Scan dauert dort bis 1 s und blockiert das Zeichnen. War er schon eingeplant, als unsere
+        // Leiste eben gezeigt wurde, sah man so lange die echte (z. B. Video runtergewischt). Erst zeichnen lassen.
+        if (isTablet) {
+            val wait = maxOf(overlay.shownAt, movedAt) + TABLET_DRAW_FIRST_MS - SystemClock.uptimeMillis()
+            if (wait > 0) {
+                handler.postDelayed({ scheduleScan() }, wait)
+                return@Runnable
+            }
+        }
         lastScanAt = SystemClock.uptimeMillis()
         scan()
     }
@@ -213,6 +225,9 @@ class FuckShortsService : AccessibilityService() {
             touchedSinceEnter = true
             lastTouchAt = SystemClock.uptimeMillis()
             if (shadeOverYouTube) onShadeTouched()
+            // Tablet: Beim Runterwischen des Videos meldet YouTube nichts, bis der Mini-Player steht (~1 s echte
+            // Leiste). Nach jeder Berührung darum Bild für Bild nachsehen, ob der Player wegrutscht.
+            if (isTablet && watchPageOpen && youTubeActive) startPolling()
         }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         menuDim = Prefs.menuDim(this)
@@ -1895,6 +1910,7 @@ class FuckShortsService : AccessibilityService() {
         private const val MINI_CHECK_MS = 400L
         private const val MINI_WALK_MS = 5_000L
         private const val DRAW_FIRST_MS = 50L
+        private const val TABLET_DRAW_FIRST_MS = 150L
         private const val SCROLL_GONE_MS = 1_500L
         private const val FEED_GRACE_MS = 600L
         private const val FOREGROUND_GAP_MS = 500L
