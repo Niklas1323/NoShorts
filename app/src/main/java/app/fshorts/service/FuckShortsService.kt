@@ -583,6 +583,17 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         if (foreground != null && foreground.packageName?.toString() == SYSTEM_UI) {
+            // Tablet: Tipp auf den Griff zwischen zwei Apps öffnet ein kleines System-Menü (Tauschen). Das sind keine
+            // Benachrichtigungen: unsere bleibt, sonst sah man die echte Leiste, solange das Menü offen war.
+            val front = Rect().also { foregroundWindow()?.getBoundsInScreen(it) }
+            val display = displayBounds()
+            if (isTablet && youTubeActive && !front.isEmpty &&
+                front.width().toLong() * front.height() < display.width().toLong() * display.height() / 6
+            ) {
+                reason("kleines System-Menü vorne, unsere bleibt")
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+                return
+            }
             if (handleShade(foreground, now)) return
         } else if (foreground == null && now - shadeClosingAt < SHADE_GAP_MS) {
             // Nach dem Zuklappen meldet Android kurz gar kein Fenster: unsere stehen lassen.
