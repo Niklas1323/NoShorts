@@ -150,6 +150,9 @@ class BottomBarOverlay(
      * eingefahren ist (Breite, Höhe).
      */
     fun show(top: Int, rest: Rect, state: BarUiState) {
+        // Fährt gerade weg (Tastatur, Video): nicht mittendrin zurückholen. Danach zeigt der nächste Durchgang sie
+        // wieder, falls nötig.
+        if (isSlidingAway || SystemClock.uptimeMillis() < holdHiddenUntil) return
         underMenu = false
         place(top, rest, state.copy(dim = 0f, hole = null, veil = null))
     }
@@ -199,6 +202,43 @@ class BottomBarOverlay(
     /** Fährt gerade weg (Scans blockieren das Zeichnen, darum solange keine). */
     val isSliding: Boolean get() = slide != null
 
+    /** Nach dem Wegfahren eine Weile nicht wieder zeigen (z. B. bis die Tastatur gemeldet wird). */
+    private var holdHiddenUntil = 0L
+
+    fun releaseHold() {
+        holdHiddenUntil = 0L
+    }
+
+    /** Fährt gerade weg und verschwindet danach ganz ([slideAway]). */
+    var isSlidingAway = false
+        private set
+
+    /**
+     * Sanft nach unten wegfahren und danach verstecken (Tastatur geht auf, Video wird geöffnet) – statt einfach
+     * zu verschwinden. Berührungen gehen dabei schon durch.
+     */
+    fun slideAway(durationMs: Long, holdMs: Long = 0L) {
+        val v = view ?: return
+        if (!isShowing || slide != null) return
+        holdHiddenUntil = SystemClock.uptimeMillis() + durationMs + holdMs
+        isSlidingAway = true
+        underMenu = true
+        applyFlags()
+        slide = android.animation.ObjectAnimator.ofFloat(v, View.TRANSLATION_Y, v.translationY, target.height().toFloat()).apply {
+            duration = durationMs
+            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.6f, 1f)
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (slide !== animation) return
+                    slide = null
+                    isSlidingAway = false
+                    hide()
+                }
+            })
+            start()
+        }
+    }
+
     /**
      * Versteckte Leiste schon an die neue Stelle legen (z. B. gedreht, während ein Video offen ist). Auf dem Tablet
      * dauerte das Neu-Einrichten beim Wiederzeigen sonst ~350 ms, so lange sah man die echte.
@@ -214,8 +254,10 @@ class BottomBarOverlay(
     }
 
     private fun stopSlide() {
-        slide?.cancel()
+        val running = slide
         slide = null
+        isSlidingAway = false
+        running?.cancel()
         view?.translationY = 0f
     }
 

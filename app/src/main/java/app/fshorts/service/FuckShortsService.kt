@@ -314,6 +314,12 @@ class FuckShortsService : AccessibilityService() {
                     }
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                         if (closesBarlessPage(event)) showBeforeBarlessCloses()
+                        // Lupe oben: Die Tastatur kommt gleich, gemeldet wird sie erst, wenn sie ganz da ist. Unsere
+                        // fährt schon jetzt sanft weg (die Seite mit den Vorschlägen hat keine Leiste).
+                        if (isSearchButton(event) && overlay.isShowing && !watchPageOpen) {
+                            reason("Suche getippt, unsere fährt weg")
+                            overlay.slideAway(SLIDE_AWAY_MS, SEARCH_HOLD_MS)
+                        }
                         touchedSinceEnter = true
                         onNavigation()
                         // Ein Tipp kann einen Short öffnen: die nächsten 1,5 s ganz oft nachsehen, damit er sofort zugeht.
@@ -409,8 +415,8 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
-    private fun drawPending(): Boolean = isTablet && overlay.isShowing && overlay.drawnAt < overlay.shownAt &&
-        SystemClock.uptimeMillis() - overlay.shownAt < TABLET_DRAW_WAIT_MS
+    private fun drawPending(): Boolean = overlay.isSlidingAway || (isTablet && overlay.isShowing &&
+        overlay.drawnAt < overlay.shownAt && SystemClock.uptimeMillis() - overlay.shownAt < TABLET_DRAW_WAIT_MS)
 
     private fun snapToEdges(r: Rect): Rect {
         val s = screenBounds()
@@ -534,6 +540,13 @@ class FuckShortsService : AccessibilityService() {
         continueScanSoon()
     }
 
+    private fun isSearchButton(event: AccessibilityEvent): Boolean {
+        val label = (event.contentDescription ?: event.text.firstOrNull())?.toString()?.trim()?.lowercase() ?: return false
+        if (label !in SEARCH_LABELS) return false
+        val r = Rect().also { event.source?.getBoundsInScreen(it) }
+        return r.isEmpty || r.top < screen.top + screen.height() / 5
+    }
+
     /** Tipp auf "Schliessen" in einem YouTube-Fenster ohne Leiste (z. B. Kamera nach Plus)? */
     private fun closesBarlessPage(event: AccessibilityEvent): Boolean {
         if (event.windowId == -1 || (event.windowId != barlessWindowId && event.windowId != coverWindowId)) return false
@@ -576,7 +589,14 @@ class FuckShortsService : AccessibilityService() {
     }
 
     private fun hideAll() {
+        // Fährt gerade sanft weg (Tastatur, Video): fertig fahren lassen, danach ist sie ohnehin weg.
+        if (overlay.isSlidingAway) return
         overlay.hide()
+    }
+
+    /** Sanft wegfahren statt verschwinden (Tastatur geht auf, Video wird geöffnet). Sonst wie [hideAll]. */
+    private fun hideSmooth() {
+        if (overlay.isShowing && !overlay.isSliding) overlay.slideAway(SLIDE_AWAY_MS) else hideAll()
     }
 
     private var lastReason = ""
@@ -655,7 +675,8 @@ class FuckShortsService : AccessibilityService() {
             menuFront = false
             menuOpen = false
             youTubeSince = 0L
-            hideAll()
+            if (keyboard) overlay.releaseHold()
+            if (keyboard) hideSmooth() else hideAll()
             return
         }
         // "Suchen": Die Ergebnisse haben eine Leiste, die gleich hinter der ausblendenden Tastatur hervorkommt.
@@ -838,7 +859,7 @@ class FuckShortsService : AccessibilityService() {
                 // Beim Öffnen fährt der Player noch hoch: immer die höchste Lage merken.
                 watchTop = minOf(watchTop, scanner.topOf(openWatch))
                 reason("Video offen")
-                hideAll()
+                hideSmooth()
                 return
             }
             // Video geht gerade zu: unsere Leiste sofort zeigen, die volle Suche unten prüft danach alles.
@@ -962,7 +983,8 @@ class FuckShortsService : AccessibilityService() {
             }
             reason("keine Leiste gefunden ($keepFail)")
             barlessWindowId = root.windowId
-            hideAll()
+            // Video geht auf: sanft wegfahren (die Video-Seite deckt die echte Leiste ab).
+            if (watchPageOpen) hideSmooth() else hideAll()
             val stuck = !barSeenOnce && now - youTubeSince > AUTO_DUMP_AFTER_MS
             if (stuck && now - lastAutoDumpAt > AUTO_DUMP_INTERVAL_MS) {
                 lastAutoDumpAt = now
@@ -1402,7 +1424,7 @@ class FuckShortsService : AccessibilityService() {
             if (node != null && watchStillOpen(node, now) != false) {
                 watchTop = minOf(watchTop, scanner.topOf(node))
                 reason("Video offen")
-                overlay.hide()
+                hideSmooth()
                 return
             }
             watchPageOpen = false
@@ -1457,7 +1479,8 @@ class FuckShortsService : AccessibilityService() {
             reason("Leiste nicht mehr da ($keepFail)")
             lastBar = null
             lastObservedTop = -1
-            overlay.hide()
+            // Video wird geöffnet (Tipp, nicht Plus/Kamera): sanft wegfahren. Sonst sofort weg.
+            if (now - lastNavAt < NAV_LINK_MS && now - createTappedAt > CREATE_HOLD_MS) hideSmooth() else hideAll()
             return
         }
         // Taucht die echte Leiste gerade wieder auf oder fährt hoch (z. B. Video verlassen), steht unsere
@@ -1475,7 +1498,7 @@ class FuckShortsService : AccessibilityService() {
         }
         if (watchPageOpen) {
             reason("Video offen")
-            overlay.hide()
+            hideSmooth()
             return
         }
         val fullyGone = observedTop >= screen.bottom - 2
@@ -1495,7 +1518,7 @@ class FuckShortsService : AccessibilityService() {
         if (onHome) {
             if (observedTop <= rest.top + 2) hiddenByScroll = false
             if (videoOpening && fullyGone) {
-                overlay.hide()
+                hideSmooth()
             } else {
                 if (!fullyGone || overlay.isShowing) hiddenByScroll = observedTop > rest.top + 2
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
@@ -2065,6 +2088,7 @@ class FuckShortsService : AccessibilityService() {
         private const val MINI_WALK_MS = 5_000L
         private const val DRAW_FIRST_MS = 50L
         private const val EDGE_SNAP_PX = 3
+        private const val SLIDE_AWAY_MS = 450L
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L
         private const val FEED_GRACE_MS = 600L
@@ -2110,6 +2134,12 @@ class FuckShortsService : AccessibilityService() {
         /** Schleier im hellen Design (Pixel 9 gemessen). */
         private val DEFAULT_VEIL_LIGHT = android.graphics.Color.rgb(0xC9, 0xD2, 0xDC)
         private const val SYSTEM_UI = "com.android.systemui"
+        private const val SEARCH_HOLD_MS = 900L
+        private val SEARCH_LABELS = setOf(
+            "suchen", "search", "rechercher", "buscar", "pesquisar", "cerca", "zoeken", "szukaj", "ara", "поиск",
+            "пошук", "検索", "검색", "搜索", "搜尋", "بحث", "खोजें", "telusuri", "tìm kiếm", "ค้นหา", "sök", "søg", "søk",
+            "haku", "hledat", "căutare", "keresés", "αναζήτηση",
+        )
         private val CLOSE_LABELS = listOf(
             "schließen", "schliessen", "close", "zurück", "navigate up", "nach oben", "fermer", "cerrar", "fechar",
             "chiudi", "sluiten", "zamknij", "kapat", "закрыть", "закрити", "閉じる", "닫기", "关闭", "關閉", "إغلاق",
