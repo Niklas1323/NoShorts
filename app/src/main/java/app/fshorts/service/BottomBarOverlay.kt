@@ -120,6 +120,10 @@ class BottomBarOverlay(
     var shownAt = 0L
         private set
 
+    /** Wann Android unsere Leiste zuletzt gezeichnet hat (zum Abwarten vor langen Scans, siehe Dienst). */
+    var drawnAt = 0L
+        private set
+
     /** Oberkante unserer Leiste auf dem Bildschirm (nur gültig, wenn [isShowing]). */
     val top: Int get() = target.top
 
@@ -300,6 +304,7 @@ class BottomBarOverlay(
         return ComposeView(service).apply {
             setViewTreeLifecycleOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
+            viewTreeObserver.addOnDrawListener { drawnAt = SystemClock.uptimeMillis() }
             // Berührungen selbst auswerten statt über Compose: einfacher und zuverlässiger in einem Overlay.
             // Die Leiste hat vier gleich breite Spalten: Startseite, Abos, Mein YouTube, Plus.
             setOnTouchListener(TapHandler(onTap = tap@{ x, width ->

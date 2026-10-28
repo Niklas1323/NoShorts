@@ -188,11 +188,15 @@ class FuckShortsService : AccessibilityService() {
             return@Runnable
         }
         // Tablet: Ein Scan dauert dort bis 1 s und blockiert das Zeichnen. War er schon eingeplant, als unsere
-        // Leiste eben gezeigt wurde, sah man so lange die echte (z. B. Video runtergewischt). Erst zeichnen lassen.
+        // Leiste eben gezeigt wurde, sah man so lange die echte (z. B. Video runtergewischt, zurück zu YouTube).
+        // Erst warten, bis Android sie wirklich gezeichnet hat (höchstens TABLET_DRAW_WAIT_MS), dann noch kurz.
         if (isTablet) {
-            val wait = maxOf(overlay.shownAt, movedAt) + TABLET_DRAW_FIRST_MS - SystemClock.uptimeMillis()
-            if (wait > 0) {
-                handler.postDelayed({ scheduleScan() }, wait)
+            val now = SystemClock.uptimeMillis()
+            val shown = maxOf(overlay.shownAt, movedAt)
+            val drawn = overlay.drawnAt > shown
+            val wait = if (drawn) overlay.drawnAt + DRAW_FIRST_MS - now else shown + TABLET_DRAW_WAIT_MS - now
+            if (overlay.isShowing && wait > 0) {
+                handler.postDelayed({ scheduleScan() }, if (drawn) wait else minOf(wait, POLL_MS))
                 return@Runnable
             }
         }
@@ -1960,7 +1964,7 @@ class FuckShortsService : AccessibilityService() {
         private const val MINI_CHECK_MS = 400L
         private const val MINI_WALK_MS = 5_000L
         private const val DRAW_FIRST_MS = 50L
-        private const val TABLET_DRAW_FIRST_MS = 150L
+        private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L
         private const val FEED_GRACE_MS = 600L
         private const val FOREGROUND_GAP_MS = 500L
