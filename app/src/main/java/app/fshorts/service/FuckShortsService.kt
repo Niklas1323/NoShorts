@@ -1038,6 +1038,13 @@ class FuckShortsService : AccessibilityService() {
             if (closing && now - shadeClosingAt >= SHADE_GAP_MS) shadeClosingAt = now
             hiddenByScroll = false
             overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        } else if (isTablet && shadePanel(shade, rest) != null) {
+            // Tablet quer: Die Benachrichtigungen sind eine Spalte in der Mitte. Links und rechts davon schimmert die
+            // echte Leiste durch, beim Zuklappen ~4 Bilder ganz. Darum Fläche in Schleierfarbe mit Loch für die Spalte.
+            reason("Benachrichtigungen offen (Spalte), Fläche mit Loch")
+            // Loch erst, wenn die Spalte bis zur Leiste reicht (beim Aufziehen schimmerte sonst dort die echte durch).
+            val hole = shadePanel(shade, rest)?.takeIf { shadeCoversBar(shade, rest) }
+            overlay.showVeiled(rest, state, shadeVeil ?: defaultVeil(), hole)
         } else if (now - shadeOpenedAt < SHADE_VEIL_MS || now - shadeTouchAt < SHADE_TOUCH_VEIL_MS ||
             !shadeCoversBar(shade, rest)
         ) {
@@ -1070,6 +1077,19 @@ class FuckShortsService : AccessibilityService() {
     private fun defaultVeil() = if (nightMode == Configuration.UI_MODE_NIGHT_YES) DEFAULT_VEIL else DEFAULT_VEIL_LIGHT
 
     /** Reichen die Benachrichtigungen (fertig aufgezogen) bis über die Leiste? Dann decken sie sie selbst ab. */
+    /** Tablet quer: Bereich der schmalen Benachrichtigungs-Spalte über unserer Leiste, sonst null. */
+    private fun shadePanel(shade: AccessibilityNodeInfo, rest: Rect): Rect? {
+        val stack = shade.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/notification_stack_scroller")
+            .firstOrNull() ?: return null
+        val r = Rect().also { stack.getBoundsInScreen(it) }
+        // Nur quer: Hochkant ist die Spalte fast so breit wie die Leiste, dort gilt die Regel wie auf dem Handy.
+        val display = displayBounds()
+        if (display.width() <= display.height() || r.isEmpty || r.width() > rest.width() * 3 / 4) return null
+        // Die Spalte reicht bis unten (Knöpfe "Löschen" usw.): Loch über die ganze Höhe unserer Leiste, etwas breiter.
+        val pad = (8 * resources.displayMetrics.density).toInt()
+        return Rect(r.left - pad, rest.top, r.right + pad, rest.bottom)
+    }
+
     private fun shadeCoversBar(shade: AccessibilityNodeInfo, rest: Rect): Boolean {
         val stack = shade.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/notification_stack_scroller")
             .firstOrNull() ?: return true

@@ -158,9 +158,10 @@ class BottomBarOverlay(
      * Benachrichtigungen offen: nur eine Fläche in der Farbe des Schleiers, Berührungen gehen durch (sie gehören
      * dann den Benachrichtigungen).
      */
-    fun showVeiled(rest: Rect, state: BarUiState, veil: Int) {
+    fun showVeiled(rest: Rect, state: BarUiState, veil: Int, panel: Rect? = null) {
         underMenu = true
-        place(rest.top, rest, state.copy(dim = 0f, hole = null, veil = veil))
+        val hole = panel?.let { Rect(it).apply { offset(-rest.left, -rest.top) } }
+        place(rest.top, rest, state.copy(dim = 0f, hole = hole, veil = veil))
     }
 
     /**
@@ -422,7 +423,25 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
     val barHeight = with(density) { state.barHeightPx.toDp() }
     val holeRadius = with(density) { 16.dp.toPx() }
     state.veil?.let { veil ->
-        Box(Modifier.fillMaxSize().background(Color(veil)))
+        // Mit Loch: Tablet quer, Benachrichtigungen als Spalte in der Mitte – die bleibt frei.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    state.hole?.let { h ->
+                        drawRoundRect(
+                            color = Color.Transparent,
+                            topLeft = Offset(h.left.toFloat(), h.top.toFloat()),
+                            size = Size(h.width().toFloat(), h.height().toFloat()),
+                            cornerRadius = CornerRadius(holeRadius, holeRadius),
+                            blendMode = BlendMode.Clear,
+                        )
+                    }
+                }
+                .background(Color(veil)),
+        )
         return
     }
     Box(
