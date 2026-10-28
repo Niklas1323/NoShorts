@@ -296,9 +296,31 @@ Tablet geprüft, in Ordnung: Startseite hoch/quer, Scrollen, Tabs (je 6/6), ⋮-
 (hoch/quer, Zurück und Wischen), Suche 4×, Suchfilter hoch/quer, Benachrichtigungen, Home/zurück, Short per Link
 (spielt, Weiterwischen wird zurückgewischt), Bildschirm aus/an, Splitscreen (oben/unten, Tabs, Video), Pop-up-Ansicht
 (Tabs 3/3, verschieben).
-Offen Tablet: Video verlassen mit Zurück 1–7 Bilder (Zurück meldet nichts); nach Drehen + Zurück manchmal 0,35 s;
-Hell-Modus nicht geprüft (YouTube steht auf eigenem Design "dunkel", nicht verstellt). Nicht lösbar: Entsperr-
-Animation, Splitscreen tauschen (0,35 s), Pop-up maximieren (0,6 s) – System-Animationen.
+### Nachmittag 28.10.: Tablet fertig gemacht
+- **Jede Sprache:** Knöpfe werden notfalls nach Lage erkannt (`collectByPosition` in `YouTubeScanner`, nur bei
+  YouTubes eigener Leiste per ID; Rechts-nach-links gespiegelt). Mit absichtlich leerer Wortliste geprüft (Tabs 3/3,
+  Video). Dazu Wörter für ~25 Sprachen in `selectors.json` (Nicht interessiert, Schliessen …), Regal-Wort wird von der
+  Leiste gelernt (`learnedShortsWord`). Ersatztext immer Englisch (Home/Subscriptions/You). YouTube folgt nur der
+  Systemsprache (App-Sprache wird ignoriert) → andere Sprachen am Gerät nicht geprüft.
+- **Keine neue Berechtigung** (Play-Store-Prüfung): Tastenfilter bewusst NICHT eingebaut.
+- **Erst zeichnen, dann abfragen (Tablet):** Bei laufendem Video wartet jede Abfrage an YouTube bis 200 ms. Nachführen
+  und Meldungen warten jetzt, bis unsere Leiste gezeichnet ist (`drawPending`, `overlay.drawnAt`). Video verlassen
+  nach dem Drehen: vorher 0,3–0,9 s, jetzt 0–4 Bilder.
+- **Benachrichtigungen quer:** Spalte in der Mitte → Fläche in Schleierfarbe mit Loch (`shadePanel`), Loch erst, wenn
+  die Spalte bis zur Leiste reicht. Hochkant unverändert.
+- **Dialog (Suchfilter):** Berührung → Bild für Bild nachsehen; nach "Abbrechen" sofort wieder hell.
+- **Hell** (YouTube-Design kurz auf "Hell", danach zurück auf "Gerätedesign verwenden"): hoch und quer geprüft.
+- **Test-Sicherheit:** `safetap`/`leavevideo` in `tab.sh` – nie auf Feed-Stellen tippen, solange ein Video offen ist
+  (ein Tipp landete einmal auf "Melden"; Fenster ohne Auswahl wieder geschlossen, nichts gemeldet).
+
+**Tablet: nichts Lösbares mehr offen.** Nicht lösbar (Android/YouTube), mit Grund:
+- Video verlassen (Zurück-Wischen/Taste): 0–4 Bilder, bei laufender Werbung bis ~10. YouTube meldet die neue Seite
+  erst so spät; vorher gibt es kein Zeichen (auch kein System-Fenster für die Geste).
+- Benachrichtigungen ohne Berührung zugeklappt (nur per Befehl möglich): selten 3 Bilder.
+- Suchfilter durch Tipp daneben geschlossen: unsere ~0,3 s zu lange abgedunkelt (Dialog bleibt bis Ende der
+  Ausblend-Animation gemeldet). Nur Optik, echte Leiste nie sichtbar.
+- System-Animationen: Entsperren, Splitscreen tauschen (0,35 s), Pop-up maximieren (0,6 s), Drehen, App-Übersicht.
+- Shorts-Regale: YouTube zeigte keine (nicht erzwingbar). Hochkant werden sie per "Nicht interessiert" entfernt.
 
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
