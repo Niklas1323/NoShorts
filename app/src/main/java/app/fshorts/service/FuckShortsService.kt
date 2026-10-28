@@ -120,6 +120,10 @@ class FuckShortsService : AccessibilityService() {
     private var ourShownAt = 0L
     /** Unsere Leiste ist gerade wie hinter einem Dialog abgedunkelt. */
     private var dialogDimmed = false
+    /** Unsere ist unter einem Dialog weggefahren, der die ganze Leiste abdeckt (siehe slideDown). */
+    private var dialogSlid = false
+    /** Nach einer Berührung im Dialog nicht nochmals wegfahren, bis er zu ist. */
+    private var dialogNoSlide = false
     /** Seit wann der Player die echte Leiste überdeckt (0 = nicht). */
     private var coveredSince = 0L
     private var themeChangedAt = 0L
@@ -178,6 +182,11 @@ class FuckShortsService : AccessibilityService() {
 
     private val scanRunnable = Runnable {
         scanPending = false
+        // Unsere fährt gerade unter einen Dialog weg: erst fertig animieren lassen (ein Scan liesse sie ruckeln).
+        if (overlay.isSliding) {
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return@Runnable
+        }
         // Tablet: Ein Scan dauert dort bis 1 s und blockiert das Zeichnen. War er schon eingeplant, als unsere
         // Leiste eben gezeigt wurde, sah man so lange die echte (z. B. Video runtergewischt). Erst zeichnen lassen.
         if (isTablet) {
@@ -230,6 +239,9 @@ class FuckShortsService : AccessibilityService() {
             // Tablet: Beim Runterwischen des Videos meldet YouTube nichts, bis der Mini-Player steht (~1 s echte
             // Leiste). Nach jeder Berührung darum Bild für Bild nachsehen, ob der Player wegrutscht.
             if (isTablet && watchPageOpen && youTubeActive) startPolling()
+            // Unter einem Dialog weggefahren: Jede Berührung kann ihn schliessen (Abbrechen, daneben, Zurück-Geste).
+            // Das merkt der Scan erst ~0,3 s später, so lange sähe man die echte. Darum sofort abgedunkelt zurück.
+            if (dialogSlid) bringBackFromSlide()
         }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         menuDim = Prefs.menuDim(this)
@@ -354,6 +366,20 @@ class FuckShortsService : AccessibilityService() {
             restBounds = null
         }
         hideAll()
+    }
+
+    private fun bringBackFromSlide() {
+        dialogSlid = false
+        dialogNoSlide = true
+        val rest = restBounds ?: return
+        val state = lastUiState ?: return
+        val popup = popupFront(foregroundWindow()?.root)
+        if (popup != null) {
+            reason("Berührung im Dialog, unsere abgedunkelt zurück")
+            overlay.showUnderMenu(rest, state.copy(style = currentStyle()), DIALOG_DIM, popup)
+        } else {
+            overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        }
     }
 
     private fun sizeKey(r: Rect) = "${r.left},${r.top},${r.width()}x${r.height()}"
@@ -646,11 +672,20 @@ class FuckShortsService : AccessibilityService() {
             val rest = restBounds
             val state = lastUiState
             val big = popup.width().toLong() * popup.height() > screen.width().toLong() * screen.height() / 6
-            if (big && rest != null && state != null && now - ourShownAt < DIALOG_SHOWN_MS && !watchPageOpen) {
-                // Dialog (z. B. Suchfilter): Android dunkelt alles dahinter ab, auch die echte Leiste. Unsere genauso.
-                reason("Dialog vorne, unsere abgedunkelt")
+            if (big && rest != null && state != null && (dialogSlid || now - ourShownAt < DIALOG_SHOWN_MS) && !watchPageOpen) {
                 dialogDimmed = true
-                overlay.showUnderMenu(rest, state.copy(style = currentStyle()), DIALOG_DIM, popup)
+                // Deckt der Dialog die ganze Leiste ab, fährt unsere sanft darunter weg (die echte bleibt verdeckt).
+                // Sonst (z. B. Tablet: Dialog in der Mitte) sähe man dabei die echte: dann abgedunkelt stehen lassen.
+                val coversBar = popup.left <= rest.left + 2 && popup.right >= rest.right - 2 && popup.bottom >= rest.bottom - 2
+                if (!dialogNoSlide && (dialogSlid || coversBar)) {
+                    reason("Dialog deckt die Leiste, unsere fährt runter")
+                    dialogSlid = true
+                    overlay.slideDown(rest, state.copy(style = currentStyle()))
+                } else {
+                    // Dialog (z. B. Suchfilter): Android dunkelt alles dahinter ab, auch die echte Leiste. Unsere genauso.
+                    reason("Dialog vorne, unsere abgedunkelt")
+                    overlay.showUnderMenu(rest, state.copy(style = currentStyle()), DIALOG_DIM, popup)
+                }
             } else {
                 reason("kleines Menü vorne, unsere bleibt")
             }
@@ -659,6 +694,9 @@ class FuckShortsService : AccessibilityService() {
         }
         if (dialogDimmed) {
             dialogDimmed = false
+            // Nach dem Wegfahren kommt unsere ohne Animation sofort wieder ganz (kein Hochfahren: dabei sähe man die echte).
+            dialogSlid = false
+            dialogNoSlide = false
             val rest = restBounds
             val state = lastUiState
             if (rest != null && state != null && overlay.isShowing) overlay.show(rest.top, rest, state.copy(style = currentStyle()))

@@ -109,6 +109,7 @@ class BottomBarOverlay(
     private var appliedFlags = 0
     private var underMenu = false
     private var ignoreTapsUntil = 0L
+    private var slide: android.animation.Animator? = null
 
     var isShowing = false
         private set(value) {
@@ -169,7 +170,38 @@ class BottomBarOverlay(
         place(rest.top, rest, state.copy(dim = dim, hole = hole, veil = null))
     }
 
-    private fun place(top: Int, rest: Rect, state: BarUiState) {
+    /**
+     * Ein Dialog (z. B. Suchfilter) deckt die ganze Leiste ab: unsere fährt sanft nach unten weg. Das Fenster bleibt
+     * dabei an seiner Stelle und "sichtbar", so ist sie nach dem Schliessen mit [show] sofort wieder ganz da.
+     */
+    fun slideDown(rest: Rect, state: BarUiState) {
+        underMenu = true
+        place(rest.top, rest, state.copy(dim = 0f, hole = null, veil = null), keepSlide = true)
+        val v = view ?: return
+        if (slide != null || v.translationY > 0f) return
+        slide = android.animation.ObjectAnimator.ofFloat(v, View.TRANSLATION_Y, 0f, rest.height().toFloat()).apply {
+            duration = SLIDE_MS
+            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f)
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (slide === animation) slide = null
+                }
+            })
+            start()
+        }
+    }
+
+    /** Fährt gerade weg (Scans blockieren das Zeichnen, darum solange keine). */
+    val isSliding: Boolean get() = slide != null
+
+    private fun stopSlide() {
+        slide?.cancel()
+        slide = null
+        view?.translationY = 0f
+    }
+
+    private fun place(top: Int, rest: Rect, state: BarUiState, keepSlide: Boolean = false) {
+        if (!keepSlide) stopSlide()
         val keepOptimistic = optimistic != null &&
             SystemClock.uptimeMillis() - optimisticAt < OPTIMISTIC_MS &&
             state.selected != optimistic
@@ -217,6 +249,7 @@ class BottomBarOverlay(
     fun hide() {
         val v = view ?: return
         if (!isShowing) return
+        stopSlide()
         isShowing = false
         // Durchsichtig statt unsichtbar: Ein unsichtbares Fenster richtet Android beim Wiederzeigen neu ein
         // (1–2 Bilder später, z. B. beim Verlassen eines Videos sah man so die echte Leiste kurz).
@@ -307,6 +340,7 @@ class BottomBarOverlay(
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         const val OPTIMISTIC_MS = 600L
+        const val SLIDE_MS = 300L
         const val IGNORE_AFTER_PASS_THROUGH_MS = 700L
         val COLUMNS = listOf(TabKind.HOME, TabKind.SUBSCRIPTIONS, TabKind.YOU, TabKind.CREATE)
     }
