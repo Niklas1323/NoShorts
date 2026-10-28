@@ -460,7 +460,7 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
             TabSlot(
                 modifier = Modifier.weight(1f),
                 kind = TabKind.HOME,
-                label = state.labels[TabKind.HOME] ?: "Startseite",
+                label = state.labels[TabKind.HOME] ?: "Home",
                 state = state,
                 onTap = onTap,
                 onLongPress = onLongPress,
@@ -470,7 +470,7 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
             TabSlot(
                 modifier = Modifier.weight(1f),
                 kind = TabKind.SUBSCRIPTIONS,
-                label = state.labels[TabKind.SUBSCRIPTIONS] ?: "Abos",
+                label = state.labels[TabKind.SUBSCRIPTIONS] ?: "Subscriptions",
                 state = state,
                 onTap = onTap,
                 onLongPress = onLongPress,
@@ -505,7 +505,7 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
             TabSlot(
                 modifier = Modifier.weight(1f),
                 kind = TabKind.YOU,
-                label = state.labels[TabKind.YOU] ?: "Mein YouTube",
+                label = state.labels[TabKind.YOU] ?: "You",
                 state = state,
                 onTap = onTap,
                 onLongPress = onLongPress,

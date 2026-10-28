@@ -2034,7 +2034,11 @@ class FuckShortsService : AccessibilityService() {
         /** Schleier im hellen Design (Pixel 9 gemessen). */
         private val DEFAULT_VEIL_LIGHT = android.graphics.Color.rgb(0xC9, 0xD2, 0xDC)
         private const val SYSTEM_UI = "com.android.systemui"
-        private val CLOSE_LABELS = listOf("schließen", "schliessen", "close", "zurück", "navigate up", "nach oben")
+        private val CLOSE_LABELS = listOf(
+            "schließen", "schliessen", "close", "zurück", "navigate up", "nach oben", "fermer", "cerrar", "fechar",
+            "chiudi", "sluiten", "zamknij", "kapat", "закрыть", "закрити", "閉じる", "닫기", "关闭", "關閉", "إغلاق",
+            "बंद करें", "tutup", "đóng", "ปิด", "stäng", "luk", "lukk", "sulje", "zavřít", "închide", "bezárás", "κλείσιμο",
+        )
 
         @Volatile
         var running = false

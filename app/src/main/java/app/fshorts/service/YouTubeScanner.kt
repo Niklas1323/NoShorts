@@ -254,7 +254,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
     fun findShelves(root: AccessibilityNodeInfo, screen: Rect, limitBottom: Int): List<Shelf> {
         val result = mutableListOf<Shelf>()
         val feed = findFeed(root, screen)
-        for (label in sel.shelfHeaderLabels) {
+        for (label in (sel.shelfHeaderLabels + listOfNotNull(learnedShortsWord)).distinct()) {
             // Manche Überschriften (z. B. auf "Abos") haben nur eine Beschreibung, die findet die Textsuche
             // von Android nicht: dann in den Einträgen der Liste selbst nachsehen.
             val hits = root.findAccessibilityNodeInfosByText(label) + (feed?.let { headersIn(it, label) } ?: emptyList())
@@ -453,9 +453,96 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
         val tabs = mutableMapOf<TabKind, TabInfo>()
         val nodes = mutableMapOf<TabKind, AccessibilityNodeInfo>()
         collectTabs(container, 0, b, tabs, nodes)
+        // Unbekannte Sprache (Wörter passen nicht): Knöpfe nach ihrer Reihenfolge zuordnen. Nur bei YouTubes eigener
+        // Leiste (bekannte ID), sonst könnte eine beliebige Knopfreihe unten als Leiste gelten.
+        if ((tabs.size < 2 || (TabKind.HOME !in tabs && TabKind.SUBSCRIPTIONS !in tabs)) && isKnownBar(container)) {
+            tabs.clear()
+            nodes.clear()
+            collectByPosition(container, b, tabs, nodes)
+        }
         if (tabs.size < 2) return null
         if (TabKind.HOME !in tabs && TabKind.SUBSCRIPTIONS !in tabs) return null
+        tabs[TabKind.SHORTS]?.label?.let { learnedShortsWord = it }
         return FoundBar(container, Rect(b), tabs, nodes)
+    }
+
+    /** Das Wort für "Shorts" in der Sprache der App (von der Leiste gelernt), für die Überschrift der Regale. */
+    var learnedShortsWord: String? = null
+        private set
+
+    private fun isKnownBar(container: AccessibilityNodeInfo): Boolean {
+        val id = container.viewIdResourceName ?: return false
+        return id == learnedBarId || sel.barIds.any { sel.fullId(it) == id }
+    }
+
+    /**
+     * Ordnet die Knöpfe nach der Lage zu, in jeder Sprache gleich: Startseite, Shorts, Erstellen, Abos, Mein YouTube
+     * (ohne Erstellen: 4 Knöpfe). Rechts-nach-links-Sprachen (Arabisch, Hebräisch) zeigen sie gespiegelt: Dann steht
+     * "Mein YouTube" (mit Profilbild) links. Erstellen hat als einziger keinen sichtbaren Text.
+     */
+    private fun collectByPosition(
+        container: AccessibilityNodeInfo,
+        barBounds: Rect,
+        tabs: MutableMap<TabKind, TabInfo>,
+        nodes: MutableMap<TabKind, AccessibilityNodeInfo>,
+    ) {
+        val found = mutableListOf<Pair<AccessibilityNodeInfo, Rect>>()
+        collectClickable(container, 0, barBounds, found)
+        if (found.size !in 4..5) return
+        var ordered = found.sortedBy { it.second.left }
+        val withText = ordered.map { deepTextNode(it.first, 0) != null }
+        val textless = withText.count { !it }
+        if (found.size == 5 && (textless != 1 || withText[2])) return
+        if (found.size == 4 && textless != 0) return
+        // Profilbild ganz links: gespiegelt.
+        if (findThumbnail(ordered.first().first, 0) && !findThumbnail(ordered.last().first, 0)) ordered = ordered.reversed()
+        val kinds = if (found.size == 5) {
+            listOf(TabKind.HOME, TabKind.SHORTS, TabKind.CREATE, TabKind.SUBSCRIPTIONS, TabKind.YOU)
+        } else {
+            listOf(TabKind.HOME, TabKind.SHORTS, TabKind.SUBSCRIPTIONS, TabKind.YOU)
+        }
+        for ((i, kind) in kinds.withIndex()) {
+            val (child, r) = ordered[i]
+            val textNode = deepTextNode(child, 0)
+            tabs[kind] = TabInfo(
+                kind = kind,
+                bounds = Rect(r),
+                label = textNode?.text?.toString()?.trim(),
+                labelBounds = textNode?.let { Rect().also(it::getBoundsInScreen) },
+                iconBounds = findIcon(child, 0),
+                selected = isSelectedDeep(child, 0),
+                badge = hasBadge(child),
+            )
+            nodes[kind] = child
+        }
+    }
+
+    private fun collectClickable(
+        node: AccessibilityNodeInfo,
+        depth: Int,
+        barBounds: Rect,
+        out: MutableList<Pair<AccessibilityNodeInfo, Rect>>,
+    ) {
+        val r = Rect()
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            child.getBoundsInScreen(r)
+            if (child.isClickable && r.width() in 1..(barBounds.width() / 2)) {
+                out += child to Rect(r)
+                continue
+            }
+            if (depth < 6) collectClickable(child, depth + 1, barBounds, out)
+        }
+    }
+
+    private fun findThumbnail(node: AccessibilityNodeInfo, depth: Int): Boolean {
+        if (node.viewIdResourceName?.contains("thumbnail") == true) return true
+        if (depth >= 4) return false
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            if (findThumbnail(child, depth + 1)) return true
+        }
+        return false
     }
 
     private fun collectTabs(
