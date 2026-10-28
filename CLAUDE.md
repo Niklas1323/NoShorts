@@ -320,7 +320,7 @@ Tablet geprüft, in Ordnung: Startseite hoch/quer, Scrollen, Tabs (je 6/6), ⋮-
 - Suchfilter durch Tipp daneben geschlossen: unsere ~0,3 s zu lange abgedunkelt (Dialog bleibt bis Ende der
   Ausblend-Animation gemeldet). Nur Optik, echte Leiste nie sichtbar.
 - System-Animationen: Entsperren, Splitscreen tauschen (0,35 s), Pop-up maximieren (0,6 s), Drehen, App-Übersicht.
-- Shorts-Regale: YouTube zeigte keine (nicht erzwingbar). Hochkant werden sie per "Nicht interessiert" entfernt.
+- Shorts-Regale: YouTube zeigte keine (nicht erzwingbar), Entfernen per "Nicht interessiert" darum am Tablet ungeprüft.
 
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
