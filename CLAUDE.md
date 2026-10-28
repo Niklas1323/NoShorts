@@ -267,6 +267,39 @@ Noch offen (mit Ideen):
 - Dialog zu: unsere ~10 Bilder zu lange abgedunkelt (kosmetisch).
 - Anruf: auf Wunsch des Nutzers nicht getestet. Bildschirm aus/an nicht getestet.
 
+## Neu am 28.10.2026, Morgen: Tablet (Galaxy Tab A8 SM-X200, Android 14, 1200x1920, 240 dpi, YouTube 21.42.243, dunkel)
+Alles Tablet-Spezifische hängt an `isTablet` (smallestScreenWidthDp >= 600), das Handy läuft wie vorher. Ausnahme:
+Suchfilter-Animation (Wunsch des Nutzers, betrifft auch das Handy, dort noch NICHT getestet).
+YouTube zeigt auf dem Tablet hoch UND quer die Leiste unten (keine Seitenleiste). Echte Leiste hoch top=1776,
+quer top=1056, 72 px hoch. Testwerkzeuge: `tab.sh` im Scratchpad (realdet/oursgone/tstrips, Lagen für P/L).
+- **Video runterwischen** (schwebender Mini-Player): YouTube meldet nichts, bis er steht → vorher 1,1 s echte Leiste.
+  Jetzt: Berührung bei offenem Video → `startPolling()`; zusätzlich wartet ein Scan, bis unsere wirklich gezeichnet
+  ist (`overlay.drawnAt`, max. `TABLET_DRAW_WAIT_MS`) – Scans dauern auf dem Tablet bis 1,2 s und blockieren das
+  Zeichnen. Rest: 0–3 Bilder.
+- **Kamera nach Plus:** YouTube meldet die Leiste beim Schliessen kurz 32 px zu hoch; das wurde als Ruhelage gelernt
+  (auch gespeichert) → unsere zu hoch und hell, darunter "Shorts". `rememberRestPosition` lernt das nicht mehr und
+  korrigiert eine falsche Lage (`wrongRest`). Nach der Fotos-Frage nicht mehr vorab über der Kamera (`leftWithoutBar`).
+- **Quer, Video-Seite** hat zwei Spalten, Player nur 70 % breit → galt nicht als Video (0,9 s echte Leiste).
+  `YouTubeScanner(tablet=true)`: 60 %.
+- **Drehen mit offenem Video:** YouTube baut den Player neu → neu suchen statt "verlassen" (`watchStillOpen`);
+  versteckte Leiste vorab an die neue Stelle (`overlay.prepare`), sonst 350 ms bis sie wieder gezeichnet war.
+- **Splitscreen:** Griff-Menü (Tauschen) ist ein kleines systemui-Fenster → galt als Benachrichtigungen, unsere weg.
+  Jetzt "kleines System-Menü vorne, unsere bleibt".
+- **Pop-up-Ansicht** (Samsung, schwebendes Fenster) und Splitscreen nebeneinander: Fenster gilt als Bildschirm
+  (`updateSplit`), unsere Leiste so breit wie das Fenster (`applyBounds`). Vorher abgedunkelt unten am Bildschirm.
+- **Suchfilter-Animation (neu, auch Handy):** Deckt der Dialog die ganze Leiste ab (Handy: Blatt von unten), fährt
+  unsere 300 ms nach unten weg (`overlay.slideDown`); Schliessen → sofort ganz da, kein Hochfahren. Jede Berührung
+  bringt sie sofort abgedunkelt zurück (`bringBackFromSlide`). Auf dem Tablet ist der Suchfilter ein Dialog in der
+  Mitte → bleibt wie bisher abgedunkelt. Animation auf dem Tablet nur erzwungen geprüft: **auf dem Handy testen!**
+
+Tablet geprüft, in Ordnung: Startseite hoch/quer, Scrollen, Tabs (je 6/6), ⋮-Menü, Kamera, Video öffnen/verlassen
+(hoch/quer, Zurück und Wischen), Suche 4×, Suchfilter hoch/quer, Benachrichtigungen, Home/zurück, Short per Link
+(spielt, Weiterwischen wird zurückgewischt), Bildschirm aus/an, Splitscreen (oben/unten, Tabs, Video), Pop-up-Ansicht
+(Tabs 3/3, verschieben).
+Offen Tablet: Video verlassen mit Zurück 1–7 Bilder (Zurück meldet nichts); nach Drehen + Zurück manchmal 0,35 s;
+Hell-Modus nicht geprüft (YouTube steht auf eigenem Design "dunkel", nicht verstellt). Nicht lösbar: Entsperr-
+Animation, Splitscreen tauschen (0,35 s), Pop-up maximieren (0,6 s) – System-Animationen.
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit
