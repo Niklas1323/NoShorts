@@ -231,7 +231,7 @@ class FuckShortsService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         selectors = Selectors.load(this)
-        scanner = YouTubeScanner(selectors, resources.displayMetrics.density)
+        scanner = YouTubeScanner(selectors, resources.displayMetrics.density, isTablet)
         overlay = BottomBarOverlay(this, ::onTabTapped, ::onBarLongPressed)
         dumper = TreeDumper(this)
         sampler = BarStyleSampler(this)

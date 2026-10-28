@@ -38,7 +38,7 @@ private const val PANEL_ID = "app_engagement_panel"
  * Verlässt sich nicht nur auf View-IDs: Wenn die ID nicht passt, suchen wir über die
  * Beschriftungen ("Shorts", "Startseite", ...) und die Position am unteren Rand.
  */
-class YouTubeScanner(private val sel: Selectors, private val density: Float) {
+class YouTubeScanner(private val sel: Selectors, private val density: Float, private val tablet: Boolean = false) {
 
     private var learnedBarId: String? = null
     private val maxBarHeight get() = (sel.maxBarHeightDp * density).toInt()
@@ -148,7 +148,8 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float) {
     private fun isLargePlayer(node: AccessibilityNodeInfo, screen: Rect): Boolean {
         if (!node.isVisibleToUser) return false
         val r = node.bounds()
-        val wide = r.width() >= screen.width() * 0.9
+        // Tablet quer: Video-Seite mit zwei Spalten, der Player ist nur ~70 % breit (Handy: ganze Breite).
+        val wide = r.width() >= screen.width() * (if (tablet) 0.6 else 0.9)
         val nearTop = r.top - screen.top < screen.height() * 0.35
         val playerSized = r.height() >= 150 * density && r.height() <= screen.height() * 0.7
         // Vollbild (z. B. quer): Der Player füllt den ganzen Bildschirm, das Video ist weiter offen.
