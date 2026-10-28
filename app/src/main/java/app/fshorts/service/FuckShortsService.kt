@@ -246,6 +246,12 @@ class FuckShortsService : AccessibilityService() {
             // Unter einem Dialog weggefahren: Jede Berührung kann ihn schliessen (Abbrechen, daneben, Zurück-Geste).
             // Das merkt der Scan erst ~0,3 s später, so lange sähe man die echte. Darum sofort abgedunkelt zurück.
             if (dialogSlid) bringBackFromSlide()
+            // Tablet: Dialog vorne (z. B. Suchfilter), Berührung kann ihn schliessen. Bild für Bild nachsehen, sonst
+            // blieb unsere ~0,3 s zu lange abgedunkelt.
+            if (isTablet && dialogDimmed) {
+                fastUntil = SystemClock.uptimeMillis() + DIALOG_CLOSE_FAST_MS
+                startPolling()
+            }
         }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         menuDim = Prefs.menuDim(this)
@@ -2002,6 +2008,7 @@ class FuckShortsService : AccessibilityService() {
         private const val KEYBOARD_FAST_MS = 100L
         /** So stark dunkelt Android hinter Dialogen ab (Standard, am Pixel gemessen: 255 → 102). */
         private const val DIALOG_DIM = 0.6f
+        private const val DIALOG_CLOSE_FAST_MS = 600L
         private const val DIALOG_SHOWN_MS = 1_000L
         private const val POPUP_AFTER_MS = 1_000L
         private const val POLL_DURATION_MS = 500L
