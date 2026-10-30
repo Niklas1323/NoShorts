@@ -1387,6 +1387,13 @@ class FuckShortsService : AccessibilityService() {
         restBounds?.let { r -> snapToEdges(r).takeIf { it != r }?.let { restBounds = it } }
         val rest = restBounds
         val b = snapToEdges(bar.bounds)
+        // Tablet: Gleiche Oberkante, aber kürzer: Die gemerkte Lage war zu hoch gelernt (auch gespeichert, 144 statt
+        // 72 px). Dann galt die Leiste nie als "still", Farbe und Profilbild wurden nie abgeschaut (weiss auf dunkel).
+        if (isTablet && rest != null && kotlin.math.abs(b.top - rest.top) <= 2 && b.bottom < rest.bottom - 2) {
+            Log.d(TAG, "Leiste: Ruhelage zu hoch, jetzt ${b.toShortString()} (war ${rest.toShortString()})")
+            restBounds = Rect(b)
+            return
+        }
         // Tablet: Beim Schliessen der Kamera meldet YouTube die Leiste kurz 32 px zu hoch (Unterkante über der
         // gewohnten). Das ist keine neue Ruhelage, sonst stand unsere danach zu hoch und hell, darunter "Shorts".
         if (isTablet && rest != null && b.bottom < rest.bottom - 2) return

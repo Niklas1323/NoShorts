@@ -31,6 +31,7 @@ class Shelf(
 
 // Shorts-Player von YouTube 21.41 (am Pixel nachgesehen): eine Seite pro Short in einer senkrechten Liste.
 private const val SHORTS_PAGE_ID = "reel_player_page_container"
+private const val EDIT_SUGGESTION_ID = "edit_suggestion"
 private val SHEET_IDS = listOf("design_bottom_sheet", "touch_outside")
 // Panel im YouTube-Fenster selbst (Werbe-Menü, auf der Video-Seite auch Kommentare), YouTube 21.42.
 private const val PANEL_ID = "app_engagement_panel"
@@ -307,6 +308,9 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
 
         val feed = path[feedIdx]
         val item = path[feedIdx - 1]
+        // Suchvorschlag "shorts" (Verlauf) ist kein Regal. Sonst tippten wir auf seinen Pfeil (füllt das Suchfeld) und
+        // gaben auf: Zurück, und bis zum Neustart wurden gar keine Regale mehr ausgeblendet.
+        if (item.findAccessibilityNodeInfosByViewId(sel.fullId(EDIT_SUGGESTION_ID)).isNotEmpty()) return null
         val parts = mutableListOf(item)
         val bounds = item.bounds()
         if (bounds.height() < 160 * density) {

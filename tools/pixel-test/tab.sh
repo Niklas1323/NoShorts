@@ -44,3 +44,8 @@ videoopen() { state | grep -q "Video offen"; }
 leavevideo() { adb shell input swipe 2 1000 450 1000 150; sleep 3; if videoopen; then adb shell input keyevent KEYCODE_BACK; sleep 3; fi; if videoopen; then echo "VIDEO NOCH OFFEN - Abbruch"; return 1; fi; }
 # Nur tippen, wenn kein Video offen ist
 safetap() { if videoopen; then echo "Video offen, Tipp $1 $2 übersprungen"; return 1; fi; adb shell input tap $1 $2; }
+# Sicher auf unsere Leiste tippen: Bricht ab, wenn der Tipp nicht angekommen ist (dann nicht blind weitertippen)
+tipcount() { adb logcat -d -s FuckShorts | grep -c 'Tipp: .*Klick'; }
+tapbar() { local b=$(tipcount) a; adb shell input tap $1 1810; sleep 0.6; a=$(tipcount); if [ "$a" -le "$b" ]; then sleep 1; a=$(tipcount); fi; if [ "$a" -le "$b" ]; then echo "ABBRUCH: Tipp $1 nicht angekommen"; return 1; fi; }
+# Welche App ist vorne?
+focus() { adb shell dumpsys window | grep -m1 mCurrentFocus | grep -oE 'permissioncontroller|youtube|launcher|chrome|vending' | head -1; }

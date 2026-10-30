@@ -369,6 +369,42 @@ zeigt englische Ersatztexte → echte Leiste hat wohl keinen Text bzw. ist umgeb
 **Am Pixel prüfen + Struktur holen** (`uiautomator dump` auf Startseite und Mein YouTube): Wie sieht die neue Leiste
 aus (Texte, `isSelected`)? Logcat "Tab gewählt: … (Leiste meldet …)".
 
+## Test der letzten Fixes – Tablet fertig, Handy offen
+30.10.2026, Heim-PC "Admin", Galaxy Tab A8 (SM-X200, Android 14), **YouTube 21.43.523**, YouTube dunkel, Gerät hell.
+Zuerst Release build-83 geprüft, danach lokaler Build mit den zwei Fixes unten (Stand dieses Commits).
+
+| Punkt | Ergebnis Tablet |
+|---|---|
+| 1 Scrollen | OK: 170 s Startseite (3973 Bilder), dazu Abos/Startseite (2811 Bilder): echte nie sichtbar, unsere nie weg, kein "Leiste nicht mehr da". **Nicht geprüft: Video in der Liste läuft an** – das gibt es auf dem Tablet nicht (Bild steht in den Pausen still). Am Handy prüfen! |
+| 2 Profilbild | OK: Ring nur auf Mein YouTube, hell und dunkel |
+| 3 Auswahl | OK: je >10 s auf jeder Seite, kein Springen, Logcat immer nur ein Tab gemeldet |
+| 4 Abos-Knopf | OK: 10/10 (5 von Startseite, 5 von Mein YouTube), Seite bleibt offen |
+| 5 Neues Design | Auf dem Tablet NICHT vorhanden: oben nur Chips ("Alle, Musik, …"), keine Reiter. Echte Leiste `pivot_bar` [0,1776][1200,1848] mit 5 Knöpfen (Startseite, Shorts, Erstellen, Abos, Mein YouTube), Texte da, `selected` stimmt (Startseite und Mein YouTube geprüft). Ist noch ungetestet, ob `findTopTab` am Handy greift. |
+| 6 Rest | OK: Video öffnen/verlassen 4/4, Plus→Kamera→X 5/5, Suche 5/5, Startseite/Abos/Mein YouTube je 5/5 |
+
+**Zwei Fehler behoben (Tablet geprüft, Handy noch nicht):**
+- **Leiste weiss auf dunklem YouTube:** Gespeicherte Ruhelage war 144 statt 72 px hoch ([0,1776][1200,1920], Herkunft unklar, wohl ein einzelner
+  Messwert). Das Tablet lernte eine kürzere Lage nie (Schutz gegen den Kamera-Fehler), `bar.bounds == restBounds` stimmte nie: keine
+  Farbe, kein neues Profilbild, unsere deckte Samsungs Taskleiste ab. `rememberRestPosition`: gleiche Oberkante + kürzer = neu lernen
+  (Logcat "Ruhelage zu hoch"). Korrigierte sich sofort beim Start.
+- **Suchverlauf "shorts" galt als Regal:** Zeile hiess genau wie die Überschrift. Wir tippten ihren Pfeil (Suchfeld füllte sich mit "shorts"),
+  fanden keinen Menüpunkt, drückten Zurück und setzten `shelfHideBroken` (bis zum Neustart keine Regale mehr ausgeblendet). `shelfFor` nimmt
+  keine Zeilen mit `edit_suggestion` mehr. Geprüft: Suche 5/5 ohne "Regal"-Meldung. **Regal-Ausblenden selbst nicht neu geprüft:** in diesen
+  Tests kam auf dem Tablet kein Regal vor. Am Handy prüfen.
+
+**Bleibt, nicht behoben:**
+- Video verlassen per Zurück-Wischen, Werbung lief: echte Leiste 4–5 Bilder (~0,13 s). Bekannte Grenze (siehe oben: 0–4, mit Werbung bis ~10).
+- Kamera mit Zurück-Taste verlassen: echte 1–3 Bilder (mit X: keine). Zurück meldet keinen Klick, darum kein Vorab-Zeigen.
+
+**Beim Testen beachten:**
+- Keine Tipps ohne Prüfung: Ein blinder Tipp traf eine Premium-Werbekarte, ein Wischen in der Listenmitte öffnete ein Mitglieder-Video mit
+  Mitgliedschafts-Blatt. Beides ohne Auswahl geschlossen, nichts gekauft, keine Berechtigung erteilt. Darum neu in `tab.sh`: `tapbar` (bricht ab,
+  wenn der Tipp nicht ankommt), `focus`; auf dem Tablet am Rand wischen (x=1188).
+- `realdet` schlägt beim Hochfahren der Fotos-Frage falsch an (weisse Fläche): immer Bilder ansehen. Die Frage kommt bei jedem Plus; nur mit Zurück
+  schliessen, Berechtigungen bleiben aus.
+
+**Offen:** Handy, Punkte 1–6 (mit beiden Fixes). Nach einem Fix am Handy wieder am Tablet prüfen.
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit
