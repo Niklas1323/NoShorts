@@ -212,6 +212,8 @@ class BarStyleSampler(private val service: AccessibilityService) {
                 crop.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             crop.recycle()
+            // Wie bei den Struktur-Dateien höchstens 12 behalten (sonst käme alle 30 s ein Bild dazu).
+            dumps.listFiles()?.sortedByDescending { it.lastModified() }?.drop(MAX_DUMP_FILES)?.forEach { it.delete() }
         }
     }
 
@@ -229,6 +231,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
         const val MIN_INTERVAL_MS = 1_000L
         const val RECHECK_MS = 30_000L
         const val AVATAR_DP = 24f
+        const val MAX_DUMP_FILES = 12
         const val ICON_BOX_DP = 28f
     }
 }

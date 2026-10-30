@@ -4,7 +4,8 @@ import android.content.Context
 
 object Prefs {
     private const val FILE = "fuckshorts"
-    private const val DISCLOSURE = "disclosure_accepted"
+    // v2: Hinweis wurde für den Play Store vervollständigt, darum muss man neu zustimmen.
+    private const val DISCLOSURE = "disclosure_accepted_v2"
     private const val DEBUG_DUMPS = "debug_dumps"
     private const val SHORTS_BLOCKED = "shorts_blocked"
     private const val AUTO_HIDE_SHELF = "auto_hide_shelf"

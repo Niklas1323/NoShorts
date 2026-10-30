@@ -76,6 +76,7 @@ private fun MainScreen() {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(isServiceEnabled(context)) }
     var accepted by remember { mutableStateOf(Prefs.disclosureAccepted(context)) }
+    var declined by remember { mutableStateOf(false) }
     var debug by remember { mutableStateOf(Prefs.debugDumps(context)) }
     var dumpCount by remember { mutableIntStateOf(TreeDumper.files(context).size) }
     var blocked by remember { mutableIntStateOf(Prefs.shortsBlocked(context)) }
@@ -106,15 +107,21 @@ private fun MainScreen() {
 
             StatusCard(enabled, blocked)
 
-            if (!enabled) {
-                if (!accepted) {
-                    DisclosureCard(onAccept = {
-                        Prefs.setDisclosureAccepted(context)
-                        accepted = true
-                    })
+            // Der Hinweis kommt immer zuerst, auch wenn die Bedienungshilfe schon an ist (z. B. ohne die App eingeschaltet).
+            if (!accepted) {
+                if (declined) {
+                    DeclinedCard(onShowAgain = { declined = false })
                 } else {
-                    SetupCard(context)
+                    DisclosureCard(
+                        onAccept = {
+                            Prefs.setDisclosureAccepted(context)
+                            accepted = true
+                        },
+                        onDecline = { declined = true },
+                    )
                 }
+            } else if (!enabled) {
+                SetupCard(context)
             } else {
                 Button(onClick = { openYouTube(context) }, modifier = Modifier.fillMaxWidth()) {
                     Text("YouTube öffnen")
@@ -126,8 +133,9 @@ private fun MainScreen() {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("Shorts-Regal wegklicken", fontWeight = FontWeight.Bold)
                         Text(
-                            "Die App tippt beim Shorts-Regal auf ⋮ → \"Nicht interessiert\". " +
-                                "Dann blendet YouTube das Regal selbst aus.",
+                            "Die App tippt beim Shorts-Regal auf ⋮ → \"Nicht interessiert\" (auf Abos bei jeder " +
+                                "Karte auf \"Ausblenden\"). Dann blendet YouTube das Regal selbst aus. " +
+                                "Das ändert deine YouTube-Empfehlungen.",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
@@ -183,23 +191,61 @@ private fun StatusCard(enabled: Boolean, blocked: Int) {
 }
 
 @Composable
-private fun DisclosureCard(onAccept: () -> Unit) {
+private fun DisclosureCard(onAccept: () -> Unit, onDecline: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Bevor es losgeht", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Damit F*ck Shorts funktioniert, braucht die App die Berechtigung \"Bedienungshilfen\".",
+                "F*ck Shorts braucht die Android-Berechtigung \"Bedienungshilfen\" (Accessibility-Service). " +
+                    "Die App ist kein Hilfsmittel für Menschen mit Behinderung. Sie nutzt diese Berechtigung nur, " +
+                    "um Shorts in der YouTube-App auszublenden. Ohne sie funktioniert die App nicht.",
             )
-            Text("Damit kann die App:")
-            Text("• sehen, wo in der YouTube-App welche Knöpfe sind")
-            Text("• eine eigene Leiste ohne Shorts darüberlegen")
-            Text("• \"Zurück\" drücken, wenn ein Short aufgeht")
-            Text("Was die App NICHT macht:")
-            Text("• Sie liest keine anderen Apps.")
-            Text("• Sie liest keine Passwörter oder Nachrichten.")
-            Text("• Sie schickt nichts ins Internet.")
+            Text("Was die App damit liest", fontWeight = FontWeight.Bold)
+            Text("• Den Aufbau der YouTube-App: Knöpfe, Texte (z. B. Videotitel) und wo sie auf dem Bildschirm sind.")
+            Text(
+                "• Welche App gerade vorne ist. Bei offenen Benachrichtigungen oder offener Tastatur nur, " +
+                    "wo sie auf dem Bildschirm liegen, nicht was drinsteht.",
+            )
+            Text("• Bildschirmfotos, um Farben und dein Profilbild für die eigene Leiste zu übernehmen.")
+            Text("Was die App damit in YouTube macht", fontWeight = FontWeight.Bold)
+            Text(
+                "• Sie legt eine eigene Leiste ohne Shorts-Knopf über die YouTube-Leiste. Tippst du darauf, " +
+                    "tippt die App auf den passenden YouTube-Knopf.",
+            )
+            Text(
+                "• Sie drückt \"Zurück\", sobald ein Short aufgeht. Ein per Link geöffneter Short darf laufen; " +
+                    "wischst du weiter, wischt die App zurück.",
+            )
+            Text(
+                "• Wenn \"Shorts-Regal wegklicken\" an ist: Sie tippt bei Shorts-Regalen auf ⋮ → " +
+                    "\"Nicht interessiert\" bzw. \"Ausblenden\". Das ändert deine YouTube-Empfehlungen. " +
+                    "Du kannst das unten ausschalten.",
+            )
+            Text("Was mit den Daten passiert", fontWeight = FontWeight.Bold)
+            Text("• Alles bleibt auf deinem Handy. Die App hat keinen Internetzugang und gibt nichts weiter.")
+            Text(
+                "• Gespeichert werden nur: ein Ausschnitt deines Profilbilds, die Lage der YouTube-Leiste und für " +
+                    "die Fehlersuche höchstens 12 Dateien mit dem Aufbau der YouTube-Seite. Diese kannst du unten " +
+                    "teilen oder löschen.",
+            )
+            Text("• Die App liest keine Passwörter, keine Nachrichten und keine Inhalte anderer Apps.")
             Button(onClick = onAccept, modifier = Modifier.fillMaxWidth()) {
-                Text("Verstanden, weiter")
+                Text("Zustimmen")
+            }
+            OutlinedButton(onClick = onDecline, modifier = Modifier.fillMaxWidth()) {
+                Text("Ablehnen")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeclinedCard(onShowAgain: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Ohne diese Berechtigung kann F*ck Shorts nichts tun.")
+            OutlinedButton(onClick = onShowAgain, modifier = Modifier.fillMaxWidth()) {
+                Text("Hinweis nochmals zeigen")
             }
         }
     }

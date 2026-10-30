@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">F*ck Shorts</string>
-    <string name="a11y_description">F*ck Shorts versteckt den Shorts-Knopf in der YouTube-App und schliesst Shorts sofort wieder. Dafür liest die App nur den Aufbau der YouTube-App (wo welche Knöpfe sind). Nichts davon wird gespeichert oder verschickt. Andere Apps werden nicht gelesen.</string>
+    <string name="a11y_description">F*ck Shorts blendet Shorts in der YouTube-App aus: Die App liest den Aufbau der YouTube-App (Knöpfe, Texte, Positionen), merkt, welche App vorne ist, macht Bildschirmfotos für Farben und Profilbild, legt eine eigene Leiste ohne Shorts darüber, drückt \"Zurück\", wenn ein Short aufgeht, und blendet auf Wunsch Shorts-Regale aus. Alles bleibt auf dem Handy, die App hat keinen Internetzugang. Passwörter, Nachrichten und Inhalte anderer Apps werden nicht gelesen.</string>
     <string name="shorts_hidden_toast">Shorts sind ausgeblendet</string>
 </resources>

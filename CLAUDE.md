@@ -369,6 +369,15 @@ zeigt englische Ersatztexte → echte Leiste hat wohl keinen Text bzw. ist umgeb
 **Am Pixel prüfen + Struktur holen** (`uiautomator dump` auf Startseite und Mein YouTube): Wie sieht die neue Leiste
 aus (Texte, `isSelected`)? Logcat "Tab gewählt: … (Leiste meldet …)".
 
+### 30.10. (Cloud, NICHT am Handy getestet): Hinweis für Google (Play Store, Bedienungshilfe)
+Unterlagen fürs Play-Console-Formular, Store-Text und Video-Drehbuch: `docs/play-store/bedienungshilfe-erklaerung.md`.
+App: `DisclosureCard` vollständig und ehrlich (vorher "liest keine anderen Apps" – stimmte nicht ganz: vordere App,
+Lage von Benachrichtigungen/Tastatur, Bildschirmfotos; Regal-Klicks und Fehler-Dateien fehlten), Knöpfe Zustimmen/
+Ablehnen, Hinweis kommt auch, wenn der Dienst schon an ist. Neuer Schlüssel `disclosure_accepted_v2` → jeder muss
+einmal neu zustimmen (Dienst läuft trotzdem weiter). `a11y_description` angepasst. `leiste-*.png` werden auf 12
+Dateien aufgeräumt. **Am Handy prüfen:** Hinweis erscheint einmal, Ablehnen/Zustimmen, Leiste geht wie vorher.
+Wichtig: Kommt später Internet dazu (Superwall, Absturzberichte, Online-Selektoren), Hinweis + Formular anpassen!
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit
