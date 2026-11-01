@@ -378,9 +378,8 @@ einmal neu zustimmen (Dienst läuft trotzdem weiter). `a11y_description` angepas
 Dateien aufgeräumt. **Am Handy prüfen:** Hinweis erscheint einmal, Ablehnen/Zustimmen, Leiste geht wie vorher.
 Wichtig: Kommt später Internet dazu (Superwall, Absturzberichte, Online-Selektoren), Hinweis + Formular anpassen!
 
-## Test der letzten Fixes – Handy fertig, Tablet nochmals prüfen
-**Offen: Tablet nochmals testen**, der App-Code hat sich geändert (siehe "Behoben am Handy"). Vor allem: Abos-Knopf, Kanal-Seite, Regal-Karten, ⋮-Menü
-auf gescrollter Startseite schliessen, Profilbild nach Video verlassen.
+## Test der letzten Fixes – Tablet und Handy fertig
+**Offen: am Handy Zweig `wip/handy-0.1.87` prüfen** (nur lokal auf dem Heim-PC, siehe "Tablet nochmals"). Auf dem Pixel ist bereits dieser Build installiert (0.1.87).
 
 ### Handy (01.11.2026, Heim-PC "Admin", Pixel 9, Android 17, YouTube 21.43.523, lokaler Build 0.1.86)
 Am Anfang war Release 0.1.85 (8bf06ef) installiert. Handy-Sprache en-CH, YouTube darum Englisch. Zwei Benutzer auf dem Handy (Leon, Niklas; aktiv ist
@@ -418,7 +417,32 @@ Niklas = u10). Systemschrift von Niklas ist **100 %**, nicht 150 % (Leon 130 %).
 - Das Handy wird manchmal nebenbei benutzt (Aufnahme zeigte andere Apps, ein "Save to Watch later" ohne Befehl von uns). Vor Tipps prüfen, was vorne ist.
 - Weil die Handy-Sprache Englisch ist, findet `videopos`/`menupos` in `suite.sh` nichts (Wörter Deutsch; ein laufendes Video in der Liste zeigt seine Knöpfe nicht in `uiautomator`).
 
-### Tablet
+### Tablet nochmals (01.11.2026, Galaxy Tab A8, Android 14, YouTube 21.43.523, Build 0.1.87 aus `wip/handy-0.1.87`)
+Enthält alle Handy-Fixes. Das Tablet hat das neue Design weiterhin NICHT (oben nur Chips, echte Leiste 5 Knöpfe mit Text), die Reiter-Wege laufen dort also nicht.
+
+| Punkt | Ergebnis Tablet |
+|---|---|
+| Scrollen | OK: 120 s, Leiste weicht in keinem Bild ab, echte nie sichtbar, kein "Leiste nicht mehr da". |
+| Abos-Knopf, Auswahl | OK: 10/10 Abos (5 von Startseite, 5 von Mein YouTube). Je 12 Proben auf jeder Seite: Leiste unverändert, Ring nur auf Mein YouTube. Nur dunkel geprüft. |
+| Kanal-Seite | OK: 2 Kanäle, Reiter bleibt auf "Übersicht", keine Regal-Meldung. |
+| ⋮ auf gescrollter Startseite | OK: 3/3 (daneben, Zurück), unsere bleibt, abgedunkelt solange offen. |
+| Profilbild nach Video | OK: Foto erst nach 1,5 s, ganzes Bild. |
+| Video verlassen | OK: 4×. Wischen: echte 3 Bilder (bekannte Grenze 0–3). |
+| Suche, Plus | OK: Suche 3/3, Plus 3× (Fotos-Frage mit Zurück geschlossen, nichts erlaubt). Echte nie sichtbar. |
+| App-Update | OK: Update auf gescrollter Startseite und Abos, unsere sofort da (echte bleibt dort beim Scrollen stehen, also kein Beweis für das Handy). |
+| Leere Wortliste | OK: Testbuild ohne Wörter für die Knöpfe, 6/6 Tabs (5-Knopf-Leiste). |
+| Regal-Karten | NICHT geprüft: Auf Abos kam in 12 Wischern kein Regal. |
+| Hinweis | Erscheint auf dem Tablet, absichtlich nicht zugestimmt (war nicht Teil des Auftrags). |
+
+**In `wip/handy-0.1.87`, noch nicht auf dem Arbeits-Branch, weil am Handy ungeprüft (das Handy wurde gebraucht, Test abgebrochen):**
+- App-Update auf gescrollter Abos-Seite: `restoredState` gilt auch für Abos.
+- Tipp auf Startseite von Mein YouTube aus: sofort auf Reiter Startseite, Auswahl springt nicht mehr ~0,4 s auf Abos (`leaveSubsTopTabSoon`, `HOME_TAP_HOLD_MS`).
+- Andere Sprachen im neuen Design: 4 Knöpfe ohne Text (`noSubs`), Reiter nach Lage, nur mit YouTube-Logo oben (`topTabByPosition`).
+- "Zustimmen" und andere Knöpfe im dunklen Design: weisse Schrift (`onPrimary`).
+**Am Pixel prüfen:** Update auf gescrollter Startseite und Abos (YouTube startet nach `force-stop` bis 20 s schwarz, erst warten, bis die Leiste da ist); You → Home mehrmals; Button-Farbe; Testbuild mit leerer Wortliste (`labels` home/shorts/subscriptions/you/create leeren, danach zurück). Dann Regression und auf den Arbeits-Branch mergen.
+Hinweis: `screenrecord` schreibt auf still stehendem Bild manchmal keine Datei; dann mit Einzelfotos prüfen. Lokaler Build 0.1.87 kann neuer sein als die Release-Nummer: `adb install -r -d`.
+
+### Tablet (30.10.)
 30.10.2026, Heim-PC "Admin", Galaxy Tab A8 (SM-X200, Android 14), **YouTube 21.43.523**, YouTube dunkel, Gerät hell.
 Zuerst Release build-83 geprüft, danach lokaler Build mit den zwei Fixes unten (Stand dieses Commits).
 
@@ -452,7 +476,7 @@ Zuerst Release build-83 geprüft, danach lokaler Build mit den zwei Fixes unten 
 - `realdet` schlägt beim Hochfahren der Fotos-Frage falsch an (weisse Fläche): immer Bilder ansehen. Die Frage kommt bei jedem Plus; nur mit Zurück
   schliessen, Berechtigungen bleiben aus.
 
-**Offen:** Tablet nochmals (siehe oben).
+**Offen:** siehe oben (`wip/handy-0.1.87`).
 
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
