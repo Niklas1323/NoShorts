@@ -64,7 +64,7 @@ private val Red = Color(0xFFFF3B30)
 @Composable
 private fun AppTheme(content: @Composable () -> Unit) {
     val scheme = if (isSystemInDarkTheme()) {
-        darkColorScheme(primary = Red, background = Color(0xFF0F0F0F), surface = Color(0xFF0F0F0F))
+        darkColorScheme(primary = Red, onPrimary = Color.White, background = Color(0xFF0F0F0F), surface = Color(0xFF0F0F0F))
     } else {
         lightColorScheme(primary = Color(0xFFD70015))
     }

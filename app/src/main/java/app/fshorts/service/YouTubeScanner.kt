@@ -37,6 +37,7 @@ private val SHEET_IDS = listOf("design_bottom_sheet", "touch_outside")
 private const val PANEL_ID = "app_engagement_panel"
 
 private const val TOP_TAB_ID = "tabs_bar_text_tab_view"
+private const val YOUTUBE_LOGO_ID = "youtube_logo"
 
 /**
  * Sucht in der YouTube-Oberfläche die untere Leiste, ihre Tabs und den Shorts-Player.
@@ -424,7 +425,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
             return barTabs.firstOrNull { n ->
                 val name = (n.contentDescription ?: n.text)?.toString()?.trim()?.lowercase()
                 name != null && name in all && n.isVisibleToUser
-            }
+            } ?: topTabByPosition(root, barTabs, kind)
         }
         val words = (listOfNotNull(barLabel) + sel.labels[kind].orEmpty().take(2)).distinct()
         for (word in words) {
@@ -436,6 +437,26 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
             }
         }
         return null
+    }
+
+    /**
+     * Unbekannte Sprache: Reihenfolge Startseite, Abos. Kanäle haben dieselben Reiter (Home, Videos ...), darum nur
+     * mit YouTube-Logo oben, das gibt es dort nicht.
+     */
+    private fun topTabByPosition(
+        root: AccessibilityNodeInfo,
+        barTabs: List<AccessibilityNodeInfo>,
+        kind: TabKind,
+    ): AccessibilityNodeInfo? {
+        val index = when (kind) {
+            TabKind.HOME -> 0
+            TabKind.SUBSCRIPTIONS -> 1
+            else -> return null
+        }
+        if (barTabs.size < 3) return null
+        val logo = runCatching { root.findAccessibilityNodeInfosByViewId(sel.fullId(YOUTUBE_LOGO_ID)) }.getOrNull().orEmpty()
+        if (logo.none { it.isVisibleToUser }) return null
+        return barTabs.sortedBy { it.bounds().left }.getOrNull(index)?.takeIf { it.isVisibleToUser }
     }
 
     /** Reiter gewählt? Das steht am Text selbst oder an einem der zwei Elemente darüber. */
@@ -597,11 +618,15 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
         val withText = ordered.map { deepTextNode(it.first, 0) != null }
         val textless = withText.count { !it }
         if (found.size == 5 && (textless != 1 || withText[2])) return
-        if (found.size == 4 && textless != 0) return
+        // Neues Design (YouTube 21.43): 4 Knöpfe nur mit Beschreibung, Abos fehlt, Erstellen an dritter Stelle.
+        val noSubs = found.size == 4 && textless == 4
+        if (found.size == 4 && textless != 0 && !noSubs) return
         // Profilbild ganz links: gespiegelt.
         if (findThumbnail(ordered.first().first, 0) && !findThumbnail(ordered.last().first, 0)) ordered = ordered.reversed()
         val kinds = if (found.size == 5) {
             listOf(TabKind.HOME, TabKind.SHORTS, TabKind.CREATE, TabKind.SUBSCRIPTIONS, TabKind.YOU)
+        } else if (noSubs) {
+            listOf(TabKind.HOME, TabKind.SHORTS, TabKind.CREATE, TabKind.YOU)
         } else {
             listOf(TabKind.HOME, TabKind.SHORTS, TabKind.SUBSCRIPTIONS, TabKind.YOU)
         }

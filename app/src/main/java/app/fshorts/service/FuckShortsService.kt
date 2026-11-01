@@ -189,6 +189,7 @@ class FuckShortsService : AccessibilityService() {
     private var cardClickFails = 0
     private var lastShelfHideAt = 0L
     private var shelfHideBroken = false
+    private var homeTappedAt = 0L
     private var shelfMenuDoneAt = 0L
     private val shelfRetry = Runnable { scheduleScan() }
 
@@ -1606,7 +1607,9 @@ class FuckShortsService : AccessibilityService() {
         // Liste anläuft). Stand unsere wegen Scrollen allein da, ist es also trotzdem noch dieselbe Seite.
         // Neustart unseres Dienstes (App-Update) auf weggescrollter Startseite: Die echte Leiste gibt es nicht, ihre
         // Lage kennen wir aus dem Speicher. Steht die Startseiten-Liste im vordersten YouTube-Fenster, bleibt unsere.
-        if (restoredState && barWindowId == -1 && lastUiState?.selected == TabKind.HOME) {
+        if (restoredState && barWindowId == -1 &&
+            (lastUiState?.selected == TabKind.HOME || lastUiState?.selected == TabKind.SUBSCRIPTIONS)
+        ) {
             val main = youTubeMainRoot()
             val feed = main?.takeIf { foregroundWindow()?.id == it.windowId }?.let { scanner.findFeed(it, screen) }
             if (main != null && feed != null) {
@@ -1682,6 +1685,10 @@ class FuckShortsService : AccessibilityService() {
             if (top == null && pick == TabKind.HOME && previous == TabKind.SUBSCRIPTIONS &&
                 TabKind.SUBSCRIPTIONS !in bar.tabs
             ) pick = TabKind.SUBSCRIPTIONS
+        }
+        // Startseite getippt, YouTube zeigt kurz noch den gemerkten Reiter Abos: Auswahl springt nicht mit.
+        if (pick == TabKind.SUBSCRIPTIONS && previous != null && SystemClock.uptimeMillis() - homeTappedAt < HOME_TAP_HOLD_MS) {
+            pick = TabKind.HOME
         }
         if (pick != previous) Log.d(TAG, "Tab gewählt: $pick (Leiste meldet $marked)")
         return pick
@@ -1883,6 +1890,10 @@ class FuckShortsService : AccessibilityService() {
         }
         val clicked = click(node)
         tapLog("$kind: Klick ${if (clicked) "ok" else "fehlgeschlagen"}")
+        if (clicked && kind == TabKind.HOME) {
+            homeTappedAt = SystemClock.uptimeMillis()
+            leaveSubsTopTabSoon(tapSeq, 0)
+        }
         if (!clicked) {
             tapThroughIfVisible(kind)
         } else if (kind != TabKind.CREATE) {
@@ -1910,6 +1921,23 @@ class FuckShortsService : AccessibilityService() {
         waitForTopTabThenClick(tapSeq, 0)
         scheduleScan()
         return true
+    }
+
+    /** Von You zurück merkt sich YouTube den Reiter Abos: gleich auf den Reiter Startseite, nicht erst nach [VERIFY_MS]. */
+    private fun leaveSubsTopTabSoon(seq: Int, attempt: Int) {
+        handler.postDelayed({
+            if (seq != tapSeq) return@postDelayed
+            val root = youTubeMainRoot() ?: return@postDelayed
+            val subs = scanner.findTopTab(root, screen, TabKind.SUBSCRIPTIONS, null)
+            when {
+                subs != null && scanner.isSelectedNear(subs) ->
+                    scanner.findTopTab(root, screen, TabKind.HOME, null)?.let { home ->
+                        if (click(home)) tapLog("HOME: Reiter oben geklickt")
+                        scheduleScan()
+                    }
+                attempt < HOME_TAP_TRIES -> leaveSubsTopTabSoon(seq, attempt + 1)
+            }
+        }, REVEAL_POLL_MS)
     }
 
     private fun waitForTopTabThenClick(seq: Int, attempt: Int) {
@@ -2241,6 +2269,8 @@ class FuckShortsService : AccessibilityService() {
         private const val REVEAL_POLL_MS = 50L
         private const val REVEAL_TRIES = 20
         private const val TOP_TAB_TRIES = 60
+        private const val HOME_TAP_TRIES = 8
+        private const val HOME_TAP_HOLD_MS = 800L
         private const val TOP_TAB_NUDGE_AT = 8
         private const val LINK_WINDOW_MS = 8_000L
         private const val LINK_END_MS = 400L
