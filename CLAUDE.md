@@ -379,7 +379,7 @@ Dateien aufgeräumt. **Am Handy prüfen:** Hinweis erscheint einmal, Ablehnen/Zu
 Wichtig: Kommt später Internet dazu (Superwall, Absturzberichte, Online-Selektoren), Hinweis + Formular anpassen!
 
 ## Test der letzten Fixes – Tablet und Handy fertig
-**Offen: am Handy Zweig `wip/handy-0.1.87` prüfen** (nur lokal auf dem Heim-PC, siehe "Tablet nochmals"). Auf dem Pixel ist bereits dieser Build installiert (0.1.87).
+**Offen:** Regal-Karten auf der Startseite (⋮ → "Not interested"): auf Handy und Tablet kam dort noch kein Regal, also ungeprüft. Sonst nichts.
 
 ### Handy (01.11.2026, Heim-PC "Admin", Pixel 9, Android 17, YouTube 21.43.523, lokaler Build 0.1.86)
 Am Anfang war Release 0.1.85 (8bf06ef) installiert. Handy-Sprache en-CH, YouTube darum Englisch. Zwei Benutzer auf dem Handy (Leon, Niklas; aktiv ist
@@ -434,12 +434,20 @@ Enthält alle Handy-Fixes. Das Tablet hat das neue Design weiterhin NICHT (oben 
 | Regal-Karten | NICHT geprüft: Auf Abos kam in 12 Wischern kein Regal. |
 | Hinweis | Erscheint auf dem Tablet, absichtlich nicht zugestimmt (war nicht Teil des Auftrags). |
 
-**In `wip/handy-0.1.87`, noch nicht auf dem Arbeits-Branch, weil am Handy ungeprüft (das Handy wurde gebraucht, Test abgebrochen):**
-- App-Update auf gescrollter Abos-Seite: `restoredState` gilt auch für Abos.
-- Tipp auf Startseite von Mein YouTube aus: sofort auf Reiter Startseite, Auswahl springt nicht mehr ~0,4 s auf Abos (`leaveSubsTopTabSoon`, `HOME_TAP_HOLD_MS`).
-- Andere Sprachen im neuen Design: 4 Knöpfe ohne Text (`noSubs`), Reiter nach Lage, nur mit YouTube-Logo oben (`topTabByPosition`).
-- "Zustimmen" und andere Knöpfe im dunklen Design: weisse Schrift (`onPrimary`).
-**Am Pixel prüfen:** Update auf gescrollter Startseite und Abos (YouTube startet nach `force-stop` bis 20 s schwarz, erst warten, bis die Leiste da ist); You → Home mehrmals; Button-Farbe; Testbuild mit leerer Wortliste (`labels` home/shorts/subscriptions/you/create leeren, danach zurück). Dann Regression und auf den Arbeits-Branch mergen.
+**Handy-Nachtest (01.11.2026, Pixel 9, Abend, sauberer Build 0.1.87 = dieser Stand, vorher Zweig `wip/handy-0.1.87`, jetzt gemergt):**
+| Punkt | Ergebnis Handy |
+|---|---|
+| "YouTube öffnen" und andere rote Knöpfe | OK: weisse Schrift (`onPrimary`). "Zustimmen" selbst nicht geöffnet (Hinweis ist schon bestätigt), selbe Farbregel. |
+| You → Home | OK: 6/6, im Protokoll nie Abos dazwischen; "Reiter oben geklickt" nach 40–130 ms (`leaveSubsTopTabSoon`). |
+| Update auf gescrollter Startseite und Abos | OK: `adb install -r -d`, je ~1,7 s keine Leiste (Dienst startet neu), echte nie sichtbar, danach unsere mit richtiger Auswahl. Kein Eintrag verloren in der Bedienungshilfen-Liste. |
+| Leere Wortliste (Testbuild, danach wieder sauberer Build) | OK: 11/11 Tipps inkl. aus gescrollter Liste; Kanal-Seite: Reiter bleibt auf Home, Abos von dort geht. |
+| Regression Scrollen | OK: 60 s, 2601 Bilder, Abweichung höchstens 1,49 (nicht gemessen über 1,5). |
+| Regression Abos | OK: 10/10 (5 von Home, 5 von You), kein Fehler im Protokoll. |
+| Regression ⋮ | OK: Normales Menü (Video und Beitrag) auf gescrollter Liste, unsere bleibt; Werbe-⋮ ("My Ad Center") 3/3, Leiste danach da. Nichts gewählt. |
+| Regression Video verlassen | OK: 4/4 mit Zurück. `barcheck` meldete 3× "ECHT" 1 Bild: Fehlalarm (heller Inhalt bei Abdunkelung, im Bild geprüft). |
+| Regression Suche, Plus | OK: je 3/3, Leiste danach da. |
+
+Test-Fallen: `uiautomator dump` nimmt unsere Leiste für ~2 s weg, ein Foto gleich danach sieht wie ein Fehler aus: ≥6 s warten. `barok` allein sagt nichts über den Vordergrund (auch auf dem Startbildschirm "ok"): immer mit `focus` prüfen. Zurück auf Abos oder Startseite verlässt YouTube schnell. Aufnahmen brauchen viel Platz: Festplatte des Heim-PCs lief dabei voll (C: 223 GB).
 Hinweis: `screenrecord` schreibt auf still stehendem Bild manchmal keine Datei; dann mit Einzelfotos prüfen. Lokaler Build 0.1.87 kann neuer sein als die Release-Nummer: `adb install -r -d`.
 
 ### Tablet (30.10.)
@@ -476,7 +484,7 @@ Zuerst Release build-83 geprüft, danach lokaler Build mit den zwei Fixes unten 
 - `realdet` schlägt beim Hochfahren der Fotos-Frage falsch an (weisse Fläche): immer Bilder ansehen. Die Frage kommt bei jedem Plus; nur mit Zurück
   schliessen, Berechtigungen bleiben aus.
 
-**Offen:** siehe oben (`wip/handy-0.1.87`).
+**Offen:** siehe oben (Regal-Karten auf der Startseite).
 
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
