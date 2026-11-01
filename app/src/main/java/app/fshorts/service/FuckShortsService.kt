@@ -59,6 +59,11 @@ class FuckShortsService : AccessibilityService() {
     private var hiddenByScroll = false
     private var navFromRest = false
     private var watchPageOpen = false
+        set(value) {
+            if (field && !value) watchClosedAt = SystemClock.uptimeMillis()
+            field = value
+        }
+    private var watchClosedAt = 0L
     private var watchNode: AccessibilityNodeInfo? = null
     private var watchTop = 0
     /** Der letzte volle Scan hat unsere Leiste absichtlich versteckt (Shorts, verdeckt): nicht vorschnell zeigen. */
@@ -184,6 +189,8 @@ class FuckShortsService : AccessibilityService() {
     private var cardClickFails = 0
     private var lastShelfHideAt = 0L
     private var shelfHideBroken = false
+    private var shelfMenuDoneAt = 0L
+    private val shelfRetry = Runnable { scheduleScan() }
 
     private val scanRunnable = Runnable {
         scanPending = false
@@ -1027,6 +1034,10 @@ class FuckShortsService : AccessibilityService() {
         if (bar != null && bar.bounds == restBounds && sampler.needsCapture(bar)) {
             if (now - restSince < REST_STABLE_MS) {
                 handler.postDelayed({ scheduleScan() }, REST_STABLE_MS)
+            } else if (now - watchClosedAt < SAMPLE_AFTER_VIDEO_MS) {
+                // Die Video-Seite rutscht noch über die Leiste, deren Lage stimmt aber schon: Foto zeigte ein halbes
+                // Profilbild (blieb bis zum nächsten Foto stehen).
+                handler.postDelayed({ scheduleScan() }, SAMPLE_AFTER_VIDEO_MS)
             } else if (sampler.canCaptureBehindOverlay) {
                 sampler.capture(bar, root.windowId, windowBounds(root.windowId)) { scheduleScan() }
             } else if (!overlay.isShowing) {
@@ -1416,6 +1427,8 @@ class FuckShortsService : AccessibilityService() {
         // Menü vorne oder Panel offen: Das regelt der Scan (Lage des Menüs), die Leiste ist nicht abfragbar.
         if (menuFront || panelMinTop != Int.MAX_VALUE || coverWindowId != -1) return
         if (popupFront(foregroundWindow()?.root) != null) return
+        // Unser eigener Tipp aufs Karten-⋮: Das Menü ist gleich wieder zu, unsere bleibt stehen (sonst 0,13 s weg).
+        if (shelfMenuOpenedAt != 0L || now - shelfMenuDoneAt < SHELF_MENU_HOLD_MS) return
         if (rest == null || state == null || menuOpen) {
             overlay.hide()
             return
@@ -1579,6 +1592,8 @@ class FuckShortsService : AccessibilityService() {
         }
         // Noch keine Liste gemerkt, oder sie war beim schnellen Wischen kurz nicht abfragbar: neu suchen,
         // aber nur direkt nach dem Scrollen und ohne Tipp dazwischen (sonst ist es wohl eine andere Seite).
+        // ⋮-Menü vorne: Die Liste ist nur verdeckt. Sonst galt der Tipp daneben als Seitenwechsel und unsere blieb weg.
+        if (known != null && known.windowId == barWindowId && !barWindowFront) feedBeforeVideo = known
         goneFeed = null
         // YouTube nimmt seine Leiste schon weg, sobald der Finger zum Wischen aufliegt, noch bevor es "gescrollt"
         // meldet: Die Berührung zählt darum schon als Scrollen. Ein Tipp (z. B. auf ein Video) meldet danach einen Klick.
@@ -1663,6 +1678,10 @@ class FuckShortsService : AccessibilityService() {
         if (pick == null || pick == TabKind.HOME) {
             val top = scanner.findTopTab(root, screen, TabKind.SUBSCRIPTIONS, bar.tabs[TabKind.SUBSCRIPTIONS]?.label)
             if (top != null && scanner.isSelectedNear(top)) pick = TabKind.SUBSCRIPTIONS
+            // Abos weggescrollt: Die Reiter oben sind dann weg, die Leiste meldet Startseite. Auswahl bleibt auf Abos.
+            if (top == null && pick == TabKind.HOME && previous == TabKind.SUBSCRIPTIONS &&
+                TabKind.SUBSCRIPTIONS !in bar.tabs
+            ) pick = TabKind.SUBSCRIPTIONS
         }
         if (pick != previous) Log.d(TAG, "Tab gewählt: $pick (Leiste meldet $marked)")
         return pick
@@ -1692,8 +1711,13 @@ class FuckShortsService : AccessibilityService() {
         // Regal ohne eigenes ⋮ (z. B. "Abos"): Karten einzeln über ihr ⋮ → "Ausblenden" (Wunsch des Nutzers).
         val card = if (header == null) shelves.firstNotNullOfOrNull { it.cardMenuButtons.firstOrNull() } else null
         val interval = if (card != null) CARD_HIDE_INTERVAL_MS else SHELF_HIDE_INTERVAL_MS
-        if (now - lastShelfHideAt < interval) return
         val button = header ?: card ?: return
+        if (now - lastShelfHideAt < interval) {
+            // Ohne neues Ereignis käme sonst kein Scan mehr (stille Seite): nächste Karte blieb stehen.
+            handler.removeCallbacks(shelfRetry)
+            handler.postDelayed(shelfRetry, interval - (now - lastShelfHideAt))
+            return
+        }
         lastShelfHideAt = now
         if (button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
             shelfMenuOpenedAt = now
@@ -1710,10 +1734,12 @@ class FuckShortsService : AccessibilityService() {
         val roots = windows.mapNotNull { it.root }.filter { it.packageName?.toString() == selectors.youtubePackage }
         // Karte: nur "Ausblenden" (nimmt den einen Short raus). Nie "Kein Interesse": Das gäbe es auch im Menü
         // eines normalen Videos, falls doch einmal das falsche ⋮ getroffen wurde.
-        val labels = if (shelfMenuForCard) selectors.cardHideLabels else selectors.shelfHideLabels
+        // Regal: Während die Liste läuft, kann das ⋮ der ersten Karte als ⋮ des Regals gelten, darum auch "Ausblenden".
+        val labels = if (shelfMenuForCard) selectors.cardHideLabels else selectors.shelfHideLabels + selectors.cardHideLabels
         val item = scanner.findMenuItem(roots, labels)
         if (item != null) {
             shelfMenuOpenedAt = 0L
+            shelfMenuDoneAt = now
             cardClickFails = 0
             val ok = click(item)
             if (ok) Prefs.incrementShelvesHidden(this)
@@ -1728,7 +1754,8 @@ class FuckShortsService : AccessibilityService() {
         // Menüpunkt nicht gefunden: Menü schliessen, Aufbau speichern, in dieser Sitzung nicht mehr probieren.
         Log.d(TAG, "Regal: Menüpunkt nicht gefunden, aufgegeben")
         shelfMenuOpenedAt = 0L
-        shelfHideBroken = true
+        // Karten: Läuft in der Liste ein Video an, kommt das Menü manchmal sehr spät. Nicht gleich ganz aufgeben.
+        if (!shelfMenuForCard || ++cardClickFails >= CARD_CLICK_FAILS_MAX) shelfHideBroken = true
         val active = foregroundWindow()?.root
         if (active != null && active.packageName?.toString() == selectors.youtubePackage) {
             dumper.dump(active, windows, "regal-menue")
@@ -1847,14 +1874,7 @@ class FuckShortsService : AccessibilityService() {
             revealBarThenClick(kind, root)
             return
         }
-        if (node == null && kind == TabKind.SUBSCRIPTIONS) {
-            val top = scanner.findTopTab(root, screen, kind, null)
-            if (top != null && click(top)) {
-                tapLog("$kind: nicht in der Leiste, Reiter oben geklickt")
-                scheduleScan()
-                return
-            }
-        }
+        if (node == null && kind == TabKind.SUBSCRIPTIONS && bar != null && openSubsFromTop(root, bar)) return
         if (node == null) {
             tapLog("$kind: Tab nicht gefunden (Leiste da)")
             dumper.dump(root, windows, "tab-$kind-nicht-gefunden")
@@ -1869,6 +1889,51 @@ class FuckShortsService : AccessibilityService() {
             verifyLater(kind)
         }
         scheduleScan()
+    }
+
+    /**
+     * Neues Design: Abos fehlt in der Leiste und ist oben ein Reiter, den es nur auf der Startseite gibt
+     * (ganz oben in der Liste). Von anderswo erst Startseite klicken, dann auf den Reiter warten.
+     */
+    private fun openSubsFromTop(root: AccessibilityNodeInfo, bar: FoundBar): Boolean {
+        val kind = TabKind.SUBSCRIPTIONS
+        val top = scanner.findTopTab(root, screen, kind, null)
+        if (top != null && click(top)) {
+            tapLog("$kind: nicht in der Leiste, Reiter oben geklickt")
+            verifyLater(kind)
+            scheduleScan()
+            return true
+        }
+        val home = bar.nodes[TabKind.HOME] ?: return false
+        if (!click(home)) return false
+        tapLog("$kind: Reiter nicht da, erst Startseite")
+        waitForTopTabThenClick(tapSeq, 0)
+        scheduleScan()
+        return true
+    }
+
+    private fun waitForTopTabThenClick(seq: Int, attempt: Int) {
+        val kind = TabKind.SUBSCRIPTIONS
+        handler.postDelayed({
+            if (seq != tapSeq) return@postDelayed
+            val root = youTubeMainRoot() ?: return@postDelayed
+            val top = scanner.findTopTab(root, screen, kind, null)
+            when {
+                top != null -> {
+                    val clicked = click(top)
+                    tapLog("$kind: Reiter oben geklickt (${if (clicked) "ok" else "fehlgeschlagen"})")
+                    if (clicked) verifyLater(kind)
+                    scheduleScan()
+                }
+                // Nach dem Start oder Scrollen fehlen die Reiter, bis die Liste ein Stück nach unten gezogen wird.
+                attempt == TOP_TAB_NUDGE_AT || attempt == TOP_TAB_NUDGE_AT * 3 -> {
+                    nudgeFeedDown()
+                    waitForTopTabThenClick(seq, attempt + 1)
+                }
+                attempt < TOP_TAB_TRIES -> waitForTopTabThenClick(seq, attempt + 1)
+                else -> tapLog("$kind: Reiter oben kam nicht")
+            }
+        }, REVEAL_POLL_MS)
     }
 
     /** Prüft nach einer Weile, ob der Tab gewählt ist – aber nur, wenn du seither nicht schon weitergetippt hast. */
@@ -1890,8 +1955,12 @@ class FuckShortsService : AccessibilityService() {
         handler.postDelayed({
             if (seq != tapSeq) return@postDelayed
             val root = youTubeMainRoot() ?: return@postDelayed
-            val node = scanner.findBar(root, screenBounds())?.nodes?.get(kind)
+            val found = scanner.findBar(root, screenBounds())
+            val node = found?.nodes?.get(kind)
             when {
+                node == null && found != null && kind == TabKind.SUBSCRIPTIONS -> {
+                    if (!openSubsFromTop(root, found)) tapLog("$kind: Reiter oben nicht erreichbar")
+                }
                 node != null -> {
                     val clicked = click(node)
                     tapLog("$kind: Leiste wieder da, Klick ${if (clicked) "ok" else "fehlgeschlagen"}")
@@ -1922,6 +1991,19 @@ class FuckShortsService : AccessibilityService() {
         dispatchGesture(gesture, null, handler)
     }
 
+    /** Kurzes, langsames Wischen nach unten: Reiter oben kommen, die Liste lädt nicht neu. */
+    private fun nudgeFeedDown() {
+        val x = screen.exactCenterX()
+        val path = Path().apply {
+            moveTo(x, screen.top + screen.height() * 0.45f)
+            lineTo(x, screen.top + screen.height() * 0.57f)
+        }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 250))
+            .build()
+        dispatchGesture(gesture, null, handler)
+    }
+
     private fun isAtRest(bar: FoundBar): Boolean {
         val rest = restBounds ?: return false
         return kotlin.math.abs(bar.bounds.top - rest.top) <= 2 && kotlin.math.abs(bar.bounds.bottom - rest.bottom) <= 2
@@ -1936,6 +2018,14 @@ class FuckShortsService : AccessibilityService() {
         }
         // Neues Design: Abos ist oben ein Reiter der Startseite, der Knopf unten tut dann nichts.
         if (kind == TabKind.SUBSCRIPTIONS) {
+            val top = scanner.findTopTab(root, screen, kind, bar.tabs[kind]?.label)
+            if (top != null && click(top)) {
+                tapLog("$kind: Reiter oben geklickt")
+                return
+            }
+        }
+        // Auf Abos (Reiter oben) führt der Startseite-Knopf unten nicht zurück: Reiter "Startseite" oben klicken.
+        if (kind == TabKind.HOME) {
             val top = scanner.findTopTab(root, screen, kind, bar.tabs[kind]?.label)
             if (top != null && click(top)) {
                 tapLog("$kind: Reiter oben geklickt")
@@ -2150,6 +2240,8 @@ class FuckShortsService : AccessibilityService() {
         private const val SLOW_SCAN_MS = 150L
         private const val REVEAL_POLL_MS = 50L
         private const val REVEAL_TRIES = 20
+        private const val TOP_TAB_TRIES = 60
+        private const val TOP_TAB_NUDGE_AT = 8
         private const val LINK_WINDOW_MS = 8_000L
         private const val LINK_END_MS = 400L
         private const val LINK_FIX_MS = 600L
@@ -2161,6 +2253,7 @@ class FuckShortsService : AccessibilityService() {
         private const val ICON_CENTER_DP = 20f
         private const val LABEL_TOP_DP = 32.5f
         private const val REST_STABLE_MS = 300L
+        private const val SAMPLE_AFTER_VIDEO_MS = 1500L
         private const val WATCHDOG_MS = 400L
         private const val BACK_COOLDOWN_MS = 700L
         private const val HINT_WINDOW_MS = 10_000L
@@ -2170,7 +2263,8 @@ class FuckShortsService : AccessibilityService() {
         private const val SHELF_HIDE_INTERVAL_MS = 60_000L
         private const val CARD_HIDE_INTERVAL_MS = 1_500L
         private const val CARD_CLICK_FAILS_MAX = 3
-        private const val SHELF_MENU_TIMEOUT_MS = 1_500L
+        private const val SHELF_MENU_HOLD_MS = 500L
+        private const val SHELF_MENU_TIMEOUT_MS = 3_000L
         private const val PRE_SHOW_HOLD_MS = 700L
         private const val CREATE_HOLD_MS = 1_500L
         private const val NAV_HOLD_MS = 800L

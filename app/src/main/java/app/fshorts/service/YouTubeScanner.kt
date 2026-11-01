@@ -36,6 +36,8 @@ private val SHEET_IDS = listOf("design_bottom_sheet", "touch_outside")
 // Panel im YouTube-Fenster selbst (Werbe-Menü, auf der Video-Seite auch Kommentare), YouTube 21.42.
 private const val PANEL_ID = "app_engagement_panel"
 
+private const val TOP_TAB_ID = "tabs_bar_text_tab_view"
+
 /**
  * Sucht in der YouTube-Oberfläche die untere Leiste, ihre Tabs und den Shorts-Player.
  * Verlässt sich nicht nur auf View-IDs: Wenn die ID nicht passt, suchen wir über die
@@ -305,6 +307,9 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
         if (feedIdx <= 0) return null
         // Liegt die Überschrift in einer seitlich scrollbaren Leiste (z. B. Kanal-Tabs), ist es kein Regal.
         if (path.subList(0, feedIdx).any { it.isScrollable }) return null
+        // YouTube 21.43: Die Reiter-Leiste meldet sich nicht als scrollbar. Sonst tippten wir auf einem Kanal auf den
+        // Reiter neben "Shorts" und gingen dann zurück.
+        if (path.subList(0, feedIdx).any { it.viewIdResourceName == sel.fullId(TOP_TAB_ID) }) return null
 
         val feed = path[feedIdx]
         val item = path[feedIdx - 1]
@@ -366,10 +371,19 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
             return
         }
         if (depth >= 10) return
-        val row = inRow || (node.isScrollable && r.width() >= screen.width() / 2 && r.height() < screen.height() / 2)
+        // Passen die letzten Karten ganz aufs Bild, meldet sich die Reihe nicht mehr als scrollbar: dann Liste mit schmalen Karten.
+        val row = inRow || (
+            (node.isScrollable || isNarrowCardList(node, r)) && r.width() >= screen.width() / 2 && r.height() < screen.height() / 2
+            )
         for (i in 0 until node.childCount) {
             runCatching { node.getChild(i) }.getOrNull()?.let { findCardMenus(it, header, screen, depth + 1, row, out) }
         }
+    }
+
+    private fun isNarrowCardList(node: AccessibilityNodeInfo, r: Rect): Boolean {
+        if (node.className?.toString()?.contains("RecyclerView") != true || node.childCount == 0) return false
+        val first = runCatching { node.getChild(0) }.getOrNull() ?: return false
+        return first.bounds().width() < r.width() * 7 / 10
     }
 
     /** Neue Position eines bekannten Regals, ohne den ganzen Bildschirm neu zu durchsuchen (fürs Scrollen). */
@@ -402,8 +416,17 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
      * Sucht den Reiter (sichtbarer Text, oberes Drittel des Bildschirms).
      */
     fun findTopTab(root: AccessibilityNodeInfo, screen: Rect, kind: TabKind, barLabel: String?): AccessibilityNodeInfo? {
-        val words = (listOfNotNull(barLabel) + sel.labels[kind].orEmpty().take(2)).distinct()
         val r = Rect()
+        // YouTube 21.43: Reiter mit eigener ID, Name als Beschreibung (auf Englisch "Subs"). Gibt es nur auf der Startseite.
+        val barTabs = runCatching { root.findAccessibilityNodeInfosByViewId(sel.fullId(TOP_TAB_ID)) }.getOrNull().orEmpty()
+        if (barTabs.isNotEmpty()) {
+            val all = (listOfNotNull(barLabel) + sel.labels[kind].orEmpty()).map { it.lowercase() }
+            return barTabs.firstOrNull { n ->
+                val name = (n.contentDescription ?: n.text)?.toString()?.trim()?.lowercase()
+                name != null && name in all && n.isVisibleToUser
+            }
+        }
+        val words = (listOfNotNull(barLabel) + sel.labels[kind].orEmpty().take(2)).distinct()
         for (word in words) {
             val hits = runCatching { root.findAccessibilityNodeInfosByText(word) }.getOrNull() ?: continue
             for (n in hits) {

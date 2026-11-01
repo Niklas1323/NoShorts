@@ -378,7 +378,47 @@ einmal neu zustimmen (Dienst läuft trotzdem weiter). `a11y_description` angepas
 Dateien aufgeräumt. **Am Handy prüfen:** Hinweis erscheint einmal, Ablehnen/Zustimmen, Leiste geht wie vorher.
 Wichtig: Kommt später Internet dazu (Superwall, Absturzberichte, Online-Selektoren), Hinweis + Formular anpassen!
 
-## Test der letzten Fixes – Tablet fertig, Handy offen
+## Test der letzten Fixes – Handy fertig, Tablet nochmals prüfen
+**Offen: Tablet nochmals testen**, der App-Code hat sich geändert (siehe "Behoben am Handy"). Vor allem: Abos-Knopf, Kanal-Seite, Regal-Karten, ⋮-Menü
+auf gescrollter Startseite schliessen, Profilbild nach Video verlassen.
+
+### Handy (01.11.2026, Heim-PC "Admin", Pixel 9, Android 17, YouTube 21.43.523, lokaler Build 0.1.86)
+Am Anfang war Release 0.1.85 (8bf06ef) installiert. Handy-Sprache en-CH, YouTube darum Englisch. Zwei Benutzer auf dem Handy (Leon, Niklas; aktiv ist
+Niklas = u10). Systemschrift von Niklas ist **100 %**, nicht 150 % (Leon 130 %). Für den Hinweis kurz auf 150 % gestellt, danach zurück.
+
+| Punkt | Ergebnis Handy |
+|---|---|
+| 0 Hinweis | OK: kam einmal, Ablehnen → kurze Karte → "Hinweis nochmals zeigen" → Zustimmen → "YouTube öffnen", bleibt nach Neustart weg. Bei 150 % alles lesbar, Leiste lief weiter. Nur Optik: "Zustimmen" ist violett auf rot (`onPrimary` fehlt im dunklen Farbschema). |
+| 1 Scrollen | OK: zweimal ~130–170 s (4348 und 5791 Bilder), Videos liefen in der Liste an (geprüft). Leiste weicht in keinem Bild ab, echte nie sichtbar, beim Scrollen kein "Leiste nicht mehr da". Aber: siehe ⋮-Fehler unten (behoben). |
+| 2 Profilbild | OK: Ring nur auf You, hell und dunkel. |
+| 3 Auswahl | OK: je 12 s auf jeder Seite, hell und dunkel, nichts springt. Kurz sichtbar nur: Tipp auf Home von You aus, wenn YouTube sich Abos gemerkt hat (~0,4 s Abos, dann Home). |
+| 4 Abos-Knopf | Ging **nicht** (siehe unten), jetzt OK: 5/5 von Home, 5/5 von You, auch nach Neustart von YouTube und aus gescrollter Liste. |
+| 5 Neues Design | **Ist da.** Oben `tabs_bar_text_tab_view` [Home, Subs, Music, Live, More] als Beschreibung, nur auf der Startseite, `selected` stimmt. Nach dem Start und nach dem Scrollen fehlen sie, bis die Liste nach unten gezogen wird. Echte Leiste `pivot_bar` [0,2235][1080,2424]: **4 Knöpfe** Home, Shorts, Create, You, nur Beschreibung, kein Text, kein Abos. `selected` stimmt. Auf Abos meldet die Leiste Home. Unsere zeigt englische Ersatztexte. |
+| 6 Tablet-Fixes | OK: (a) Farbe und Höhe hell und dunkel richtig. (b) Suchverlauf mit Zeile "shorts": keine Regal-Meldung, Suchfeld bleibt leer. Suche 3/3 im letzten Stand (vorher 5/5). |
+| 7 Regale | Abos: OK, Karten einzeln weg ("Hide"), nur "Shorts >" bleibt, normale Videos unberührt, unsere Leiste bleibt ganz stehen. Startseite und unter Videos kam kein Regal: **⋮ → "Not interested" nicht geprüft.** Letzte Prüfung einen Build vor dem letzten Fix (der betrifft nur das Schliessen des ⋮-Menüs). |
+| 8 Rest | OK: Video öffnen/verlassen, Mini-Player mit allen Tabs, Plus → Kamera → X und Zurück, Suche, Benachrichtigungen. Echte nie sichtbar ausser Bekanntem: Kamera mit Zurück-Taste verlassen, 3 Bilder. |
+
+**Behoben am Handy (Tablet noch nicht geprüft):**
+- **Abos ging nicht:** `findTopTab` kannte "Subs" nicht und nicht die Beschreibung am Reiter, und von You aus gibt es gar keine Reiter. Jetzt über die ID, "Subs" in `selectors.json`.
+  Sind die Reiter nicht da: erst Startseite klicken, nötigenfalls kurz nach unten wischen (`nudgeFeedDown`), dann Reiter (`openSubsFromTop`). Zurück auf Home genauso über den Reiter.
+- **Auswahl beim Scrollen auf Abos:** Reiter weg → Auswahl sprang auf Home. Bleibt jetzt auf Abos.
+- **Kanal-Seite:** Der Reiter "Shorts" galt als Regal (die Reiter-Leiste meldet sich nicht als scrollbar). Wir tippten den Reiter daneben und drückten Zurück, danach bis zum Neustart kein Regal-Ausblenden. Jetzt nicht mehr.
+- **Halbes Profilbild:** Foto beim Video verlassen zeigte die drüberrutschende Video-Seite, blieb bis zum nächsten Foto (bis 30 s). Jetzt 1,5 s Abstand (`SAMPLE_AFTER_VIDEO_MS`).
+- **⋮ auf gescrollter Startseite:** Daneben getippt oder Menüpunkt gewählt → unsere Leiste weg, bis die echte wieder auftaucht ("Tipp nach dem Scrollen"). Das war vermutlich das "verschwindet beim Scrollen". Liste wird jetzt gemerkt.
+- **Regal-Karten:** (a) Passen die letzten Karten aufs Bild, ist die Reihe nicht scrollbar → nie ausgeblendet (`isNarrowCardList`). (b) Auf stiller Seite kam nach der ersten Karte kein Scan mehr (`shelfRetry`). (c) Menü kommt spät, während ein Video anläuft → 3 s warten, nicht gleich aufgeben. (d) Beim Scrollen galt das Karten-⋮ als Regal-⋮ → "Hide" zählt jetzt auch dort. (e) Unsere fehlte 0,13 s, solange das Menü offen war (`SHELF_MENU_HOLD_MS`).
+
+**Bleibt, nicht behoben:**
+- App-Update auf gescrollter Seite: unsere fehlt, bis die echte wieder auftaucht (die Sonderregel `restoredState` gilt nur für Home). Echte ist dabei nicht sichtbar.
+- Andere Sprachen mit 4 Knöpfen ungeprüft: `collectByPosition` kennt die Reihe Home, Shorts, Create, You nicht (bricht bei Knopf ohne Text ab). Kurzform des Abos-Reiters kennen wir nur für Deutsch und Englisch.
+
+**Beim Testen beachten:**
+- **Nie `am force-stop app.fshorts`:** Android nimmt den Dienst dann aus `enabled_accessibility_services`! Passiert (sofort mit exakt gleicher Liste wiederhergestellt). Zum Neu-Laden nur `am start`.
+- `env.sh`-Auswertung (`analyze`, `shortsdet`) taugt fürs neue Design nicht: `tools/pixel-test/phone.sh` nehmen. `barcheck` schlägt falsch an bei der "Short"-Pille der Kamera und beim App-Zoom: Bilder ansehen.
+- **Nie blind tippen, auch nicht `input text`/Enter:** Tasten ohne Suchfeld öffneten den eigenen Kanal. Zurück vom Video führt je nach Zustand zu Kommentaren statt in den Mini-Player. Die Liste verschiebt sich nach dem Video und beim Anlaufen: Ein Tipp aufs ⋮ traf so eine Werbung (Chrome ging auf). Immer `bartap`/`tapif`.
+- Das Handy wird manchmal nebenbei benutzt (Aufnahme zeigte andere Apps, ein "Save to Watch later" ohne Befehl von uns). Vor Tipps prüfen, was vorne ist.
+- Weil die Handy-Sprache Englisch ist, findet `videopos`/`menupos` in `suite.sh` nichts (Wörter Deutsch; ein laufendes Video in der Liste zeigt seine Knöpfe nicht in `uiautomator`).
+
+### Tablet
 30.10.2026, Heim-PC "Admin", Galaxy Tab A8 (SM-X200, Android 14), **YouTube 21.43.523**, YouTube dunkel, Gerät hell.
 Zuerst Release build-83 geprüft, danach lokaler Build mit den zwei Fixes unten (Stand dieses Commits).
 
@@ -412,7 +452,7 @@ Zuerst Release build-83 geprüft, danach lokaler Build mit den zwei Fixes unten 
 - `realdet` schlägt beim Hochfahren der Fotos-Frage falsch an (weisse Fläche): immer Bilder ansehen. Die Frage kommt bei jedem Plus; nur mit Zurück
   schliessen, Berechtigungen bleiben aus.
 
-**Offen:** Handy, Punkte 1–6 (mit beiden Fixes). Nach einem Fix am Handy wieder am Tablet prüfen.
+**Offen:** Tablet nochmals (siehe oben).
 
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
