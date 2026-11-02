@@ -689,4 +689,4 @@ Arbeits-Branch: `claude/intelligent-volta-4lochv`.
 - Onboarding: Paywall kommt NICHT mehr von selbst, wenn die Bedienungshilfe schon an ist (Seite "Turn it on" wurde
   übersprungen), nur nach Tipp auf "Continue". Knopf heisst "Continue" statt "Start 3 days free", darunter nur noch
   "Have a code?" (Wiederherstellen gibt es in der Paywall).
-- Vor dem Release: "Run setup again" soll ohne Paywall durchlaufen (Wunsch des Nutzers), noch nicht gebaut.
+- "Run setup again" läuft ohne Paywall (`rerunSetup`, "Continue" beendet direkt; `onboarding_done` bleibt gesetzt).

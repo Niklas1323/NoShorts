@@ -61,6 +61,8 @@ private fun App() {
     var accepted by remember { mutableStateOf(Prefs.disclosureAccepted(context)) }
     var onboardingDone by remember { mutableStateOf(Prefs.onboardingDone(context)) }
     var showSetup by remember { mutableStateOf(false) }
+    // "Run setup again": Einrichtung nochmals zeigen, aber ohne Paywall (war schon einmal fertig).
+    var rerunSetup by remember { mutableStateOf(false) }
     /** In die Android-Einstellungen geschickt: beim Zurückkommen und eingeschaltet geht es weiter. */
     var awaitingEnable by remember { mutableStateOf(false) }
     var onboardingKey by remember { mutableIntStateOf(0) }
@@ -93,6 +95,7 @@ private fun App() {
     fun finishSetup() {
         awaitingEnable = false
         showSetup = false
+        rerunSetup = false
         if (!onboardingDone) {
             Prefs.setOnboardingDone(context)
             onboardingDone = true
@@ -161,7 +164,7 @@ private fun App() {
 
     // Welche Seite: Einrichtung, Abo beendet oder Startseite. Wechsel immer mit sanfter Überblendung.
     val screen = when {
-        !onboardingDone || showSetup || !accepted -> 0
+        !onboardingDone || showSetup || rerunSetup || !accepted -> 0
         !isPro -> 1
         else -> 2
     }
@@ -189,7 +192,7 @@ private fun App() {
                             openAccessibilitySettings(context)
                         }
                     },
-                    onContinue = { if (Access.unlocked) finishSetup() else showPaywall() },
+                    onContinue = { if (rerunSetup || Access.unlocked) finishSetup() else showPaywall() },
                     onOpenSettings = {
                         awaitingEnable = true
                         openAccessibilitySettings(context)
@@ -260,8 +263,7 @@ private fun App() {
                         paused = false
                     },
                     restartSetup = {
-                        Prefs.setOnboardingDone(context, false)
-                        onboardingDone = false
+                        rerunSetup = true
                         showSetup = false
                         onboardingKey++
                     },
