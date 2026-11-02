@@ -83,6 +83,8 @@ class HomeActions(
     val setThemeMode: (Int) -> Unit,
     /** Unsere Superwall-Paywall. */
     val showPaywall: () -> Unit,
+    /** Pro unten in der Leiste: mit Abo Abo verwalten (Jahresabo, kündigen), sonst Paywall. */
+    val proTab: () -> Unit,
     val restore: () -> Unit,
     val manageSubscription: () -> Unit,
     val rateApp: () -> Unit,
@@ -123,7 +125,7 @@ fun HomeApp(state: HomeState, actions: HomeActions) {
             selected = if (screen == Screen.Home) 0 else 1,
             onHome = { screen = Screen.Home },
             onSettings = { screen = Screen.Settings },
-            onPro = actions.showPaywall,
+            onPro = actions.proTab,
         )
     }
 }
@@ -488,8 +490,9 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
     if (redeemOpen) RedeemDialog(actions.redeem, onClose = { redeemOpen = false })
 }
 
+/** Gratis-Code eingeben (auch im Onboarding). */
 @Composable
-private fun RedeemDialog(redeem: (String) -> String, onClose: () -> Unit) {
+fun RedeemDialog(redeem: (String) -> String, onClose: () -> Unit) {
     var code by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     AlertDialog(

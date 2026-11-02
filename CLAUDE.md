@@ -526,6 +526,17 @@ weiterhin. Hinweis-Schlüssel bleibt v3 (v3 war nur im Test).
   der letzte Knopf "Continue".
 - Solange die Abos in Google Play nicht live sind, geht die App nur mit dem Code!
 
+### 02.11.2026, Nacht (Cloud, NICHT am Handy getestet): Paywall im Onboarding, Superwall-Testmodus
+- Nutzer: Paywall kam nie, Pro-Knopf tat nichts. Vermutlich keine Kampagne mit Placement `app_start` und/oder keine
+  Produkte in Google Play. Jetzt: `showPaywall()` mit `PaywallPresentationHandler` → Toast mit Grund
+  (PlacementNotFound, NoAudienceMatch, Fehler). **Superwall-Testmodus** `TestModeBehavior.ALWAYS` in Debug-Builds
+  (alle GitHub-APKs): Produkte aus dem Dashboard, Kauf nur simuliert (Schublade "Start Free Trial"), beim Start ein
+  Test-Modus-Fenster. Release-Builds: normal.
+- Onboarding hat Schritt 4 "Last step: start your free trial" (`TrialPage`): Knopf → Paywall, "Restore purchases",
+  "Have a code?". Fertig erst, wenn Abo/Testzeit oder Code aktiv (`isPro`), dann automatisch zur Startseite.
+- Pro unten: mit Abo → Google-Play-Abo-Seite (Wechsel auf Jährlich), mit Code → Hinweis, sonst Paywall. In Settings
+  mit Abo kein "Get Pro" (war schon so).
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -46,6 +47,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -78,8 +80,19 @@ fun Onboarding(
     onContinue: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAppInfo: () -> Unit,
+    /** Abo/Testzeit oder Code aktiv: dann ist der letzte Schritt (Testzeit) erledigt. */
+    isPro: Boolean,
+    onStartTrial: () -> Unit,
+    onRestore: () -> Unit,
+    onRedeem: (String) -> String,
+    /** Onboarding fertig (nur mit Testzeit, Abo oder Code). */
+    onDone: () -> Unit,
 ) {
     var step by remember { mutableIntStateOf(startStep) }
+    // Hinweis bestätigt und Bedienungshilfe an: weiter zur Testzeit (ohne sie geht die App nicht).
+    LaunchedEffect(accepted, enabled, step, isPro) {
+        if (step == 2 && accepted && enabled && !isPro) step = 3
+    }
     Box(
         Modifier
             .fillMaxSize()
@@ -93,7 +106,8 @@ fun Onboarding(
             when (page) {
                 0 -> WelcomePage(onNext = { step = 1 })
                 1 -> BeforeAfterPage(onNext = { step = 2 })
-                else -> TurnOnPage(accepted, enabled, onAgree, onContinue, onOpenSettings, onOpenAppInfo)
+                2 -> TurnOnPage(accepted, enabled, onAgree, onContinue, onOpenSettings, onOpenAppInfo)
+                else -> TrialPage(isPro, onStartTrial, onRestore, onRedeem, onDone)
             }
         }
     }
@@ -148,7 +162,7 @@ private fun Dots(step: Int) {
         Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.Center,
     ) {
-        repeat(3) { i ->
+        repeat(STEPS) { i ->
             Box(
                 Modifier
                     .padding(horizontal = 3.dp)
@@ -546,5 +560,76 @@ private fun Bullet(text: String, color: Color) {
     Row {
         Text("•  ", color = color, fontSize = 14.sp)
         Text(text, color = color, fontSize = 14.sp)
+    }
+}
+
+private const val STEPS = 4
+
+/**
+ * Letzter Schritt: 3 Tage gratis starten (Superwall-Paywall). Ohne Testzeit, Abo oder Code geht es nicht weiter.
+ * Sobald eins davon aktiv ist, ist das Onboarding fertig.
+ */
+@Composable
+private fun TrialPage(
+    isPro: Boolean,
+    onStartTrial: () -> Unit,
+    onRestore: () -> Unit,
+    onRedeem: (String) -> String,
+    onDone: () -> Unit,
+) {
+    var redeemOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(isPro) { if (isPro) onDone() }
+    Page(
+        step = 3,
+        button = "Start 3 days free",
+        onButton = onStartTrial,
+        footer = {
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Text(
+                    "Restore purchases",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 14.sp,
+                    modifier = Modifier.clickable(onClick = onRestore).padding(6.dp),
+                )
+                Text(
+                    "Have a code?",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 14.sp,
+                    modifier = Modifier.clickable { redeemOpen = true }.padding(6.dp),
+                )
+            }
+        },
+    ) {
+        Spacer(Modifier.weight(1f))
+        Box(Modifier.align(Alignment.CenterHorizontally)) { BrandLogo(96.dp) }
+        Spacer(Modifier.height(26.dp))
+        Text("Last step:", style = headline(36.sp), color = Color.White.copy(alpha = 0.6f))
+        Text("start your free trial.", style = headline(36.sp), color = Color.White)
+        Spacer(Modifier.height(20.dp))
+        TrialPoint("Today", "Shorts are gone. Everything is unlocked.")
+        TrialPoint("Day 2", "You get your time back.")
+        TrialPoint("Day 3", "Your subscription starts. Cancel before in Google Play and you pay nothing.")
+        Spacer(Modifier.weight(1.2f))
+    }
+    if (redeemOpen) RedeemDialog(onRedeem, onClose = { redeemOpen = false })
+}
+
+@Composable
+private fun TrialPoint(title: String, text: String) {
+    Row(Modifier.padding(vertical = 7.dp), verticalAlignment = Alignment.Top) {
+        Box(
+            Modifier.padding(top = 2.dp).size(26.dp).clip(CircleShape).background(Color.White),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Check, null, tint = Brand.RedText, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column {
+            Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(text, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp)
+        }
     }
 }

@@ -31,6 +31,8 @@ import app.fshorts.ui.HomeState
 import app.fshorts.ui.Onboarding
 import com.superwall.sdk.Superwall
 import com.superwall.sdk.models.entitlements.SubscriptionStatus
+import com.superwall.sdk.paywall.presentation.PaywallPresentationHandler
+import com.superwall.sdk.paywall.presentation.internal.state.PaywallSkippedReason
 import com.superwall.sdk.paywall.presentation.register
 
 class MainActivity : ComponentActivity() {
@@ -63,7 +65,7 @@ private fun App() {
     }
     val isPro = subscribed || promo
 
-    /** Einrichtung fertig: zur Startseite, dann die Paywall mit den 3 Gratis-Tagen (ohne sie geht die App nicht). */
+    /** Einrichtung fertig. Nur mit Testzeit, Abo oder Code (sonst kommt man nicht aus dem Onboarding). */
     fun finishSetup() {
         awaitingEnable = false
         showSetup = false
@@ -71,13 +73,61 @@ private fun App() {
             Prefs.setOnboardingDone(context)
             onboardingDone = true
         }
-        if (!Access.unlocked) Superwall.instance.register(FShortsApp.PLACEMENT_START)
+    }
+
+    /** Unsere Superwall-Paywall. Kommt sie nicht, sagt eine Meldung warum (z. B. Placement nicht im Dashboard). */
+    fun showPaywall() {
+        val handler = PaywallPresentationHandler()
+        handler.onSkip { reason ->
+            val text = when (reason) {
+                is PaywallSkippedReason.PlacementNotFound ->
+                    "Paywall not shown: placement \"${FShortsApp.PLACEMENT_START}\" isn't in a Superwall campaign."
+                is PaywallSkippedReason.NoAudienceMatch -> "Paywall not shown: no audience matches in the campaign."
+                is PaywallSkippedReason.Holdout -> "Paywall not shown: you're in the campaign's holdout group."
+                is PaywallSkippedReason.UserIsSubscribed -> "You already have Pro."
+                else -> "Paywall not shown."
+            }
+            ContextCompat.getMainExecutor(context).execute { Toast.makeText(context, text, Toast.LENGTH_LONG).show() }
+        }
+        handler.onError { error ->
+            ContextCompat.getMainExecutor(context).execute {
+                Toast.makeText(context, "Paywall error: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+        Superwall.instance.register(FShortsApp.PLACEMENT_START, handler = handler)
+    }
+
+    val restore = {
+        Superwall.instance.restorePurchases { result ->
+            val text = if (result.isSuccess) "Purchases restored" else "Nothing to restore"
+            ContextCompat.getMainExecutor(context).execute {
+                Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val redeem = { code: String ->
+        when (Access.redeem(context, code)) {
+            Access.Redeem.Unlocked -> {
+                promo = true
+                "Unlocked. F*ck Shorts is free for you."
+            }
+            Access.Redeem.Stopped -> {
+                promo = false
+                "Code removed. Pro now needs a subscription again."
+            }
+            Access.Redeem.Invalid -> "This code isn't valid."
+        }
     }
 
     LifecycleResumeEffect(Unit) {
         enabled = isServiceEnabled(context)
         shortsClosed = Prefs.shortsBlocked(context)
-        if (enabled && accepted && awaitingEnable) finishSetup()
+        if (enabled && accepted && awaitingEnable) {
+            awaitingEnable = false
+            // Weiter geht es im Onboarding mit der Testzeit; nur wer schon freigeschaltet ist, ist hier fertig.
+            if (Access.unlocked) finishSetup()
+        }
         onPauseOrDispose { }
     }
 
@@ -95,18 +145,23 @@ private fun App() {
                         Prefs.setDisclosureAccepted(context)
                         accepted = true
                         if (enabled) {
-                            finishSetup()
+                            if (Access.unlocked) finishSetup()
                         } else {
                             awaitingEnable = true
                             openAccessibilitySettings(context)
                         }
                     },
-                    onContinue = { finishSetup() },
+                    onContinue = { if (Access.unlocked) finishSetup() },
                     onOpenSettings = {
                         awaitingEnable = true
                         openAccessibilitySettings(context)
                     },
                     onOpenAppInfo = { openAppInfo(context) },
+                    isPro = isPro,
+                    onStartTrial = { showPaywall() },
+                    onRestore = restore,
+                    onRedeem = redeem,
+                    onDone = { finishSetup() },
                 )
             }
         } else {
@@ -126,36 +181,18 @@ private fun App() {
                         themeMode = it
                         Prefs.setThemeMode(context, it)
                     },
-                    showPaywall = {
-                        if (isPro) {
-                            Toast.makeText(context, "You already have Pro", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Superwall.instance.register(FShortsApp.PLACEMENT_START)
+                    showPaywall = { showPaywall() },
+                    proTab = {
+                        when {
+                            subscribed -> openUrl(context, FShortsApp.PLAY_SUBSCRIPTIONS)
+                            promo -> Toast.makeText(context, "Pro is unlocked with a code", Toast.LENGTH_SHORT).show()
+                            else -> showPaywall()
                         }
                     },
-                    restore = {
-                        Superwall.instance.restorePurchases { result ->
-                            val text = if (result.isSuccess) "Purchases restored" else "Nothing to restore"
-                            ContextCompat.getMainExecutor(context).execute {
-                                Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    },
+                    restore = restore,
                     manageSubscription = { openUrl(context, FShortsApp.PLAY_SUBSCRIPTIONS) },
                     rateApp = { openUrl(context, "https://play.google.com/store/apps/details?id=${context.packageName}") },
-                    redeem = { code ->
-                        when (Access.redeem(context, code)) {
-                            Access.Redeem.Unlocked -> {
-                                promo = true
-                                "Unlocked. F*ck Shorts is free for you."
-                            }
-                            Access.Redeem.Stopped -> {
-                                promo = false
-                                "Code removed. Pro now needs a subscription again."
-                            }
-                            Access.Redeem.Invalid -> "This code isn't valid."
-                        }
-                    },
+                    redeem = redeem,
                     restartSetup = {
                         Prefs.setOnboardingDone(context, false)
                         onboardingDone = false
