@@ -492,7 +492,7 @@ Nach dem Design-PDF des Nutzers (Onboarding, Status/Settings/Pro, About), aber i
 - `ui/Theme.kt` (Farben, `BrandLogo` gezeichnet, `GlassCard`), `ui/Onboarding.kt` (Willkommen → Vorher/Nachher →
   "Turn it on" mit vollständigem Hinweis `Disclosure`, Zustimmen/"Not now", Blatt "Switch locked?"),
   `ui/MainTabs.kt` (Status, Settings mit Theme System/Dark/Light, Debugging, About, Pro). `MainActivity.kt` verbindet.
-- **Superwall 2.9.0**: `FShortsApp` (Application) mit `Superwall.configure(pk_…)`, Paywall-Activity im Manifest,
+- **Superwall 2.9.0**: `FShortsApp` (Application) mit `Superwall.configure(pk_… der Android-App; der erste Schlüssel war der der Apple-App → falsche Paywall "Theo")`, Paywall-Activity im Manifest,
   `INTERNET` + `BILLING`, `POST_NOTIFICATIONS` entfernt (`tools:node="remove"`). Paywall (`app_start`) kommt einmal,
   sobald nach dem Onboarding die Bedienungshilfe an ist, und über Pro/"Time saved". Produkte: `fckshorts_pro`
   (Base Plans `monthly` mit 3 Tagen gratis, `yearly`). **Keine Sperre:** Die Leiste funktioniert ohne Abo.

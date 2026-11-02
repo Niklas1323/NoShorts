@@ -32,7 +32,7 @@ class FShortsApp : Application() {
     }
 
     companion object {
-        const val SUPERWALL_KEY = "pk_TuWN1bNCyvooyXGoe-UMU"
+        const val SUPERWALL_KEY = "pk_FhDD1tEHLAsmd93ianMsW"
         /** Placement im Superwall-Dashboard, an dem die Paywall hängt. */
         const val PLACEMENT_START = "app_start"
         const val PLAY_SUBSCRIPTIONS = "https://play.google.com/store/account/subscriptions?sku=fckshorts_pro&package=app.fshorts"
