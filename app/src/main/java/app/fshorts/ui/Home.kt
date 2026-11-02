@@ -92,7 +92,9 @@ class HomeState(
     /** Jetzt (Uhrzeit ms), sekündlich aktualisiert für den Countdown. */
     val now: Long = 0L,
     /** Wartezeit fürs nächste Ausschalten in Minuten. */
-    val nextWaitMinutes: Int = 15,
+    val nextWaitMinutes: Int = 5,
+    /** Seit wann die App benutzt wird (Uhrzeit ms), für die Tages-Sprüche. */
+    val startedAt: Long = 0L,
     /** Test-Code aktiv: Wartezeit nur 5 Sekunden. */
     val fastTimer: Boolean = false,
 )
@@ -260,19 +262,28 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                 color = accent,
             )
             Spacer(Modifier.height(8.dp))
-            Text(
-                when {
-                    !state.enabled -> "Turn on F*ck Shorts in Accessibility."
-                    state.paused -> "Shorts are allowed. Tap the shield to turn protection back on."
-                    readyToTurnOff -> "You can turn protection off now. Tap the shield."
-                    waiting -> "You can turn it off in ${countdown(remainingMs)}."
-                    else -> "YouTube is Shorts-free."
-                },
-                color = p.subtext,
-                fontSize = 17.sp,
-                textAlign = TextAlign.Center,
-            )
-            if (waiting) {
+            if (readyToTurnOff) {
+                // Wartezeit abgesessen: gross, ohne "Keep protection on" darunter.
+                Text(
+                    "You can turn protection off now. Tap the shield.",
+                    style = headline(24.sp),
+                    color = p.text,
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                Text(
+                    when {
+                        !state.enabled -> "Turn on F*ck Shorts in Accessibility."
+                        state.paused -> "Shorts are allowed. Tap the shield to turn protection back on."
+                        waiting -> "You can turn it off in ${countdown(remainingMs)}."
+                        else -> "YouTube is Shorts-free."
+                    },
+                    color = p.subtext,
+                    fontSize = 17.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            if (waiting && !readyToTurnOff) {
                 Text(
                     "Keep protection on",
                     color = p.text,
@@ -324,7 +335,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
 
     when (dialog) {
         ProtectionDialog.Quote -> QuoteDialog(
-            stat = progressLine(state.shortsClosed),
+            stat = progressLine(state.shortsClosed, state.startedAt, state.now),
             waitLabel = if (state.fastTimer) "5 sec" else "${state.nextWaitMinutes} min",
             onKeep = { dialog = null },
             onTurnOff = {
@@ -347,7 +358,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
         ProtectionDialog.ConfirmOff -> ProtectionSheet(
             kicker = "Last chance.",
             quote = remember { SHORTS_QUOTES.random() },
-            stat = progressLine(state.shortsClosed),
+            stat = progressLine(state.shortsClosed, state.startedAt, state.now),
             note = "Shorts will play again. Your bar without the Shorts button stays.",
             primary = "Keep protection on",
             onPrimary = {
@@ -387,11 +398,27 @@ private val SHORTS_QUOTES = listOf(
     "Nobody on their deathbed wished they'd watched more Shorts.",
 )
 
-/** "Das wirfst du weg": eigene Zahlen im Ausschalt-Fenster. */
-private fun progressLine(shortsClosed: Int): String =
-    if (shortsClosed <= 0) "You just started. Don't quit on day one."
-    else "$shortsClosed Shorts blocked. ${timeSaved(shortsClosed).removePrefix("≈ ")} of your life back. " +
-        "Turning it off throws that away."
+/** "Das wirfst du weg": Tag seit Beginn plus eigene Zahlen im Ausschalt-Fenster. */
+private fun progressLine(shortsClosed: Int, startedAt: Long, now: Long): String {
+    val ref = if (now > 0L) now else System.currentTimeMillis()
+    val day = if (startedAt <= 0L) 1 else ((ref - startedAt).coerceAtLeast(0L) / 86_400_000L + 1).toInt()
+    val dayLine = when {
+        day <= 1 -> "Day 1. Don't quit on day one."
+        day == 2 -> "Day 2. You made it through yesterday. Don't undo it today."
+        day == 3 -> "Day 3. The first days are the hardest. You're almost through them."
+        day == 4 -> "Day 4. Your brain is starting to adjust. Don't reset it now."
+        day == 5 -> "Day 5. Five days without the endless scroll. Don't throw them away."
+        day == 6 -> "Day 6. One more day and it's a full week. Don't quit now."
+        day < 14 -> "Day $day. Don't quit in your first week Shorts-free."
+        day < 30 -> "Day $day. Two weeks in, this is becoming a habit. Don't break it."
+        day < 60 -> "Day $day. Don't quit in your first month."
+        day < 180 -> "${day / 30} months Shorts-free. One tap and you're back at zero."
+        day < 365 -> "Half a year Shorts-free. Don't trade it for a few clips."
+        else -> "Over a year Shorts-free. Don't let one tap undo it."
+    }
+    if (shortsClosed <= 0) return dayLine
+    return "$dayLine $shortsClosed Shorts blocked, ${timeSaved(shortsClosed).removePrefix("≈ ")} of your life back."
+}
 
 private fun countdown(ms: Long): String {
     val total = (ms + 999) / 1000

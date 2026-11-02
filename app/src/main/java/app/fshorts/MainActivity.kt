@@ -236,6 +236,7 @@ private fun App() {
                     now = now,
                     nextWaitMinutes = nextWait,
                     fastTimer = fastTimer,
+                    startedAt = Prefs.startedAt(context),
                 ),
                 HomeActions(
                     turnOn = { showSetup = true },

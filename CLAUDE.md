@@ -670,3 +670,11 @@ Auf dem Arbeits-PC (A023985, 26.10.2026) gibt es kein JDK: dort nur über GitHub
 ohne Admin-Rechte unter `%USERPROFILE%\tools` (platform-tools, ffmpeg-master-latest-win64-gpl).
 Lokale Builds haben versionCode 1 → `adb install -r -d`.
 Arbeits-Branch: `claude/intelligent-volta-4lochv`.
+
+### 03.11.2026, Nacht (Cloud, NICHT am Handy getestet)
+- Erste Wartezeit fürs Ausschalten jetzt **5 min** (`Prefs.nextWaitMinutes` Standard 5).
+- Ausschalt-Fenster: Spruch je nach Tag seit Beginn (`progressLine`, Tag 1–6 je eigener, dann Woche, 2 Wochen, Monat,
+  Monate, halbes Jahr, Jahr), dazu die eigenen Zahlen. Beginn = Prefs `started_at` (beim ersten Lesen gesetzt,
+  "Ningeningestop" setzt zurück).
+- Wartezeit abgesessen: "Keep protection on" verschwindet, "You can turn protection off now" gross.
+- Superwall-Paywall: Texte je nach `products.hasIntroductoryOffer` (Testzeit schon gebraucht → ohne Testzeit-Text).
