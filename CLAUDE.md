@@ -502,6 +502,16 @@ Nach dem Design-PDF des Nutzers (Onboarding, Status/Settings/Pro, About), aber i
 Status an/aus, Theme hell/dunkel, Pro, Debugging-Teilen. Leiste in YouTube unverändert? Superwall-Start im Logcat
 (`adb logcat -s Superwall`). Der Dienst läuft im selben Prozess wie Superwall – auf Ruckler achten.
 
+### 02.11.2026, später (Cloud, NICHT am Handy getestet): Startseite und Einstellungen neu
+Wunsch des Nutzers: Debugging-Bereich weg, Regal-Schalter und Regal-Zahl weg (Regale werden **immer** im
+Hintergrund ausgeblendet, `Prefs.autoHideShelf` gibt fest `true`), keine eigene Pro-Seite (Pro = immer unsere
+Superwall-Paywall `app_start`), Hinweis im Onboarding aufklappbar ("Show details", Knöpfe direkt darunter).
+Neu: `ui/Home.kt` – eine Startseite (Logo, grosser Status-Kreis, "Shorts closed", "Time saved" mit PRO-Pille →
+Paywall, Knopf "Open YouTube"/"Turn on protection"), Zahnrad oben rechts → Settings (Subscription: "Get Pro"-Karte
+im Paywall-Stil bzw. "Manage subscription"; Restore; Theme; Rate; Privacy & permissions; Version). `ui/MainTabs.kt`
+gelöscht. Fehler-Dateien werden weiter still gespeichert (nur per adb), lange Drücken auf unsere Leiste speichert
+weiterhin. Hinweis-Schlüssel bleibt v3 (v3 war nur im Test).
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit

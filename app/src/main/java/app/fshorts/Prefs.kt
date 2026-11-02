@@ -10,7 +10,6 @@ object Prefs {
     private const val THEME_MODE = "theme_mode"
     private const val DEBUG_DUMPS = "debug_dumps"
     private const val SHORTS_BLOCKED = "shorts_blocked"
-    private const val AUTO_HIDE_SHELF = "auto_hide_shelf"
     private const val SHELVES_HIDDEN = "shelves_hidden"
     private const val MENU_DIM = "menu_dim"
     private const val BAR_STATE = "bar_state"
@@ -34,9 +33,9 @@ object Prefs {
     fun incrementShortsBlocked(context: Context) =
         prefs(context).edit().putInt(SHORTS_BLOCKED, shortsBlocked(context) + 1).apply()
 
-    fun autoHideShelf(context: Context) = prefs(context).getBoolean(AUTO_HIDE_SHELF, true)
-    fun setAutoHideShelf(context: Context, on: Boolean) =
-        prefs(context).edit().putBoolean(AUTO_HIDE_SHELF, on).apply()
+    /** Regale werden immer ausgeblendet (Schalter entfernt, Wunsch des Nutzers 02.11.2026). */
+    @Suppress("UNUSED_PARAMETER")
+    fun autoHideShelf(context: Context) = true
 
     fun shelvesHidden(context: Context) = prefs(context).getInt(SHELVES_HIDDEN, 0)
     fun incrementShelvesHidden(context: Context) =

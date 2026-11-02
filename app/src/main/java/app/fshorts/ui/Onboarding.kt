@@ -2,6 +2,7 @@ package app.fshorts.ui
 
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -30,6 +31,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Home
@@ -343,7 +346,7 @@ private fun TurnOnPage(
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Disclosure()
+            Disclosure(collapsible = true)
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -445,11 +448,13 @@ private fun FakeSwitch() {
 
 /**
  * Vollständiger Hinweis (Play-Richtlinie "Use of the AccessibilityService API"). Muss vor dem Einschalten zu sehen
- * sein und genau sagen, was gelesen wird, was die App tut und wohin Daten gehen. Bei Änderungen: Formular in der
- * Play Console neu abgeben und `Prefs.DISCLOSURE` hochzählen.
+ * sein und genau sagen, was gelesen wird, was die App tut und wohin Daten gehen. Im Onboarding zuerst zugeklappt
+ * (Zusammenfassung + "Show details"), die Knöpfe stehen direkt darunter. Bei Änderungen: Formular in der Play
+ * Console neu abgeben und `Prefs.DISCLOSURE` hochzählen.
  */
 @Composable
-fun Disclosure(textColor: Color = Color.White) {
+fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
+    var expanded by remember { mutableStateOf(!collapsible) }
     val sub = textColor.copy(alpha = 0.8f)
     val shape = RoundedCornerShape(18.dp)
     Column(
@@ -464,35 +469,62 @@ fun Disclosure(textColor: Color = Color.White) {
         Text("Before you agree", color = textColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Text(
             "F*ck Shorts needs Android's Accessibility permission. It is not an assistive tool for people with " +
-                "disabilities. It uses this permission only to remove Shorts from the YouTube app. Without it, " +
-                "the app can't work.",
+                "disabilities. It uses this permission only to remove Shorts from the YouTube app: it reads " +
+                "YouTube's screen, acts in YouTube for you, and keeps that data on your phone.",
             color = sub, fontSize = 14.sp,
         )
-        Text("What it reads", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        Bullet("The layout of the YouTube app: buttons, text (e.g. video titles) and where they are on screen.", sub)
-        Bullet("Which app is in front. For notifications and the keyboard only where they are, not what's in them.", sub)
-        Bullet("Screenshots, to copy colors and your profile picture into its own bar.", sub)
-        Text("What it does in YouTube", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        Bullet("Places its own bar without the Shorts button over YouTube's bar. Tapping it taps the matching YouTube button.", sub)
-        Bullet("Presses Back as soon as a Short opens. A Short opened from a link may play; swipe on and the app swipes back.", sub)
-        Bullet(
-            "If \"Auto-hide Shorts shelves\" is on: taps ⋮ → \"Not interested\" or \"Hide\" on Shorts shelves. " +
-                "This changes your YouTube recommendations. You can switch it off in Settings.",
-            sub,
-        )
-        Text("Your data", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        Bullet("Everything it reads from YouTube stays on your phone and is never sent anywhere.", sub)
-        Bullet(
-            "Stored on your phone only: a crop of your profile picture, the position of YouTube's bar and up to " +
-                "12 troubleshooting files (Settings → Debugging), which you can share or delete.",
-            sub,
-        )
-        Bullet(
-            "Subscriptions are handled by Google Play and our payment provider Superwall. They receive purchase and " +
-                "basic device info (e.g. device model, language, app version), never anything from YouTube.",
-            sub,
-        )
-        Bullet("It doesn't read passwords, messages or the content of other apps.", sub)
+        if (collapsible) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (expanded) "Hide details" else "Show details",
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    null,
+                    tint = textColor,
+                )
+            }
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("What it reads", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Bullet("The layout of the YouTube app: buttons, text (e.g. video titles) and where they are on screen.", sub)
+                Bullet("Which app is in front. For notifications and the keyboard only where they are, not what's in them.", sub)
+                Bullet("Screenshots, to copy colors and your profile picture into its own bar.", sub)
+                Text("What it does in YouTube", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Bullet("Places its own bar without the Shorts button over YouTube's bar. Tapping it taps the matching YouTube button.", sub)
+                Bullet("Presses Back as soon as a Short opens. A Short opened from a link may play; swipe on and the app swipes back.", sub)
+                Bullet(
+                    "Hides Shorts shelves automatically: taps ⋮ → \"Not interested\" or \"Hide\" on them. " +
+                        "This changes your YouTube recommendations.",
+                    sub,
+                )
+                Text("Your data", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Bullet("Everything it reads from YouTube stays on your phone and is never sent anywhere.", sub)
+                Bullet(
+                    "Stored on your phone only: a crop of your profile picture, the position of YouTube's bar and up " +
+                        "to 12 small troubleshooting files about YouTube's screen layout.",
+                    sub,
+                )
+                Bullet(
+                    "Subscriptions are handled by Google Play and our payment provider Superwall. They receive purchase " +
+                        "and basic device info (e.g. device model, language, app version), never anything from YouTube.",
+                    sub,
+                )
+                Bullet("It doesn't read passwords, messages or the content of other apps.", sub)
+            }
+        }
     }
 }
 

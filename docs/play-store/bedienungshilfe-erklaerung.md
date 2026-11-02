@@ -29,10 +29,10 @@ für Menschen mit Behinderung. Mit `true` zu lügen wäre ein Grund zum Sperren.
 - **Bildschirmfotos:** vom YouTube-Fenster (Profilbild, hell/dunkel) – `BarStyle.kt`; vom ganzen Bildschirm nur zum
   Messen einer Farbe (Benachrichtigungs-Schleier, Menü-Abdunkelung), danach sofort verworfen.
 - **Handelt in YouTube nach festen Regeln:** eigene Leiste darüber, Tipp darauf → Klick auf den echten Knopf;
-  Short geht auf → "Zurück"; Shorts-Regal → ⋮ → "Nicht interessiert" / auf Abos "Ausblenden" (Schalter, abschaltbar);
+  Short geht auf → "Zurück"; Shorts-Regal → ⋮ → "Nicht interessiert" / auf Abos "Ausblenden" (immer an, seit 02.11. kein Schalter mehr);
   Short per Link: Weiterwischen → zurückwischen.
 - **Speichert nur auf dem Gerät:** Profilbild-Ausschnitt, Lage der Leiste, Einstellungen, max. 12 Fehler-Dateien
-  (Struktur der YouTube-Seite, Bild der Leiste). Teilen nur, wenn man selbst auf "Struktur teilen" tippt.
+  (Struktur der YouTube-Seite, Bild der Leiste). Seit 02.11. nicht mehr in der App teilbar (nur per USB/adb).
 - **Internet nur für Abos (seit 02.11.2026, Superwall):** Die App hat jetzt `INTERNET` und `BILLING`. Superwall
   (Paywall, Abo-Status) und Google Play bekommen Kauf- und einfache Geräte-Infos (Modell, Sprache, App-Version).
   Was der Dienst aus YouTube liest, geht weiterhin nirgendwohin (kein Netzwerk-Code im Dienst).
@@ -59,32 +59,33 @@ No.
 > and copy the user's profile picture into the replacement bar; full-screen screenshots are only used to measure a
 > single color and are discarded immediately. All of this is processed on the device only and is never
 > transmitted or shared. A small cropped profile picture, the bar position and up to 12 local troubleshooting files
-> are stored on the device only and can be deleted by the user in the app. The app's only network use is for
+> are stored on the device only (deleted when the app is uninstalled or its data is cleared). The app's only network use is for
 > subscriptions: Google Play Billing and our paywall provider Superwall receive purchase and basic device
 > information (device model, language, app version). No data obtained through the AccessibilityService API is
 > ever sent to them or anywhere else.
 
 **Does the app perform actions on behalf of the user? / Autonomous behavior?**
 > The app does not autonomously plan or make decisions and contains no AI agent. It only follows fixed, deterministic
-> rules that the user turns on: when a Short opens, it performs Back; when the user taps our replacement bar, it
-> clicks the corresponding YouTube tab; when a Short opened from a shared link is swiped away, it swipes back to that
-> Short; and, if the user leaves the "Hide Shorts shelves" switch on, it opens the
-> menu of a Shorts shelf and selects "Not interested" (or "Hide" on Shorts cards in Subscriptions). All of this is
-> described in the in-app disclosure, and the shelf feature can be switched off.
+> rules that serve the single purpose the user installed it for: when a Short opens, it performs Back; when the user
+> taps our replacement bar, it clicks the corresponding YouTube tab; when a Short opened from a shared link is swiped
+> away, it swipes back to that Short; and when a Shorts shelf appears, it opens the shelf's menu and selects
+> "Not interested" (or "Hide" on Shorts cards in Subscriptions). All of this is described in the in-app disclosure
+> the user agrees to before turning the service on.
 
 **Prominent disclosure – where is it shown?**
-> On the main screen of the app, before the user is sent to the Accessibility settings. It explains what data is
-> accessed, what the app does with it, and that nothing leaves the device. The user must tap "Zustimmen" (Accept);
-> "Ablehnen" (Decline) is available, and the setup steps are only shown after accepting.
+> On the last onboarding screen ("Turn it on"), before the user is sent to the Accessibility settings. A short
+> summary is always visible; "Show details" expands the full text in place, right above the buttons. It explains
+> what data is accessed, what the app does with it, and that nothing it reads leaves the device. The user must tap
+> "Agree & open settings"; "Not now" is available. The full text is also in Settings → Privacy & permissions.
 
 **Video link:** (nicht gelisteter YouTube-Link, siehe Drehbuch)
 
 ### Deutsch zum Verstehen
 - Kein Hilfsmittel für Behinderung → Nein.
 - Kernfunktion: Shorts in der YouTube-App entfernen (digitales Wohlbefinden). Ohne Bedienungshilfe geht es nicht.
-- Daten: Aufbau von YouTube, vordere App, Bildschirmfotos – alles nur auf dem Handy, kein Internet, nichts geteilt.
+- Daten: Aufbau von YouTube, vordere App, Bildschirmfotos – alles nur auf dem Handy; Internet nur fürs Abo.
 - Keine KI, keine eigenen Entscheidungen: nur feste Regeln (Short → Zurück; Tipp → echter Knopf; Regal → "Nicht
-  interessiert", abschaltbar).
+  interessiert").
 
 ## Text für die Store-Beschreibung
 
@@ -107,12 +108,12 @@ Danach auf YouTube als **"Nicht gelistet"** hochladen, Link ins Formular.
 
 1. **Vorbereitung:** App neu installieren *oder* App-Daten der Test-App zurücksetzen – nur mit Erlaubnis von
    Niklas (`pm clear` löscht alle Einstellungen!). Bedienungshilfe vorher ausschalten.
-2. App öffnen. Den **ganzen Hinweis langsam** zeigen (scrollen, jeder Satz lesbar, ~20 s).
-3. Auf **"Zustimmen"** tippen.
+2. App öffnen, Onboarding bis "Turn it on". **"Show details"** aufklappen, den ganzen Hinweis langsam zeigen (~20 s).
+3. Auf **"Agree & open settings"** tippen.
 4. "Bedienungshilfen öffnen" → F*ck Shorts **einschalten**, Android-Bestätigung zeigen.
 5. "YouTube öffnen": unten unsere Leiste **ohne Shorts-Knopf**; Startseite, Abos, Mein YouTube antippen.
 6. Einen Short öffnen (z. B. aus der Suche) → er geht **sofort zu**.
-7. Zurück in F*ck Shorts: Schalter **"Shorts-Regal wegklicken"** zeigen (an/aus).
+7. Zurück in F*ck Shorts: Startseite "Protection on", Settings → "Privacy & permissions" (Hinweis nachlesbar).
 8. Optional: Bildtext/Untertitel auf Englisch ("The app shows this disclosure before the user enables the service").
 
 ## Checkliste vor der Abgabe
@@ -131,7 +132,7 @@ Danach auf YouTube als **"Nicht gelistet"** hochladen, Link ins Formular.
 
 - **App-Name:** "F*ck Shorts" kann wegen Schimpfwort abgelehnt werden → sauberen Namen bereithalten.
 - **Regal wegklicken:** Die App tippt in YouTube für den Nutzer. Das ist eine feste Regel (erlaubt), Google könnte es
-  trotzdem als "Handeln für den Nutzer" kritisch sehen. Gut erklärt im Formular; notfalls Schalter standardmässig aus.
+  trotzdem als "Handeln für den Nutzer" kritisch sehen. Gut erklärt im Formular; notfalls wieder einen Schalter einbauen (standardmässig aus).
 - **Fehler-Dateien:** Schreiben YouTube-Texte (z. B. Videotitel) auch ins Android-Protokoll (logcat). Für die
   Release-Version abschalten oder kürzen.
 - **Prüfung dauert:** Accessibility-Apps werden genau angeschaut; mit Rückfragen oder Ablehnung rechnen.

@@ -21,14 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.fshorts.service.FuckShortsService
-import app.fshorts.service.TreeDumper
 import app.fshorts.ui.FShortsTheme
-import app.fshorts.ui.MainActions
-import app.fshorts.ui.MainState
-import app.fshorts.ui.MainTabs
+import app.fshorts.ui.HomeActions
+import app.fshorts.ui.HomeApp
+import app.fshorts.ui.HomeState
 import app.fshorts.ui.Onboarding
 import com.superwall.sdk.Superwall
 import com.superwall.sdk.models.entitlements.SubscriptionStatus
@@ -50,18 +48,12 @@ private fun App() {
     var accepted by remember { mutableStateOf(Prefs.disclosureAccepted(context)) }
     var onboardingDone by remember { mutableStateOf(Prefs.onboardingDone(context)) }
     var showSetup by remember { mutableStateOf(false) }
-    var debug by remember { mutableStateOf(Prefs.debugDumps(context)) }
-    var dumpCount by remember { mutableIntStateOf(TreeDumper.files(context).size) }
     var shortsClosed by remember { mutableIntStateOf(Prefs.shortsBlocked(context)) }
-    var shelvesHidden by remember { mutableIntStateOf(Prefs.shelvesHidden(context)) }
-    var autoHide by remember { mutableStateOf(Prefs.autoHideShelf(context)) }
     val subscription by Superwall.instance.subscriptionStatus.collectAsState()
 
     LifecycleResumeEffect(Unit) {
         enabled = isServiceEnabled(context)
-        dumpCount = TreeDumper.files(context).size
         shortsClosed = Prefs.shortsBlocked(context)
-        shelvesHidden = Prefs.shelvesHidden(context)
         // Zurück aus den Einstellungen und eingeschaltet: Onboarding fertig, danach kommt die Paywall.
         if (enabled && accepted && (!onboardingDone || showSetup)) {
             if (!onboardingDone) {
@@ -91,37 +83,20 @@ private fun App() {
                 onOpenAppInfo = { openAppInfo(context) },
             )
         } else {
-            MainTabs(
-                MainState(
+            HomeApp(
+                HomeState(
                     enabled = enabled,
                     shortsClosed = shortsClosed,
-                    shelvesHidden = shelvesHidden,
                     isPro = subscription is SubscriptionStatus.Active,
-                    autoHide = autoHide,
                     themeMode = themeMode,
-                    debug = debug,
-                    dumpCount = dumpCount,
                     version = BuildConfig.VERSION_NAME,
                 ),
-                MainActions(
+                HomeActions(
                     turnOn = { showSetup = true },
                     openYouTube = { openYouTube(context) },
-                    setAutoHide = {
-                        autoHide = it
-                        Prefs.setAutoHideShelf(context, it)
-                    },
                     setThemeMode = {
                         themeMode = it
                         Prefs.setThemeMode(context, it)
-                    },
-                    setDebug = {
-                        debug = it
-                        Prefs.setDebugDumps(context, it)
-                    },
-                    shareDumps = { shareDumps(context) },
-                    clearDumps = {
-                        TreeDumper.clear(context)
-                        dumpCount = 0
                     },
                     showPaywall = { Superwall.instance.register(FShortsApp.PLACEMENT_START) },
                     restore = {
@@ -183,16 +158,4 @@ private fun openUrl(context: Context, url: String) {
     } catch (e: ActivityNotFoundException) {
         Toast.makeText(context, "Couldn't open the link", Toast.LENGTH_SHORT).show()
     }
-}
-
-private fun shareDumps(context: Context) {
-    val files = TreeDumper.files(context)
-    if (files.isEmpty()) return
-    val uris = ArrayList(files.map { FileProvider.getUriForFile(context, "${context.packageName}.files", it) })
-    val send = Intent(Intent.ACTION_SEND_MULTIPLE)
-        .setType("*/*")
-        .putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-        .putExtra(Intent.EXTRA_SUBJECT, "F*ck Shorts – Struktur")
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    context.startActivity(Intent.createChooser(send, "Share"))
 }
