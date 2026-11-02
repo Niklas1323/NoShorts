@@ -97,13 +97,14 @@ private fun App() {
         Superwall.instance.register(FShortsApp.PLACEMENT_START, handler = handler)
     }
 
-    val restore = {
+    val restore: () -> Unit = {
         Superwall.instance.restorePurchases { result ->
             val text = if (result.isSuccess) "Purchases restored" else "Nothing to restore"
             ContextCompat.getMainExecutor(context).execute {
                 Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
             }
         }
+        Unit
     }
 
     val redeem = { code: String ->
