@@ -486,6 +486,22 @@ Zuerst Release build-83 geprüft, danach lokaler Build mit den zwei Fixes unten 
 
 **Offen:** siehe oben (Regal-Karten auf der Startseite).
 
+## 02.11.2026 (Cloud, NICHT am Handy getestet): Neue App-Oberfläche + Superwall
+Nach dem Design-PDF des Nutzers (Onboarding, Status/Settings/Pro, About), aber im Stil der Superwall-Paywall
+(Schwarz → Rot, weisse Knöpfe mit roter Schrift im Onboarding). App-Texte jetzt Englisch.
+- `ui/Theme.kt` (Farben, `BrandLogo` gezeichnet, `GlassCard`), `ui/Onboarding.kt` (Willkommen → Vorher/Nachher →
+  "Turn it on" mit vollständigem Hinweis `Disclosure`, Zustimmen/"Not now", Blatt "Switch locked?"),
+  `ui/MainTabs.kt` (Status, Settings mit Theme System/Dark/Light, Debugging, About, Pro). `MainActivity.kt` verbindet.
+- **Superwall 2.9.0**: `FShortsApp` (Application) mit `Superwall.configure(pk_…)`, Paywall-Activity im Manifest,
+  `INTERNET` + `BILLING`, `POST_NOTIFICATIONS` entfernt (`tools:node="remove"`). Paywall (`app_start`) kommt einmal,
+  sobald nach dem Onboarding die Bedienungshilfe an ist, und über Pro/"Time saved". Produkte: `fckshorts_pro`
+  (Base Plans `monthly` mit 3 Tagen gratis, `yearly`). **Keine Sperre:** Die Leiste funktioniert ohne Abo.
+- Hinweis-Schlüssel `disclosure_accepted_v3` (nennt Superwall/Google Play), dazu `onboarding_done`, `theme_mode`.
+- Noch nicht: App-Icon-Auswahl aus dem Design (Varianten), neues Launcher-Icon.
+**Am Handy prüfen:** Onboarding (alle 3 Seiten, "Switch greyed out?"), nach dem Einschalten kommt die Paywall,
+Status an/aus, Theme hell/dunkel, Pro, Debugging-Teilen. Leiste in YouTube unverändert? Superwall-Start im Logcat
+(`adb logcat -s Superwall`). Der Dienst läuft im selben Prozess wie Superwall – auf Ruckler achten.
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit

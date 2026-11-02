@@ -4,8 +4,10 @@ import android.content.Context
 
 object Prefs {
     private const val FILE = "fuckshorts"
-    // v2: Hinweis wurde für den Play Store vervollständigt, darum muss man neu zustimmen.
-    private const val DISCLOSURE = "disclosure_accepted_v2"
+    // v3: Hinweis nennt jetzt auch Superwall/Google Play (Internet für Abos), darum muss man neu zustimmen.
+    private const val DISCLOSURE = "disclosure_accepted_v3"
+    private const val ONBOARDING_DONE = "onboarding_done"
+    private const val THEME_MODE = "theme_mode"
     private const val DEBUG_DUMPS = "debug_dumps"
     private const val SHORTS_BLOCKED = "shorts_blocked"
     private const val AUTO_HIDE_SHELF = "auto_hide_shelf"
@@ -17,6 +19,13 @@ object Prefs {
 
     fun disclosureAccepted(context: Context) = prefs(context).getBoolean(DISCLOSURE, false)
     fun setDisclosureAccepted(context: Context) = prefs(context).edit().putBoolean(DISCLOSURE, true).apply()
+
+    fun onboardingDone(context: Context) = prefs(context).getBoolean(ONBOARDING_DONE, false)
+    fun setOnboardingDone(context: Context) = prefs(context).edit().putBoolean(ONBOARDING_DONE, true).apply()
+
+    /** 0 = wie das Handy, 1 = dunkel, 2 = hell. */
+    fun themeMode(context: Context) = prefs(context).getInt(THEME_MODE, 0)
+    fun setThemeMode(context: Context, mode: Int) = prefs(context).edit().putInt(THEME_MODE, mode).apply()
 
     fun debugDumps(context: Context) = prefs(context).getBoolean(DEBUG_DUMPS, false)
     fun setDebugDumps(context: Context, on: Boolean) = prefs(context).edit().putBoolean(DEBUG_DUMPS, on).apply()

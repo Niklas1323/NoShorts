@@ -66,4 +66,6 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    // Paywall und Abo (Google Play Billing läuft über Superwall).
+    implementation("com.superwall.sdk:superwall-android:2.9.0")
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">F*ck Shorts</string>
-    <string name="a11y_description">F*ck Shorts blendet Shorts in der YouTube-App aus: Die App liest den Aufbau der YouTube-App (Knöpfe, Texte, Positionen), merkt, welche App vorne ist, macht Bildschirmfotos für Farben und Profilbild, legt eine eigene Leiste ohne Shorts darüber, drückt \"Zurück\", wenn ein Short aufgeht, und blendet auf Wunsch Shorts-Regale aus. Alles bleibt auf dem Handy, die App hat keinen Internetzugang. Passwörter, Nachrichten und Inhalte anderer Apps werden nicht gelesen.</string>
+    <string name="a11y_description">F*ck Shorts removes Shorts from the YouTube app. It reads the layout of the YouTube app (buttons, text, positions), notices which app is in front, takes screenshots for colors and your profile picture, places its own bar without Shorts over YouTube\'s bar, presses Back when a Short opens and, if you want, hides Shorts shelves. Everything it reads from YouTube stays on your phone. Internet is only used for subscriptions (Google Play, Superwall). It doesn\'t read passwords, messages or other apps.</string>
     <string name="shorts_hidden_toast">Shorts sind ausgeblendet</string>
 </resources>

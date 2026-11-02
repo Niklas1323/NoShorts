@@ -33,9 +33,11 @@ für Menschen mit Behinderung. Mit `true` zu lügen wäre ein Grund zum Sperren.
   Short per Link: Weiterwischen → zurückwischen.
 - **Speichert nur auf dem Gerät:** Profilbild-Ausschnitt, Lage der Leiste, Einstellungen, max. 12 Fehler-Dateien
   (Struktur der YouTube-Seite, Bild der Leiste). Teilen nur, wenn man selbst auf "Struktur teilen" tippt.
-- **Kein Internet:** Die APK hat keine `INTERNET`-Berechtigung (im AndroidManifest der APK geprüft). Vor jeder
-  Abgabe nochmals prüfen, besonders wenn später Superwall, Absturzberichte oder Online-Selektoren dazukommen –
-  dann müssen Hinweis, Formular, Datenschutzerklärung und "Datensicherheit" angepasst werden!
+- **Internet nur für Abos (seit 02.11.2026, Superwall):** Die App hat jetzt `INTERNET` und `BILLING`. Superwall
+  (Paywall, Abo-Status) und Google Play bekommen Kauf- und einfache Geräte-Infos (Modell, Sprache, App-Version).
+  Was der Dienst aus YouTube liest, geht weiterhin nirgendwohin (kein Netzwerk-Code im Dienst).
+  `POST_NOTIFICATIONS` von Superwall ist im Manifest entfernt. Hinweis in der App ist angepasst (`Disclosure` in
+  `ui/Onboarding.kt`, Schlüssel `disclosure_accepted_v3`).
 
 ## Antworten fürs Formular (Englisch zum Einfügen)
 
@@ -55,9 +57,12 @@ No.
 > and positions) and which app is currently in the foreground. For the notification shade and the keyboard it only
 > reads their position on screen, not their content. It takes screenshots of the YouTube window to match the colors
 > and copy the user's profile picture into the replacement bar; full-screen screenshots are only used to measure a
-> single color and are discarded immediately. All processing happens on the device. The app has no INTERNET
-> permission; no data is collected, transmitted or shared. A small cropped profile picture, the bar position and up
-> to 12 local troubleshooting files are stored on the device only and can be deleted by the user in the app.
+> single color and are discarded immediately. All of this is processed on the device only and is never
+> transmitted or shared. A small cropped profile picture, the bar position and up to 12 local troubleshooting files
+> are stored on the device only and can be deleted by the user in the app. The app's only network use is for
+> subscriptions: Google Play Billing and our paywall provider Superwall receive purchase and basic device
+> information (device model, language, app version). No data obtained through the AccessibilityService API is
+> ever sent to them or anywhere else.
 
 **Does the app perform actions on behalf of the user? / Autonomous behavior?**
 > The app does not autonomously plan or make decisions and contains no AI agent. It only follows fixed, deterministic
@@ -87,13 +92,13 @@ No.
 > Bedienungshilfen: F*ck Shorts nutzt die Android-Bedienungshilfen (AccessibilityService). Nur so kann die App in
 > der YouTube-App erkennen, wo Shorts sind, eine eigene Leiste ohne Shorts-Knopf darüberlegen, Shorts sofort
 > schliessen und auf Wunsch Shorts-Regale ausblenden. Die App liest dafür den Aufbau der YouTube-App. Alles bleibt
-> auf deinem Handy: Die App hat keinen Internetzugang und gibt keine Daten weiter.
+> auf deinem Handy: Was die App aus YouTube liest, verlässt nie dein Handy. Internet braucht sie nur für das Abo.
 
 **English**
 > Accessibility: F*ck Shorts uses Android's AccessibilityService API. This is the only way for the app to detect
 > Shorts in the YouTube app, place its own navigation bar without the Shorts button on top, close Shorts instantly
 > and, if you want, hide Shorts shelves. To do this the app reads the screen structure of the YouTube app.
-> Everything stays on your phone: the app has no internet access and shares no data.
+> Everything it reads from YouTube stays on your phone. Internet is only used for subscriptions.
 
 ## Drehbuch fürs Video (1–2 Minuten)
 
@@ -113,12 +118,13 @@ Danach auf YouTube als **"Nicht gelistet"** hochladen, Link ins Formular.
 ## Checkliste vor der Abgabe
 
 - [ ] Hinweis in der App am Handy geprüft (erscheint, Ablehnen/Zustimmen gehen, Einrichten erst danach).
-- [ ] APK-Berechtigungen geprüft: keine `INTERNET` (sonst Texte anpassen).
+- [ ] APK-Berechtigungen geprüft: nur `INTERNET`/`BILLING` dazu (Superwall), kein `POST_NOTIFICATIONS`.
 - [ ] Video aufgenommen und als "Nicht gelistet" hochgeladen.
 - [ ] Formular "Accessibility" ausgefüllt (Antworten oben).
 - [ ] Store-Beschreibung mit dem Absatz oben.
 - [ ] Datenschutzerklärung (eigene Aufgabe) sagt dasselbe wie der Hinweis.
-- [ ] Formular "Datensicherheit" (Data safety): keine Daten erhoben/geteilt – passt nur ohne Internet.
+- [ ] Formular "Datensicherheit" (Data safety): Kaufverlauf und App-Interaktionen/Geräte-IDs durch Superwall angeben
+      (genaue Liste in der Superwall-Doku "Google Play Data Safety" nachsehen).
 - [ ] Hinweis auch auf Englisch, falls die App ausserhalb des deutschen Sprachraums angeboten wird.
 
 ## Risiken (ehrlich)
