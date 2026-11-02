@@ -137,25 +137,6 @@ private fun App() {
                 promo = true
                 "Unlocked. F*ck Shorts is free for you."
             }
-            Access.Redeem.Reset -> {
-                // Alles auf Anfang: Einstellungen, Zahlen, Zustimmung, Code, Testzeit-Konto bei Superwall.
-                Protection.setPaused(context, false)
-                Superwall.instance.reset()
-                FShortsApp.clearTestPurchases()
-                promo = false
-                paused = false
-                unlockAt = 0L
-                nextWait = Prefs.nextWaitMinutes(context)
-                fastTimer = false
-                shortsClosed = 0
-                themeMode = 0
-                accepted = false
-                showSetup = false
-                awaitingEnable = false
-                onboardingDone = false
-                onboardingKey++
-                "App reset."
-            }
             Access.Redeem.FastTimer -> {
                 fastTimer = true
                 "Timer is now 5 seconds."

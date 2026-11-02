@@ -8,7 +8,6 @@ import android.content.Context
  */
 object Access {
     private const val CODE_ON = "ningeninge"
-    private const val CODE_OFF = "ningeningestop"
     private const val CODE_TIMER = "ningeningetimer"
 
     @Volatile var subscribed = false
@@ -28,23 +27,17 @@ object Access {
         Prefs.setSubscribed(context, on)
     }
 
-    enum class Redeem { Unlocked, Reset, FastTimer, Invalid }
+    enum class Redeem { Unlocked, FastTimer, Invalid }
 
     /**
-     * Codes (Gross-/Kleinschreibung egal): "Ningeninge" schaltet gratis frei, "Ningeningestop" setzt die ganze App
-     * auf Anfang (das erledigt der Aufrufer), "Ningeningetimer" macht die Wartezeit fürs Ausschalten 5 Sekunden.
+     * Codes (Gross-/Kleinschreibung egal): "Ningeninge" schaltet gratis frei,
+     * "Ningeningetimer" macht die Wartezeit fürs Ausschalten 5 Sekunden.
      */
     fun redeem(context: Context, code: String): Redeem = when (code.trim().lowercase()) {
         CODE_ON -> {
             promo = true
             Prefs.setPromoUnlocked(context, true)
             Redeem.Unlocked
-        }
-        CODE_OFF -> {
-            Prefs.clearAll(context)
-            subscribed = false
-            promo = false
-            Redeem.Reset
         }
         CODE_TIMER -> {
             Prefs.setFastTimer(context, true)

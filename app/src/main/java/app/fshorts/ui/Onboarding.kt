@@ -93,16 +93,14 @@ fun Onboarding(
 ) {
     var step by remember { mutableIntStateOf(startStep) }
     var paywallShown by remember { mutableStateOf(false) }
-    // Hinweis bestätigt und Bedienungshilfe an: weiter zur Testzeit (ohne sie geht die App nicht). Im Moment
-    // direkt die Paywall; der Zwischenschritt [TrialPage] ist abgeschaltet (SHOW_TRIAL_STEP), aber noch da.
-    LaunchedEffect(accepted, enabled, step, isPro) {
-        if (step == 2 && accepted && enabled && !isPro) {
-            if (SHOW_TRIAL_STEP) {
-                step = 3
-            } else if (!paywallShown) {
-                paywallShown = true
-                onStartTrial()
-            }
+    // Paywall nur nach Tipp auf "Continue" (vorher kam sie von selbst, sobald die Bedienungshilfe an war, und die
+    // Seite "Turn it on" wurde übersprungen). Der Zwischenschritt [TrialPage] ist abgeschaltet (SHOW_TRIAL_STEP).
+    val continueTapped: () -> Unit = {
+        if (SHOW_TRIAL_STEP && accepted && enabled && !isPro) {
+            step = 3
+        } else {
+            paywallShown = true
+            onContinue()
         }
     }
     // Testzeit gestartet (oder Code): fertig.
@@ -126,7 +124,7 @@ fun Onboarding(
             when (page) {
                 0 -> WelcomePage(onNext = { step = 1 })
                 1 -> BeforeAfterPage(onNext = { step = 2 })
-                2 -> TurnOnPage(accepted, enabled, isPro, onAgree, onContinue, onOpenSettings, onOpenAppInfo, onRestore, onRedeem)
+                2 -> TurnOnPage(accepted, enabled, isPro, onAgree, continueTapped, onOpenSettings, onOpenAppInfo, onRedeem)
                 else -> TrialPage(isPro, onStartTrial, onRestore, onRedeem, onDone)
             }
         }
@@ -337,19 +335,17 @@ private fun TurnOnPage(
     onContinue: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAppInfo: () -> Unit,
-    onRestore: () -> Unit,
     onRedeem: (String) -> String,
 ) {
     var declined by remember { mutableStateOf(false) }
     var redeemOpen by remember { mutableStateOf(false) }
-    // Alles erledigt bis auf die Testzeit: Knopf öffnet die Paywall, darunter Code und Wiederherstellen.
+    // Alles erledigt bis auf die Testzeit: "Continue" öffnet die Paywall (dort gibt es auch Wiederherstellen), darunter Code.
     val needsTrial = accepted && enabled && !isPro
     var lockedSheet by remember { mutableStateOf(false) }
     Page(
         step = 2,
         button = when {
             !accepted -> "Agree & open settings"
-            needsTrial -> "Start 3 days free"
             enabled -> "Continue"
             else -> "Open settings"
         },
@@ -364,12 +360,6 @@ private fun TurnOnPage(
                     Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    Text(
-                        "Restore purchases",
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 14.sp,
-                        modifier = Modifier.clickable(onClick = onRestore).padding(6.dp),
-                    )
                     Text(
                         "Have a code?",
                         color = Color.White.copy(alpha = 0.8f),

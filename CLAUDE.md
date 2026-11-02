@@ -682,3 +682,11 @@ Arbeits-Branch: `claude/intelligent-volta-4lochv`.
   Placement `app_start`) zeigt die Paywall nur ohne aktives Abo. `Superwall.reset()` behält im Testmodus die gespielte
   Testzeit. Jetzt `FShortsApp.clearTestPurchases()` (per Reflexion: Test-Entitlements leeren, Status Inactive).
   Superwall-CLI in der Cloud: `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt superwall …`.
+
+### 03.11.2026, spät (Cloud, NICHT am Handy getestet)
+- Code **"Ningeningestop" entfernt** (Reset half auch mit `clearTestPurchases` nicht; Nutzer testet neu per Update).
+  `Prefs.clearAll` und `clearTestPurchases` gelöscht. Codes jetzt nur "Ningeninge" und "Ningeningetimer".
+- Onboarding: Paywall kommt NICHT mehr von selbst, wenn die Bedienungshilfe schon an ist (Seite "Turn it on" wurde
+  übersprungen), nur nach Tipp auf "Continue". Knopf heisst "Continue" statt "Start 3 days free", darunter nur noch
+  "Have a code?" (Wiederherstellen gibt es in der Paywall).
+- Vor dem Release: "Run setup again" soll ohne Paywall durchlaufen (Wunsch des Nutzers), noch nicht gebaut.

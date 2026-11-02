@@ -60,9 +60,6 @@ object Prefs {
     fun fastTimer(context: Context) = prefs(context).getBoolean(FAST_TIMER, false)
     fun setFastTimer(context: Context, on: Boolean) = prefs(context).edit().putBoolean(FAST_TIMER, on).apply()
 
-    /** Alles zurück auf Anfang (Code "Ningeningestop"). */
-    fun clearAll(context: Context) = prefs(context).edit().clear().apply()
-
     fun promoUnlocked(context: Context) = prefs(context).getBoolean(PROMO, false)
     fun setPromoUnlocked(context: Context, on: Boolean) = prefs(context).edit().putBoolean(PROMO, on).apply()
 

@@ -33,27 +33,6 @@ class FShortsApp : Application() {
     }
 
     companion object {
-        /**
-         * Testmodus (Test-APKs): gespielte Käufe/Testzeit löschen. `Superwall.reset()` behält sie, darum kam nach
-         * "Ningeningestop" keine Paywall mehr (Kampagne zeigt sie nur ohne aktives Abo → "no audience matches").
-         * Superwall bietet dafür nichts Öffentliches; im echten Google-Play-Betrieb tut das hier nichts.
-         */
-        fun clearTestPurchases() {
-            try {
-                val sw = Superwall.instance
-                val container = sw.javaClass.getMethod("getDependencyContainer\$superwall_release").invoke(sw) ?: return
-                val testMode = container.javaClass.getMethod("getTestMode\$superwall_release").invoke(container) ?: return
-                val isTest = testMode.javaClass.getMethod("isTestMode").invoke(testMode) as? Boolean ?: false
-                if (!isTest) return
-                testMode.javaClass.getMethod("setEntitlements", java.util.Set::class.java).invoke(testMode, emptySet<String>())
-                testMode.javaClass.getMethod("saveSettings").invoke(testMode)
-                sw.javaClass.getMethod("internallySetSubscriptionStatus\$superwall_release", SubscriptionStatus::class.java)
-                    .invoke(sw, SubscriptionStatus.Inactive)
-            } catch (e: Throwable) {
-                android.util.Log.w("FuckShorts", "Test-Käufe nicht gelöscht", e)
-            }
-        }
-
         const val SUPERWALL_KEY = "pk_FhDD1tEHLAsmd93ianMsW"
         /** Placement im Superwall-Dashboard, an dem die Paywall hängt. */
         const val PLACEMENT_START = "app_start"
