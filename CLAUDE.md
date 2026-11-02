@@ -678,3 +678,7 @@ Arbeits-Branch: `claude/intelligent-volta-4lochv`.
   "Ningeningestop" setzt zurück).
 - Wartezeit abgesessen: "Keep protection on" verschwindet, "You can turn protection off now" gross.
 - Superwall-Paywall: Texte je nach `products.hasIntroductoryOffer` (Testzeit schon gebraucht → ohne Testzeit-Text).
+- **"Ningeningestop" → keine Paywall ("no audience matches"):** Kampagne "Onboarding" (Projekt 43741, App 58868,
+  Placement `app_start`) zeigt die Paywall nur ohne aktives Abo. `Superwall.reset()` behält im Testmodus die gespielte
+  Testzeit. Jetzt `FShortsApp.clearTestPurchases()` (per Reflexion: Test-Entitlements leeren, Status Inactive).
+  Superwall-CLI in der Cloud: `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt superwall …`.

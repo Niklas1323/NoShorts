@@ -141,6 +141,7 @@ private fun App() {
                 // Alles auf Anfang: Einstellungen, Zahlen, Zustimmung, Code, Testzeit-Konto bei Superwall.
                 Protection.setPaused(context, false)
                 Superwall.instance.reset()
+                FShortsApp.clearTestPurchases()
                 promo = false
                 paused = false
                 unlockAt = 0L
