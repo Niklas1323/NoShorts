@@ -2,12 +2,26 @@ package app.fshorts
 
 import android.app.Application
 import com.superwall.sdk.Superwall
+import com.superwall.sdk.models.entitlements.SubscriptionStatus
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 
 class FShortsApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        // Öffentlicher Schlüssel (pk_), darf in der App stehen. Läuft im selben Prozess wie der Dienst, stört ihn aber nicht.
+        Access.load(this)
+        // Öffentlicher Schlüssel (pk_), darf in der App stehen. Läuft im selben Prozess wie der Dienst.
         Superwall.configure(this, SUPERWALL_KEY)
+        // Abo-Stand merken: Der Dienst braucht ihn sofort, auch bevor Superwall nach einem Neustart geantwortet hat.
+        MainScope().launch {
+            Superwall.instance.subscriptionStatus.collect { status ->
+                when (status) {
+                    is SubscriptionStatus.Active -> Access.setSubscribed(this@FShortsApp, true)
+                    is SubscriptionStatus.Inactive -> Access.setSubscribed(this@FShortsApp, false)
+                    else -> Unit
+                }
+            }
+        }
     }
 
     companion object {

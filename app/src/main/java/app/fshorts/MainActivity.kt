@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,21 +49,35 @@ private fun App() {
     var accepted by remember { mutableStateOf(Prefs.disclosureAccepted(context)) }
     var onboardingDone by remember { mutableStateOf(Prefs.onboardingDone(context)) }
     var showSetup by remember { mutableStateOf(false) }
+    /** In die Android-Einstellungen geschickt: beim Zurückkommen und eingeschaltet geht es weiter. */
+    var awaitingEnable by remember { mutableStateOf(false) }
+    var onboardingKey by remember { mutableIntStateOf(0) }
     var shortsClosed by remember { mutableIntStateOf(Prefs.shortsBlocked(context)) }
+    var promo by remember { mutableStateOf(Access.promo) }
     val subscription by Superwall.instance.subscriptionStatus.collectAsState()
+    // Testzeit und Abo melden sich bei Superwall als "Active". Unbekannt (noch keine Antwort): letzter Stand.
+    val subscribed = when (subscription) {
+        is SubscriptionStatus.Active -> true
+        is SubscriptionStatus.Inactive -> false
+        else -> Access.subscribed
+    }
+    val isPro = subscribed || promo
+
+    /** Einrichtung fertig: zur Startseite, dann die Paywall mit den 3 Gratis-Tagen (ohne sie geht die App nicht). */
+    fun finishSetup() {
+        awaitingEnable = false
+        showSetup = false
+        if (!onboardingDone) {
+            Prefs.setOnboardingDone(context)
+            onboardingDone = true
+        }
+        if (!Access.unlocked) Superwall.instance.register(FShortsApp.PLACEMENT_START)
+    }
 
     LifecycleResumeEffect(Unit) {
         enabled = isServiceEnabled(context)
         shortsClosed = Prefs.shortsBlocked(context)
-        // Zurück aus den Einstellungen und eingeschaltet: Onboarding fertig, danach kommt die Paywall.
-        if (enabled && accepted && (!onboardingDone || showSetup)) {
-            if (!onboardingDone) {
-                Prefs.setOnboardingDone(context)
-                onboardingDone = true
-                Superwall.instance.register(FShortsApp.PLACEMENT_START)
-            }
-            showSetup = false
-        }
+        if (enabled && accepted && awaitingEnable) finishSetup()
         onPauseOrDispose { }
     }
 
@@ -71,23 +86,36 @@ private fun App() {
 
     FShortsTheme(themeMode) {
         if (!onboardingDone || showSetup || !accepted) {
-            Onboarding(
-                startStep = if (accepted || showSetup || onboardingDone) 2 else 0,
-                accepted = accepted,
-                onAgree = {
-                    Prefs.setDisclosureAccepted(context)
-                    accepted = true
-                    openAccessibilitySettings(context)
-                },
-                onOpenSettings = { openAccessibilitySettings(context) },
-                onOpenAppInfo = { openAppInfo(context) },
-            )
+            key(onboardingKey) {
+                Onboarding(
+                    startStep = if (showSetup) 2 else 0,
+                    accepted = accepted,
+                    enabled = enabled,
+                    onAgree = {
+                        Prefs.setDisclosureAccepted(context)
+                        accepted = true
+                        if (enabled) {
+                            finishSetup()
+                        } else {
+                            awaitingEnable = true
+                            openAccessibilitySettings(context)
+                        }
+                    },
+                    onContinue = { finishSetup() },
+                    onOpenSettings = {
+                        awaitingEnable = true
+                        openAccessibilitySettings(context)
+                    },
+                    onOpenAppInfo = { openAppInfo(context) },
+                )
+            }
         } else {
             HomeApp(
                 HomeState(
                     enabled = enabled,
                     shortsClosed = shortsClosed,
-                    isPro = subscription is SubscriptionStatus.Active,
+                    isPro = isPro,
+                    promo = promo,
                     themeMode = themeMode,
                     version = BuildConfig.VERSION_NAME,
                 ),
@@ -98,7 +126,13 @@ private fun App() {
                         themeMode = it
                         Prefs.setThemeMode(context, it)
                     },
-                    showPaywall = { Superwall.instance.register(FShortsApp.PLACEMENT_START) },
+                    showPaywall = {
+                        if (isPro) {
+                            Toast.makeText(context, "You already have Pro", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Superwall.instance.register(FShortsApp.PLACEMENT_START)
+                        }
+                    },
                     restore = {
                         Superwall.instance.restorePurchases { result ->
                             val text = if (result.isSuccess) "Purchases restored" else "Nothing to restore"
@@ -109,6 +143,25 @@ private fun App() {
                     },
                     manageSubscription = { openUrl(context, FShortsApp.PLAY_SUBSCRIPTIONS) },
                     rateApp = { openUrl(context, "https://play.google.com/store/apps/details?id=${context.packageName}") },
+                    redeem = { code ->
+                        when (Access.redeem(context, code)) {
+                            Access.Redeem.Unlocked -> {
+                                promo = true
+                                "Unlocked. F*ck Shorts is free for you."
+                            }
+                            Access.Redeem.Stopped -> {
+                                promo = false
+                                "Code removed. Pro now needs a subscription again."
+                            }
+                            Access.Redeem.Invalid -> "This code isn't valid."
+                        }
+                    },
+                    restartSetup = {
+                        Prefs.setOnboardingDone(context, false)
+                        onboardingDone = false
+                        showSetup = false
+                        onboardingKey++
+                    },
                 ),
             )
         }

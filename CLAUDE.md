@@ -512,6 +512,20 @@ im Paywall-Stil bzw. "Manage subscription"; Restore; Theme; Rate; Privacy & perm
 gelöscht. Fehler-Dateien werden weiter still gespeichert (nur per adb), lange Drücken auf unsere Leiste speichert
 weiterhin. Hinweis-Schlüssel bleibt v3 (v3 war nur im Test).
 
+### 02.11.2026, Abend (Cloud, NICHT am Handy getestet): Sperre ohne Abo, Code, Leiste unten zurück
+- **Ohne Abo/Testzeit oder Code tut der Dienst nichts** (`Access.unlocked`, geprüft in `onAccessibilityEvent`,
+  `scanInternal` und `pollRunnable`; unsere Leiste wird versteckt, YouTube bleibt unverändert). Abo-Stand kommt von
+  Superwall (`subscriptionStatus`, Testzeit = Active), wird in `FShortsApp` gesammelt und in Prefs gemerkt
+  (`subscribed`), damit der Dienst nach einem Neustart sofort Bescheid weiss.
+- **Gratis-Code** in Settings → "Redeem code": "Ningeninge" schaltet frei, "Ningeningestop" nimmt es weg
+  (`Access.redeem`, Prefs `promo_unlocked`). Achtung: Der Code steht lesbar in der APK.
+- Ablauf: Onboarding → "Agree & open settings" → zurück und eingeschaltet → Startseite + Paywall `app_start`
+  (3 Tage gratis). Ohne Freischaltung zeigt die Startseite "off" und "Try 3 days free".
+- **Leiste unten wieder da:** Status, Settings, Pro (Pro = Paywall; mit Abo nur Hinweis "You already have Pro").
+- **"Run setup again"** ganz unten in Settings startet das Onboarding neu. Ist die Bedienungshilfe schon an, heisst
+  der letzte Knopf "Continue".
+- Solange die Abos in Google Play nicht live sind, geht die App nur mit dem Code!
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit

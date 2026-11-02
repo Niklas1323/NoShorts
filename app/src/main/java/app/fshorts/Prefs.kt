@@ -8,6 +8,8 @@ object Prefs {
     private const val DISCLOSURE = "disclosure_accepted_v3"
     private const val ONBOARDING_DONE = "onboarding_done"
     private const val THEME_MODE = "theme_mode"
+    private const val SUBSCRIBED = "subscribed"
+    private const val PROMO = "promo_unlocked"
     private const val DEBUG_DUMPS = "debug_dumps"
     private const val SHORTS_BLOCKED = "shorts_blocked"
     private const val SHELVES_HIDDEN = "shelves_hidden"
@@ -20,7 +22,15 @@ object Prefs {
     fun setDisclosureAccepted(context: Context) = prefs(context).edit().putBoolean(DISCLOSURE, true).apply()
 
     fun onboardingDone(context: Context) = prefs(context).getBoolean(ONBOARDING_DONE, false)
-    fun setOnboardingDone(context: Context) = prefs(context).edit().putBoolean(ONBOARDING_DONE, true).apply()
+    fun setOnboardingDone(context: Context, done: Boolean = true) =
+        prefs(context).edit().putBoolean(ONBOARDING_DONE, done).apply()
+
+    /** Letzter bekannter Abo-Stand von Superwall (Testzeit zählt als Abo), für den Start ohne Netz. */
+    fun subscribed(context: Context) = prefs(context).getBoolean(SUBSCRIBED, false)
+    fun setSubscribed(context: Context, on: Boolean) = prefs(context).edit().putBoolean(SUBSCRIBED, on).apply()
+
+    fun promoUnlocked(context: Context) = prefs(context).getBoolean(PROMO, false)
+    fun setPromoUnlocked(context: Context, on: Boolean) = prefs(context).edit().putBoolean(PROMO, on).apply()
 
     /** 0 = wie das Handy, 1 = dunkel, 2 = hell. */
     fun themeMode(context: Context) = prefs(context).getInt(THEME_MODE, 0)

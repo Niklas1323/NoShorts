@@ -16,6 +16,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Toast
+import app.fshorts.Access
 import app.fshorts.Prefs
 import app.fshorts.R
 import kotlin.math.roundToInt
@@ -227,7 +228,7 @@ class FuckShortsService : AccessibilityService() {
             // Solange unsere Leiste weg ist, die echte aber noch existiert (z. B. Video offen), weiter nachsehen:
             // So sind wir sofort da, wenn die echte wieder reinfährt.
             val waitingForBar = !overlay.isShowing && (lastBar != null || watchPageOpen)
-            if (!connected || !youTubeActive || (now > pollUntil && !waitingForBar && now > fastUntil)) {
+            if (!connected || !Access.unlocked || !youTubeActive || (now > pollUntil && !waitingForBar && now > fastUntil)) {
                 polling = false
                 return
             }
@@ -282,6 +283,11 @@ class FuckShortsService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (!connected) return
+        // Ohne Testzeit, Abo oder Code tut die App nichts (YouTube bleibt, wie es ist).
+        if (!Access.unlocked) {
+            if (overlay.isShowing) overlay.hide()
+            return
+        }
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return
         // Tablet: Unsere Leiste wartet aufs Zeichnen. YouTube schickt beim Seitenwechsel viele Meldungen, jede
@@ -625,6 +631,10 @@ class FuckShortsService : AccessibilityService() {
 
     private fun scanInternal() {
         val now = SystemClock.uptimeMillis()
+        if (!Access.unlocked) {
+            overlay.hide()
+            return
+        }
         if (shelfMenuOpenedAt != 0L) {
             handleShelfMenu(now)
             return

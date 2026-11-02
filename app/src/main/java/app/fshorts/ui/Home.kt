@@ -36,10 +36,17 @@ import androidx.compose.material.icons.outlined.GppGood
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Redeem
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -62,7 +69,10 @@ import androidx.compose.ui.unit.sp
 class HomeState(
     val enabled: Boolean,
     val shortsClosed: Int,
+    /** Abo/Testzeit oder Gratis-Code: nur dann arbeitet die App. */
     val isPro: Boolean,
+    /** Freigeschaltet per Code (kein Google-Play-Abo). */
+    val promo: Boolean,
     val themeMode: Int,
     val version: String,
 )
@@ -76,11 +86,14 @@ class HomeActions(
     val restore: () -> Unit,
     val manageSubscription: () -> Unit,
     val rateApp: () -> Unit,
+    /** Code einlösen, gibt die Meldung für den Nutzer zurück. */
+    val redeem: (String) -> String,
+    val restartSetup: () -> Unit,
 )
 
 private enum class Screen { Home, Settings, Privacy }
 
-/** Nur eine Hauptseite; Einstellungen oben rechts. Pro ist immer unsere Superwall-Paywall. */
+/** Leiste unten: Status, Settings, Pro. Pro ist keine Seite, sondern öffnet immer unsere Superwall-Paywall. */
 @Composable
 fun HomeApp(state: HomeState, actions: HomeActions) {
     var screen by remember { mutableStateOf(Screen.Home) }
@@ -88,63 +101,112 @@ fun HomeApp(state: HomeState, actions: HomeActions) {
         screen = if (screen == Screen.Privacy) Screen.Settings else Screen.Home
     }
     val p = LocalPalette.current
-    Box(
+    Column(
         Modifier
             .fillMaxSize()
             .background(if (p.dark) Brand.strongGradient else p.background),
     ) {
-        AnimatedContent(
-            targetState = screen,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "screen",
-        ) { s ->
-            when (s) {
-                Screen.Home -> HomeScreen(state, actions, onSettings = { screen = Screen.Settings })
-                Screen.Settings -> SettingsScreen(
-                    state,
-                    actions,
-                    onBack = { screen = Screen.Home },
-                    onPrivacy = { screen = Screen.Privacy },
-                )
-                Screen.Privacy -> PrivacyScreen(onBack = { screen = Screen.Settings })
+        Box(Modifier.weight(1f).fillMaxWidth().statusBarsPadding()) {
+            AnimatedContent(
+                targetState = screen,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "screen",
+            ) { s ->
+                when (s) {
+                    Screen.Home -> HomeScreen(state, actions)
+                    Screen.Settings -> SettingsScreen(state, actions, onPrivacy = { screen = Screen.Privacy })
+                    Screen.Privacy -> PrivacyScreen(onBack = { screen = Screen.Settings })
+                }
             }
         }
+        BottomNav(
+            selected = if (screen == Screen.Home) 0 else 1,
+            onHome = { screen = Screen.Home },
+            onSettings = { screen = Screen.Settings },
+            onPro = actions.showPaywall,
+        )
     }
 }
 
 @Composable
-private fun HomeScreen(state: HomeState, actions: HomeActions, onSettings: () -> Unit) {
+private fun BottomNav(selected: Int, onHome: () -> Unit, onSettings: () -> Unit, onPro: () -> Unit) {
+    val p = LocalPalette.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (p.dark) Color.Black.copy(alpha = 0.55f) else Color.White)
+            .navigationBarsPadding()
+            .padding(top = 8.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        NavItem(Icons.Outlined.Shield, "Status", selected == 0, onHome)
+        NavItem(Icons.Outlined.Tune, "Settings", selected == 1, onSettings)
+        NavItem(Icons.Outlined.WorkspacePremium, "Pro", false, onPro)
+    }
+}
+
+@Composable
+private fun NavItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Column(
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (selected) p.text.copy(alpha = 0.14f) else Color.Transparent)
+                .padding(horizontal = 20.dp, vertical = 5.dp),
+        ) {
+            Icon(icon, label, tint = if (selected) p.text else p.subtext, modifier = Modifier.size(22.dp))
+        }
+        Text(
+            label,
+            color = if (selected) p.text else p.subtext,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        )
+    }
+}
+
+@Composable
+private fun HomeScreen(state: HomeState, actions: HomeActions) {
     val p = LocalPalette.current
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
             .padding(horizontal = 22.dp),
     ) {
-        // Kopf: Marke links, Einstellungen rechts.
+        // Ohne Testzeit/Abo/Code arbeitet die App nicht: dann zählt das als "aus".
+        val active = state.enabled && state.isPro
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             BrandLogo(34.dp)
             Spacer(Modifier.width(10.dp))
             BrandName(22.sp, p.text)
-            Spacer(Modifier.weight(1f))
-            RoundIconButton(Icons.Outlined.Settings, "Settings", onSettings)
         }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(36.dp))
-            StatusOrb(state.enabled)
+            StatusOrb(active)
             Spacer(Modifier.height(26.dp))
-            val accent = if (state.enabled) Brand.Green else Brand.Red
+            val accent = if (active) Brand.Green else Brand.Red
             Text("Protection", style = headline(40.sp), color = p.text)
-            Text(if (state.enabled) "on" else "off", style = headline(40.sp), color = accent)
+            Text(if (active) "on" else "off", style = headline(40.sp), color = accent)
             Spacer(Modifier.height(8.dp))
             Text(
-                if (state.enabled) "YouTube is Shorts-free." else "Shorts are back in YouTube.",
+                when {
+                    active -> "YouTube is Shorts-free."
+                    !state.isPro -> "Start your free trial to block Shorts."
+                    else -> "Shorts are back in YouTube."
+                },
                 color = p.subtext,
                 fontSize = 17.sp,
+                textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(30.dp))
             // Eine Zahl, die zählt.
@@ -187,10 +249,10 @@ private fun HomeScreen(state: HomeState, actions: HomeActions, onSettings: () ->
             }
             Spacer(Modifier.height(16.dp))
         }
-        if (state.enabled) {
-            MainButton("Open YouTube", actions.openYouTube, Icons.AutoMirrored.Outlined.OpenInNew)
-        } else {
-            MainButton("Turn on protection", actions.turnOn)
+        when {
+            !state.isPro -> MainButton("Try 3 days free", actions.showPaywall)
+            !state.enabled -> MainButton("Turn on protection", actions.turnOn)
+            else -> MainButton("Open YouTube", actions.openYouTube, Icons.AutoMirrored.Outlined.OpenInNew)
         }
         Spacer(Modifier.height(16.dp))
     }
@@ -310,17 +372,16 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun SettingsScreen(state: HomeState, actions: HomeActions, onBack: () -> Unit, onPrivacy: () -> Unit) {
+private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: () -> Unit) {
     val p = LocalPalette.current
+    var redeemOpen by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp),
     ) {
-        ScreenHeader("Settings", onBack)
+        Text("Settings", style = headline(36.sp), color = p.text, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
 
         SectionLabel("SUBSCRIPTION")
         if (state.isPro) {
@@ -330,11 +391,18 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onBack: () ->
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text("F*ck Shorts Pro", color = p.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                        Text("Active", color = Brand.Green, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (state.promo) "Unlocked with a code" else "Active",
+                            color = Brand.Green,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
-                Divider()
-                LinkRow(Icons.AutoMirrored.Outlined.OpenInNew, "Manage subscription", "Switch to yearly or cancel", actions.manageSubscription)
+                if (!state.promo) {
+                    Divider()
+                    LinkRow(Icons.AutoMirrored.Outlined.OpenInNew, "Manage subscription", "Switch to yearly or cancel", actions.manageSubscription)
+                }
             }
         } else {
             // Wie die Paywall: roter Verlauf, weisser Knopf.
@@ -369,10 +437,12 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onBack: () ->
                     Text("Try 3 days free", color = Brand.RedText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            GlassCard(padding = 0.dp) {
-                LinkRow(Icons.Outlined.Refresh, "Restore purchases", null, actions.restore)
-            }
+        }
+        Spacer(Modifier.height(10.dp))
+        GlassCard(padding = 0.dp) {
+            LinkRow(Icons.Outlined.Redeem, "Redeem code", null) { redeemOpen = true }
+            Divider()
+            LinkRow(Icons.Outlined.Refresh, "Restore purchases", null, actions.restore)
         }
 
         SectionLabel("APPEARANCE")
@@ -397,8 +467,64 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onBack: () ->
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
+        // Ganz unten: Einrichtung nochmals von vorne.
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .border(1.dp, p.cardBorder, RoundedCornerShape(26.dp))
+                .clickable(onClick = actions.restartSetup),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.RestartAlt, null, tint = p.text, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Run setup again", color = p.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(20.dp))
     }
+    if (redeemOpen) RedeemDialog(actions.redeem, onClose = { redeemOpen = false })
+}
+
+@Composable
+private fun RedeemDialog(redeem: (String) -> String, onClose: () -> Unit) {
+    var code by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = Color(0xFF1A1A1C),
+        title = { Text("Redeem code", color = Color.White, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = {
+                        code = it
+                        message = null
+                    },
+                    singleLine = true,
+                    placeholder = { Text("Code") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color.White,
+                        cursorColor = Color.White,
+                    ),
+                )
+                message?.let { Text(it, color = Color.White.copy(alpha = 0.8f), modifier = Modifier.padding(top = 10.dp)) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { message = redeem(code) }) {
+                Text("Redeem", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) { Text("Close", color = Color.White.copy(alpha = 0.7f)) }
+        },
+    )
 }
 
 @Composable
@@ -471,8 +597,6 @@ private fun PrivacyScreen(onBack: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp),
     ) {

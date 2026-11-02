@@ -72,7 +72,10 @@ import androidx.compose.ui.unit.sp
 fun Onboarding(
     startStep: Int,
     accepted: Boolean,
+    /** Bedienungshilfe schon an (z. B. "Run setup again"): dann geht es mit "Continue" direkt weiter. */
+    enabled: Boolean,
     onAgree: () -> Unit,
+    onContinue: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAppInfo: () -> Unit,
 ) {
@@ -90,7 +93,7 @@ fun Onboarding(
             when (page) {
                 0 -> WelcomePage(onNext = { step = 1 })
                 1 -> BeforeAfterPage(onNext = { step = 2 })
-                else -> TurnOnPage(accepted, onAgree, onOpenSettings, onOpenAppInfo)
+                else -> TurnOnPage(accepted, enabled, onAgree, onContinue, onOpenSettings, onOpenAppInfo)
             }
         }
     }
@@ -294,7 +297,9 @@ private fun PlusCircle() {
 @Composable
 private fun TurnOnPage(
     accepted: Boolean,
+    enabled: Boolean,
     onAgree: () -> Unit,
+    onContinue: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAppInfo: () -> Unit,
 ) {
@@ -302,8 +307,16 @@ private fun TurnOnPage(
     var lockedSheet by remember { mutableStateOf(false) }
     Page(
         step = 2,
-        button = if (accepted) "Open settings" else "Agree & open settings",
-        onButton = if (accepted) onOpenSettings else onAgree,
+        button = when {
+            !accepted -> "Agree & open settings"
+            enabled -> "Continue"
+            else -> "Open settings"
+        },
+        onButton = when {
+            !accepted -> onAgree
+            enabled -> onContinue
+            else -> onOpenSettings
+        },
         footer = {
             if (!accepted) {
                 Text(
