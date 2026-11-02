@@ -92,7 +92,7 @@ class HomeState(
     /** Jetzt (Uhrzeit ms), sekündlich aktualisiert für den Countdown. */
     val now: Long = 0L,
     /** Wartezeit fürs nächste Ausschalten in Minuten. */
-    val nextWaitMinutes: Int = 5,
+    val nextWaitMinutes: Int = 10,
     /** Seit wann die App benutzt wird (Uhrzeit ms), für die Tages-Sprüche. */
     val startedAt: Long = 0L,
     /** Test-Code aktiv: Wartezeit nur 5 Sekunden. */

@@ -672,7 +672,7 @@ Lokale Builds haben versionCode 1 → `adb install -r -d`.
 Arbeits-Branch: `claude/intelligent-volta-4lochv`.
 
 ### 03.11.2026, Nacht (Cloud, NICHT am Handy getestet)
-- Erste Wartezeit fürs Ausschalten jetzt **5 min** (`Prefs.nextWaitMinutes` Standard 5).
+- Erste Wartezeit fürs Ausschalten jetzt **10 min** (`Prefs.nextWaitMinutes` Standard 10).
 - Ausschalt-Fenster: Spruch je nach Tag seit Beginn (`progressLine`, Tag 1–6 je eigener, dann Woche, 2 Wochen, Monat,
   Monate, halbes Jahr, Jahr), dazu die eigenen Zahlen. Beginn = Prefs `started_at` (beim ersten Lesen gesetzt,
   "Ningeningestop" setzt zurück).
