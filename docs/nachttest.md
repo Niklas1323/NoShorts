@@ -24,7 +24,7 @@ Status: ⬜ offen · 🔧 in Arbeit · ✅ ok (am Handy gesehen) · ⛔ nicht l�
 | A6c | Nach Ablauf: "Turn off" → pausiert (Shorts laufen, Leiste bleibt, Regale nicht ausgeblendet) | 🔧 | 21:07: "Last chance." → "Turn off protection" → "Protection paused", `protection_paused=true`. Short per Link (dlpFv_Irxi8) läuft, unsere Leiste (Home/Subscriptions/You/+) bleibt ✅. Offen: Regale nicht ausgeblendet (mit Regal-Test B14) |
 | A6d | Wieder einschalten mit Wartezeit (5…120, eigene ≥5), Tages-Spruch "Day 1" | ✅ | 21:08: Auswahl 5/10/15/20/30/45 min, 1 h, 2 h + eigene; "3" → "At least 5 minutes." (Knopf gesperrt); "10" ok → `next_wait_min=10`, `protection_paused=false`; "Day 1" gesehen. Hinweis: 120 min = "2 h" |
 | A7 | Settings: Theme System/Dark/Light, Restore, Manage subscription (nur öffnen), Rate (nur öffnen), Privacy & permissions, Redeem code, Run setup again (ohne Paywall, "Continue" zurück), Version | 🔧 | 21:21–21:24: Settings-Seite komplett (Subscription "Unlocked with a code", Redeem, Restore → "Purchases restored", Theme, Rate → öffnet Play Store "Item not found" (Debug-App nicht im Store, kein Fehler der App), Privacy öffnet Text + Zurück ✅, Version 0.1.1, "Run setup again" ✅). Theme Light: Statusleiste jetzt lesbar (C1). Offen: Theme Dark/Light ganze Seite ansehen, "Manage subscription" (nur mit Abo sichtbar) |
-| A8 | Pro-Knopf unten: mit Abo → Play-Abo-Seite (nur ansehen), mit Code → Hinweis | ⬜ | |
+| A8 | Pro-Knopf unten: mit Abo → Play-Abo-Seite (nur ansehen), mit Code → Hinweis | 🔧 | 21:25: mit Abo → Google-Play "Manage subscription" (nur angesehen, Seite leer weil Test-Abo) ✅. Offen: mit Code (ohne Abo) → Hinweis "Pro is unlocked with a code" |
 | A9 | Nur Hochformat, Neustart behält alles, keine Abstürze (`logcat -b crash`) | ⬜ | |
 
 ## B. Overlay (hell + dunkel, `tools/pixel-test/phone.sh`)
@@ -32,8 +32,8 @@ Status: ⬜ offen · 🔧 in Arbeit · ✅ ok (am Handy gesehen) · ⛔ nicht l�
 |---|---|---|---|
 | B10 | Startseite lange scrollen, Tabs 5×, Abos-Knopf von Home und You, Auswahl/Profilbild-Ring | 🔧 | Dunkel: Scrollen 1332 Bilder (14 Wisch), Abweichung max 1,44, kein ECHT-Bild, Log "unsere bleibt" ✅; Tabs 15/15 ausgewählt, 0 ECHT ✅; mit Mini-Player 6/6 ✅. Offen: hell, Abos-Knopf auf scrollender Liste, Profilbild-Ring |
 | B11 | Video öffnen/verlassen (Zurück, Wischen), Mini-Player alle Tabs, ⋮-Menüs, Werbe-⋮, Suche + Suchfilter | 🔧 | Video per Link öffnen + Wisch nach unten (Mini-Player): echte Leiste nie sichtbar, unsere fährt ein ✅; Mini-Player über unserer Leiste ✅; Werbe-⋮ ("My Ad Center", Panel auf/zu): echte nie sichtbar ✅. Offen: Zurück-Taste/-Geste auf Video, normales ⋮, Suche + Filter |
-| B12 | Plus → Kamera → X / Zurück-Geste / Zurück-Taste | ⬜ | |
-| B13 | Benachrichtigungen auf/zu, Bildschirm aus/an, App-Wechsel, Drehen, Short per Link + Weiterwischen, Short in Suchergebnissen | ⬜ | |
+| B12 | Plus → Kamera → X / Zurück-Geste / Zurück-Taste | 🔧 | Dunkel, 21:26: Plus → Kamera 4×: Zurück-Taste, Zurück-Geste, X: barcheck 0 ECHT-Bilder, unsere sofort da (Bilder 188–215). Offen: hell |
+| B13 | Benachrichtigungen auf/zu, Bildschirm aus/an, App-Wechsel, Drehen, Short per Link + Weiterwischen, Short in Suchergebnissen | 🔧 | Dunkel, 21:28: Short per Link (aus Startbildschirm) läuft, Weiterwischen → zurückgewischt, unsere Leiste steht ✅; Link bei schon offenem YouTube → Short sofort zu (gewollt); Benachrichtigungen auf, mit Zurück zu: nur Schleier, dann unsere ✅. Offen: Bildschirm aus/an, App-Wechsel, Drehen, Short in Suchergebnissen, hell |
 | B14 | Shorts-Regale: Abos (Karten "Hide") und Startseite (⋮ → "Not interested"), bis ~45 min suchen | ⬜ | |
 | B15 | App gesperrt: Dienst tut nichts, YouTube unverändert (echte Leiste mit Shorts sichtbar = gewollt) | ⬜ | |
 
