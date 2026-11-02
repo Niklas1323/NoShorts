@@ -126,10 +126,17 @@ private fun App() {
 
     val restore: () -> Unit = {
         Superwall.instance.restorePurchases { result ->
-            val text = if (result.isSuccess) "Purchases restored" else "Nothing to restore"
-            ContextCompat.getMainExecutor(context).execute {
+            // Erfolg heisst nur "Abfrage hat geklappt": ob wirklich ein Abo da ist, sagt erst der Abo-Stand.
+            // Kurz warten, bis Superwall ihn nach der Abfrage nachgeführt hat.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                val active = Superwall.instance.subscriptionStatus.value is SubscriptionStatus.Active
+                val text = when {
+                    result.isFailure -> "Couldn't check purchases. Try again."
+                    active -> "Purchases restored"
+                    else -> "No active subscription found"
+                }
                 Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
-            }
+            }, 1_000)
         }
         Unit
     }
