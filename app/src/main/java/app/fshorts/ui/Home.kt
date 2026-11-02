@@ -3,6 +3,14 @@ package app.fshorts.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import app.fshorts.Protection
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
@@ -75,6 +83,14 @@ class HomeState(
     val promo: Boolean,
     val themeMode: Int,
     val version: String,
+    /** Schutz vom Nutzer pausiert: Shorts laufen, unsere Leiste bleibt. */
+    val paused: Boolean = false,
+    /** Ab wann der Schutz ausgeschaltet werden darf (Uhrzeit ms, 0 = keine Wartezeit läuft). */
+    val unlockAt: Long = 0L,
+    /** Jetzt (Uhrzeit ms), sekündlich aktualisiert für den Countdown. */
+    val now: Long = 0L,
+    /** Wartezeit fürs nächste Ausschalten in Minuten. */
+    val nextWaitMinutes: Int = 15,
 )
 
 class HomeActions(
@@ -91,6 +107,13 @@ class HomeActions(
     /** Code einlösen, gibt die Meldung für den Nutzer zurück. */
     val redeem: (String) -> String,
     val restartSetup: () -> Unit,
+    /** Wartezeit fürs Ausschalten starten bzw. abbrechen. */
+    val startUnlockWait: () -> Unit = {},
+    val cancelUnlockWait: () -> Unit = {},
+    /** Nach der Wartezeit: Schutz pausieren. */
+    val pauseProtection: () -> Unit = {},
+    /** Wieder einschalten, mit der Wartezeit fürs nächste Mal (Minuten). */
+    val resumeProtection: (Int) -> Unit = {},
 )
 
 private enum class Screen { Home, Settings, Privacy }
@@ -174,16 +197,22 @@ private fun NavItem(icon: ImageVector, label: String, selected: Boolean, onClick
     }
 }
 
+private enum class ProtectionDialog { Quote, Waiting, ConfirmOff, Relock }
+
 @Composable
 private fun HomeScreen(state: HomeState, actions: HomeActions) {
     val p = LocalPalette.current
+    var dialog by remember { mutableStateOf<ProtectionDialog?>(null) }
+    val waiting = !state.paused && state.unlockAt > 0L
+    val remainingMs = (state.unlockAt - state.now).coerceAtLeast(0L)
+    val readyToTurnOff = waiting && remainingMs == 0L
+    // Arbeitet die App gerade? Bedienungshilfe an, Abo/Testzeit/Code, nicht pausiert.
+    val active = state.enabled && state.isPro && !state.paused
     Column(
         Modifier
             .fillMaxSize()
             .padding(horizontal = 22.dp),
     ) {
-        // Ohne Testzeit/Abo/Code arbeitet die App nicht: dann zählt das als "aus".
-        val active = state.enabled && state.isPro
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             BrandLogo(34.dp)
             Spacer(Modifier.width(10.dp))
@@ -193,25 +222,66 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             Modifier.weight(1f).verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(36.dp))
-            StatusOrb(active)
-            Spacer(Modifier.height(26.dp))
-            val accent = if (active) Brand.Green else Brand.Red
+            Spacer(Modifier.height(30.dp))
+            // Nur über das Schild lässt sich der Schutz ausschalten (mit Spruch und Wartezeit).
+            StatusOrb(
+                active = active,
+                waiting = waiting && !readyToTurnOff,
+                onClick = {
+                    dialog = when {
+                        !state.enabled -> null
+                        state.paused -> ProtectionDialog.Relock
+                        readyToTurnOff -> ProtectionDialog.ConfirmOff
+                        waiting -> ProtectionDialog.Waiting
+                        else -> ProtectionDialog.Quote
+                    }
+                    if (!state.enabled) actions.turnOn()
+                },
+            )
+            Spacer(Modifier.height(22.dp))
+            val accent = when {
+                active && waiting && !readyToTurnOff -> Brand.Amber
+                active -> Brand.Green
+                else -> Brand.Red
+            }
             Text("Protection", style = headline(40.sp), color = p.text)
-            Text(if (active) "on" else "off", style = headline(40.sp), color = accent)
+            Text(
+                when {
+                    state.paused -> "paused"
+                    active -> "on"
+                    else -> "off"
+                },
+                style = headline(40.sp),
+                color = accent,
+            )
             Spacer(Modifier.height(8.dp))
             Text(
                 when {
-                    active -> "YouTube is Shorts-free."
-                    !state.isPro -> "Start your free trial to block Shorts."
-                    else -> "Shorts are back in YouTube."
+                    !state.enabled -> "Turn on F*ck Shorts in Accessibility."
+                    state.paused -> "Shorts are allowed. Tap the shield to turn protection back on."
+                    readyToTurnOff -> "You can turn protection off now. Tap the shield."
+                    waiting -> "You can turn it off in ${countdown(remainingMs)}."
+                    else -> "YouTube is Shorts-free."
                 },
                 color = p.subtext,
                 fontSize = 17.sp,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(30.dp))
-            // Eine Zahl, die zählt.
+            if (waiting) {
+                Text(
+                    "Keep protection on",
+                    color = p.text,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = actions.cancelUnlockWait)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+            Spacer(Modifier.height(26.dp))
+            // Zahlen: geschlossene Shorts (zählt der Dienst mit) und die daraus geschätzte Zeit.
             GlassCard(padding = 20.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -228,46 +298,271 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                 Spacer(Modifier.height(16.dp))
                 Box(Modifier.fillMaxWidth().height(1.dp).background(p.cardBorder))
                 Spacer(Modifier.height(14.dp))
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(enabled = !state.isPro, onClick = actions.showPaywall),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Schedule, null, tint = p.text, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        if (state.isPro) {
-                            Text(timeSaved(state.shortsClosed), style = headline(20.sp), color = p.text)
-                            Text("Time saved (estimate)", color = p.subtext, fontSize = 13.sp)
-                        } else {
-                            Text("Time saved", color = p.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text("See how much time you got back", color = p.subtext, fontSize = 13.sp)
-                        }
+                        Text(timeSaved(state.shortsClosed), style = headline(20.sp), color = p.text)
+                        Text("Time saved (estimate)", color = p.subtext, fontSize = 13.sp)
                     }
-                    if (!state.isPro) ProPill()
                 }
             }
             Spacer(Modifier.height(16.dp))
         }
-        when {
-            !state.isPro -> MainButton("Try 3 days free", actions.showPaywall)
-            !state.enabled -> MainButton("Turn on protection", actions.turnOn)
-            else -> MainButton("Open YouTube", actions.openYouTube, Icons.AutoMirrored.Outlined.OpenInNew)
+        if (state.enabled) {
+            MainButton("Open YouTube", actions.openYouTube, Icons.AutoMirrored.Outlined.OpenInNew)
+        } else {
+            MainButton("Turn on protection", actions.turnOn)
         }
         Spacer(Modifier.height(16.dp))
     }
+
+    when (dialog) {
+        ProtectionDialog.Quote -> QuoteDialog(
+            waitMinutes = state.nextWaitMinutes,
+            onKeep = { dialog = null },
+            onTurnOff = {
+                dialog = null
+                actions.startUnlockWait()
+            },
+        )
+        ProtectionDialog.Waiting -> InfoDialog(
+            title = "Not yet",
+            text = "You can turn protection off in ${countdown(remainingMs)}. The timer keeps running even when " +
+                "the app is closed.",
+            confirm = "Keep protection on",
+            onConfirm = {
+                dialog = null
+                actions.cancelUnlockWait()
+            },
+            dismiss = "OK",
+            onDismiss = { dialog = null },
+        )
+        ProtectionDialog.ConfirmOff -> InfoDialog(
+            title = "Turn protection off?",
+            text = remember { SHORTS_QUOTES.random() } + "\n\nShorts will play again. Our bar stays.",
+            confirm = "Keep protection on",
+            onConfirm = {
+                dialog = null
+                actions.cancelUnlockWait()
+            },
+            dismiss = "Turn off",
+            onDismiss = {
+                dialog = null
+                actions.pauseProtection()
+            },
+        )
+        ProtectionDialog.Relock -> RelockDialog(
+            current = state.nextWaitMinutes,
+            onClose = { dialog = null },
+            onConfirm = { minutes ->
+                dialog = null
+                actions.resumeProtection(minutes)
+            },
+        )
+        null -> Unit
+    }
 }
 
-/** Grosser Kreis mit Schild, leuchtet grün (an) oder rot (aus). */
+/** Sprüche, die vom Ausschalten abhalten sollen. */
+private val SHORTS_QUOTES = listOf(
+    "Shorts are built to keep you scrolling, not to make you happy.",
+    "One Short becomes ten. Ten become an hour you never get back.",
+    "You turned this on for a reason. That reason hasn't changed.",
+    "Every Short you skip is time for something real.",
+    "Nobody ever looked back and wished they had watched more Shorts.",
+    "The feed never ends. Your day does.",
+)
+
+private fun countdown(ms: Long): String {
+    val total = (ms + 999) / 1000
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val sec = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
+}
+
 @Composable
-private fun StatusOrb(enabled: Boolean) {
-    val accent = if (enabled) Brand.Green else Brand.Red
-    Box(Modifier.size(196.dp), contentAlignment = Alignment.Center) {
+private fun QuoteDialog(waitMinutes: Int, onKeep: () -> Unit, onTurnOff: () -> Unit) {
+    val quote = remember { SHORTS_QUOTES.random() }
+    AlertDialog(
+        onDismissRequest = onKeep,
+        containerColor = Color(0xFF1A1A1C),
+        title = { Text("Wait.", style = headline(30.sp), color = Color.White) },
+        text = {
+            Column {
+                Text("“$quote”", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "If you still want to turn it off, you have to wait $waitMinutes minutes first.",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 15.sp,
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+            }
+        },
+        confirmButton = {
+            Row(
+                Modifier
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .clickable(onClick = onKeep)
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                Text("Keep protection on", color = Brand.RedText, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onTurnOff) {
+                Text("Start $waitMinutes min timer", color = Color.White.copy(alpha = 0.6f))
+            }
+        },
+    )
+}
+
+@Composable
+private fun InfoDialog(
+    title: String,
+    text: String,
+    confirm: String,
+    onConfirm: () -> Unit,
+    dismiss: String,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1A1A1C),
+        title = { Text(title, style = headline(26.sp), color = Color.White) },
+        text = { Text(text, color = Color.White.copy(alpha = 0.85f), fontSize = 16.sp) },
+        confirmButton = {
+            Row(
+                Modifier
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .clickable(onClick = onConfirm)
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                Text(confirm, color = Brand.RedText, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(dismiss, color = Color.White.copy(alpha = 0.6f)) }
+        },
+    )
+}
+
+/** Wieder einschalten: Wie lange muss man nächstes Mal warten, bis man ausschalten kann? Mindestens 5 Minuten. */
+@Composable
+private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> Unit) {
+    val options = listOf(5, 10, 15, 20, 30, 45, 60, 120)
+    var selected by remember { mutableStateOf(if (current in options) current else -1) }
+    var custom by remember { mutableStateOf(if (current in options) "" else current.toString()) }
+    val customMinutes = custom.toIntOrNull()
+    val minutes = if (selected > 0) selected else customMinutes
+    val valid = minutes != null && minutes >= Protection.MIN_WAIT_MINUTES
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = Color(0xFF1A1A1C),
+        title = { Text("Turn protection back on", style = headline(24.sp), color = Color.White) },
+        text = {
+            Column {
+                Text(
+                    "Next time you want to turn it off, you'll have to wait:",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 15.sp,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                options.chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                        row.forEach { m ->
+                            val on = selected == m
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (on) Color.White else Color.White.copy(alpha = 0.08f))
+                                    .clickable { selected = m }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    if (m >= 60) "${m / 60} h" else "$m min",
+                                    color = if (on) Brand.RedText else Color.White,
+                                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 14.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = custom,
+                    onValueChange = { v ->
+                        custom = v.filter { it.isDigit() }.take(4)
+                        selected = -1
+                    },
+                    singleLine = true,
+                    placeholder = { Text("Custom (minutes)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color.White,
+                        cursorColor = Color.White,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (selected < 0 && custom.isNotEmpty() && !valid) {
+                    Text(
+                        "At least ${Protection.MIN_WAIT_MINUTES} minutes.",
+                        color = Brand.Red,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row(
+                Modifier
+                    .clip(CircleShape)
+                    .background(if (valid) Color.White else Color.White.copy(alpha = 0.3f))
+                    .clickable(enabled = valid) { minutes?.let(onConfirm) }
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                Text("Turn on", color = Brand.RedText, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) { Text("Cancel", color = Color.White.copy(alpha = 0.6f)) }
+        },
+    )
+}
+
+/** Grosser Kreis mit Schild: grün (an), orange (Wartezeit läuft), rot (aus). Antippen = Schutz-Einstellungen. */
+@Composable
+private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit) {
+    val accent = when {
+        active && waiting -> Brand.Amber
+        active -> Brand.Green
+        else -> Brand.Red
+    }
+    val pulse = rememberInfiniteTransition(label = "orb")
+    val glow by pulse.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.45f,
+        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
+        label = "glow",
+    )
+    Box(
+        Modifier
+            .size(196.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(Modifier.size(196.dp)) {
             drawCircle(
-                Brush.radialGradient(listOf(accent.copy(alpha = 0.35f), Color.Transparent)),
+                Brush.radialGradient(listOf(accent.copy(alpha = glow), Color.Transparent)),
                 radius = size.minDimension / 2,
             )
             drawCircle(accent.copy(alpha = 0.55f), radius = size.minDimension * 0.34f, style = Stroke(2.dp.toPx()))
@@ -280,8 +575,8 @@ private fun StatusOrb(enabled: Boolean) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                if (enabled) Icons.Outlined.GppGood else Icons.Outlined.GppBad,
-                null,
+                if (active) Icons.Outlined.GppGood else Icons.Outlined.GppBad,
+                "Protection",
                 tint = Color.White,
                 modifier = Modifier.size(56.dp),
             )
@@ -404,39 +699,6 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
                 if (!state.promo) {
                     Divider()
                     LinkRow(Icons.AutoMirrored.Outlined.OpenInNew, "Manage subscription", "Switch to yearly or cancel", actions.manageSubscription)
-                }
-            }
-        } else {
-            // Wie die Paywall: roter Verlauf, weisser Knopf.
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF8E1219), Color(0xFFB3161F), Brand.Red)))
-                    .clickable(onClick = actions.showPaywall)
-                    .padding(20.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.WorkspacePremium, null, tint = Color.White, modifier = Modifier.size(28.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Get Pro", style = headline(26.sp), color = Color.White)
-                }
-                Text(
-                    "Try 3 days free. Cancel anytime in Google Play.",
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
-                )
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .clip(RoundedCornerShape(25.dp))
-                        .background(Color.White),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Try 3 days free", color = Brand.RedText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

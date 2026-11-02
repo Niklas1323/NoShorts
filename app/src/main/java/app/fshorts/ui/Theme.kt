@@ -41,6 +41,8 @@ object Brand {
     val Red = Color(0xFFE5172B)
     val RedText = Color(0xFFC8161F)
     val Green = Color(0xFF2FD27A)
+    /** Wartezeit fürs Ausschalten läuft. */
+    val Amber = Color(0xFFFFA726)
     val Black = Color(0xFF0F0F0F)
 
     /** Wie der Hintergrund der Paywall (Onboarding). */

@@ -18,6 +18,7 @@ import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Toast
 import app.fshorts.Access
 import app.fshorts.Prefs
+import app.fshorts.Protection
 import app.fshorts.R
 import kotlin.math.roundToInt
 
@@ -1723,6 +1724,7 @@ class FuckShortsService : AccessibilityService() {
 
     /** Tippt auf ⋮ beim Shorts-Regal. Den Menüpunkt "Nicht interessiert" wählt [handleShelfMenu]. */
     private fun tryHideShelf(shelves: List<Shelf>, now: Long) {
+        if (Protection.paused) return
         if (shelfHideBroken || !Prefs.autoHideShelf(this)) return
         val header = shelves.firstNotNullOfOrNull { it.menuButton }
         // Regal ohne eigenes ⋮ (z. B. "Abos"): Karten einzeln über ihr ⋮ → "Ausblenden" (Wunsch des Nutzers).
@@ -1797,6 +1799,8 @@ class FuckShortsService : AccessibilityService() {
      */
     private fun shortAllowed(root: AccessibilityNodeInfo, now: Long): Boolean {
         notShortsSince = 0L
+        // Schutz pausiert (vom Nutzer, nach der Wartezeit): Shorts dürfen laufen, unsere Leiste bleibt aber.
+        if (Protection.paused) return true
         if (!linkShortActive) {
             if (touchedSinceEnter || now - enteredYouTubeAt > LINK_WINDOW_MS) return false
             linkShortActive = true

@@ -25,7 +25,8 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -36,6 +37,7 @@
         <activity
             android:name="com.superwall.sdk.paywall.view.SuperwallPaywallActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
         <activity android:name="com.superwall.sdk.debug.DebugViewActivity" />
         <activity android:name="com.superwall.sdk.debug.localizations.SWLocalizationActivity" />

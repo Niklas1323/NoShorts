@@ -10,6 +10,9 @@ object Prefs {
     private const val THEME_MODE = "theme_mode"
     private const val SUBSCRIBED = "subscribed"
     private const val PROMO = "promo_unlocked"
+    private const val PAUSED = "protection_paused"
+    private const val UNLOCK_AT = "unlock_at"
+    private const val NEXT_WAIT = "next_wait_min"
     private const val DEBUG_DUMPS = "debug_dumps"
     private const val SHORTS_BLOCKED = "shorts_blocked"
     private const val SHELVES_HIDDEN = "shelves_hidden"
@@ -28,6 +31,18 @@ object Prefs {
     /** Letzter bekannter Abo-Stand von Superwall (Testzeit zählt als Abo), für den Start ohne Netz. */
     fun subscribed(context: Context) = prefs(context).getBoolean(SUBSCRIBED, false)
     fun setSubscribed(context: Context, on: Boolean) = prefs(context).edit().putBoolean(SUBSCRIBED, on).apply()
+
+    /** Schutz vom Nutzer pausiert (Shorts laufen, unsere Leiste bleibt). */
+    fun protectionPaused(context: Context) = prefs(context).getBoolean(PAUSED, false)
+    fun setProtectionPaused(context: Context, on: Boolean) = prefs(context).edit().putBoolean(PAUSED, on).apply()
+
+    /** Wann das Ausschalten erlaubt ist (Uhrzeit in ms, 0 = keine Wartezeit läuft). Läuft auch bei geschlossener App weiter. */
+    fun unlockAt(context: Context) = prefs(context).getLong(UNLOCK_AT, 0L)
+    fun setUnlockAt(context: Context, at: Long) = prefs(context).edit().putLong(UNLOCK_AT, at).apply()
+
+    /** Wartezeit in Minuten fürs nächste Ausschalten (beim Wieder-Einschalten gewählt, mind. 5, zuerst 15). */
+    fun nextWaitMinutes(context: Context) = prefs(context).getInt(NEXT_WAIT, 15)
+    fun setNextWaitMinutes(context: Context, minutes: Int) = prefs(context).edit().putInt(NEXT_WAIT, minutes).apply()
 
     fun promoUnlocked(context: Context) = prefs(context).getBoolean(PROMO, false)
     fun setPromoUnlocked(context: Context, on: Boolean) = prefs(context).edit().putBoolean(PROMO, on).apply()

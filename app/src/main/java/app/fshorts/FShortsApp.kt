@@ -12,6 +12,7 @@ class FShortsApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Access.load(this)
+        Protection.load(this)
         // Öffentlicher Schlüssel (pk_), darf in der App stehen. Läuft im selben Prozess wie der Dienst.
         // Testmodus (Kauf nur simuliert, Produkte aus dem Superwall-Dashboard): für alle Test-APKs, solange die Abos
         // in Google Play noch nicht live sind. Release-Builds (Play Store) laufen normal über Google Play.

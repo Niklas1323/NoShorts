@@ -89,10 +89,21 @@ fun Onboarding(
     onDone: () -> Unit,
 ) {
     var step by remember { mutableIntStateOf(startStep) }
-    // Hinweis bestätigt und Bedienungshilfe an: weiter zur Testzeit (ohne sie geht die App nicht).
+    var paywallShown by remember { mutableStateOf(false) }
+    // Hinweis bestätigt und Bedienungshilfe an: weiter zur Testzeit (ohne sie geht die App nicht). Im Moment
+    // direkt die Paywall; der Zwischenschritt [TrialPage] ist abgeschaltet (SHOW_TRIAL_STEP), aber noch da.
     LaunchedEffect(accepted, enabled, step, isPro) {
-        if (step == 2 && accepted && enabled && !isPro) step = 3
+        if (step == 2 && accepted && enabled && !isPro) {
+            if (SHOW_TRIAL_STEP) {
+                step = 3
+            } else if (!paywallShown) {
+                paywallShown = true
+                onStartTrial()
+            }
+        }
     }
+    // Testzeit gestartet (oder Code): fertig.
+    LaunchedEffect(isPro) { if (isPro && paywallShown) onDone() }
     Box(
         Modifier
             .fillMaxSize()
@@ -563,7 +574,8 @@ private fun Bullet(text: String, color: Color) {
     }
 }
 
-private const val STEPS = 4
+private const val SHOW_TRIAL_STEP = false
+private val STEPS = if (SHOW_TRIAL_STEP) 4 else 3
 
 /**
  * Letzter Schritt: 3 Tage gratis starten (Superwall-Paywall). Ohne Testzeit, Abo oder Code geht es nicht weiter.
@@ -632,4 +644,60 @@ private fun TrialPoint(title: String, text: String) {
             Text(text, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp)
         }
     }
+}
+
+/**
+ * Abo zu Ende (gekündigt oder nicht verlängert): erst erklären, dann die Paywall. Ohne Abo tut die App nichts.
+ */
+@Composable
+fun ExpiredScreen(onResubscribe: () -> Unit, onRestore: () -> Unit, onRedeem: (String) -> String) {
+    var redeemOpen by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Brand.strongGradient),
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 22.dp),
+        ) {
+            Column(Modifier.weight(1f).fillMaxWidth()) {
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.align(Alignment.CenterHorizontally)) { BrandLogo(96.dp) }
+                Spacer(Modifier.height(26.dp))
+                Text("Your subscription", style = headline(36.sp), color = Color.White.copy(alpha = 0.6f))
+                Text("has ended.", style = headline(36.sp), color = Color.White)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Shorts are back in YouTube. Resubscribe to block them again. Your settings and stats are still here.",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 17.sp,
+                )
+                Spacer(Modifier.weight(1.2f))
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Text(
+                    "Restore purchases",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 14.sp,
+                    modifier = Modifier.clickable(onClick = onRestore).padding(6.dp),
+                )
+                Text(
+                    "Have a code?",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 14.sp,
+                    modifier = Modifier.clickable { redeemOpen = true }.padding(6.dp),
+                )
+            }
+            WhiteButton("Resubscribe", onResubscribe)
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+    if (redeemOpen) RedeemDialog(onRedeem, onClose = { redeemOpen = false })
 }

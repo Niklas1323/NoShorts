@@ -537,6 +537,22 @@ weiterhin. Hinweis-Schlüssel bleibt v3 (v3 war nur im Test).
 - Pro unten: mit Abo → Google-Play-Abo-Seite (Wechsel auf Jährlich), mit Code → Hinweis, sonst Paywall. In Settings
   mit Abo kein "Get Pro" (war schon so).
 
+### 03.11.2026 (Cloud, NICHT am Handy getestet): Schutz pausieren mit Wartezeit, Abo beendet, Icon, Hochformat
+- **Hochformat:** `MainActivity` und Paywall `screenOrientation="portrait"` (Overlay unverändert).
+- **Onboarding:** Schritt "Last step" aus (`SHOW_TRIAL_STEP = false`, `TrialPage` bleibt im Code). Nach Zustimmen +
+  Bedienungshilfe an kommt direkt die Paywall; fertig, sobald Testzeit/Abo/Code aktiv. "Continue" zeigt sonst wieder
+  die Paywall.
+- **Kein "Try 3 days free"** mehr auf Startseite/Settings (wer dort ist, hat Testzeit/Abo/Code).
+- **Abo beendet** (Onboarding fertig, aber kein Abo/Code): `ExpiredScreen` ("Your subscription has ended",
+  "Resubscribe" → Paywall, Restore, Code). Danach automatisch Startseite.
+- **Schutz ausschalten nur übers Schild auf der Startseite:** Spruch (`SHORTS_QUOTES`) → "Start N min timer"
+  (zuerst 15 min, Prefs `unlock_at` als Uhrzeit, läuft bei geschlossener App weiter) → nach Ablauf Schild →
+  "Turn off" → `Protection.paused`. Pausiert: Shorts dürfen laufen (`shortAllowed` → true), keine Regale
+  ausblenden, **unsere Leiste bleibt**. Wieder einschalten: Wartezeit fürs nächste Mal wählen (5, 10, 15, 20, 30,
+  45, 60, 120 oder eigene, mind. 5; Prefs `next_wait_min`).
+- **App-Icon:** adaptives Icon, roter Hintergrund #E5172B, weisse Karte mit Schnitt (wie `BrandLogo`), PNGs gelöscht.
+- Überblendung beim Wechsel Onboarding → Startseite (`AnimatedContent` in `App()`).
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit

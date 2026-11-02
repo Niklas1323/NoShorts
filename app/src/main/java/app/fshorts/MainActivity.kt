@@ -12,6 +12,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,7 +36,9 @@ import app.fshorts.ui.FShortsTheme
 import app.fshorts.ui.HomeActions
 import app.fshorts.ui.HomeApp
 import app.fshorts.ui.HomeState
+import app.fshorts.ui.ExpiredScreen
 import app.fshorts.ui.Onboarding
+import kotlinx.coroutines.delay
 import com.superwall.sdk.Superwall
 import com.superwall.sdk.models.entitlements.SubscriptionStatus
 import com.superwall.sdk.paywall.presentation.PaywallPresentationHandler
@@ -64,6 +74,19 @@ private fun App() {
         else -> Access.subscribed
     }
     val isPro = subscribed || promo
+    // Schutz pausieren: erst nach einer Wartezeit (läuft über die Uhr, also auch bei geschlossener App weiter).
+    var paused by remember { mutableStateOf(Protection.paused) }
+    var unlockAt by remember { mutableLongStateOf(Prefs.unlockAt(context)) }
+    var nextWait by remember { mutableIntStateOf(Prefs.nextWaitMinutes(context)) }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(unlockAt, paused) {
+        while (unlockAt > 0L && !paused) {
+            now = System.currentTimeMillis()
+            if (now >= unlockAt) break
+            delay(1_000)
+        }
+        now = System.currentTimeMillis()
+    }
 
     /** Einrichtung fertig. Nur mit Testzeit, Abo oder Code (sonst kommt man nicht aus dem Onboarding). */
     fun finishSetup() {
@@ -135,8 +158,21 @@ private fun App() {
     // Aus "Turn on protection" kommend: Zurück führt wieder auf die Startseite.
     BackHandler(enabled = showSetup && onboardingDone && accepted) { showSetup = false }
 
+    // Welche Seite: Einrichtung, Abo beendet oder Startseite. Wechsel immer mit sanfter Überblendung.
+    val screen = when {
+        !onboardingDone || showSetup || !accepted -> 0
+        !isPro -> 1
+        else -> 2
+    }
     FShortsTheme(themeMode) {
-        if (!onboardingDone || showSetup || !accepted) {
+      AnimatedContent(
+        targetState = screen,
+        transitionSpec = {
+            (fadeIn(tween(450)) + scaleIn(tween(450), initialScale = 0.96f)) togetherWith fadeOut(tween(250))
+        },
+        label = "app",
+      ) { target ->
+        if (target == 0) {
             key(onboardingKey) {
                 Onboarding(
                     startStep = if (showSetup) 2 else 0,
@@ -152,7 +188,7 @@ private fun App() {
                             openAccessibilitySettings(context)
                         }
                     },
-                    onContinue = { if (Access.unlocked) finishSetup() },
+                    onContinue = { if (Access.unlocked) finishSetup() else showPaywall() },
                     onOpenSettings = {
                         awaitingEnable = true
                         openAccessibilitySettings(context)
@@ -165,6 +201,8 @@ private fun App() {
                     onDone = { finishSetup() },
                 )
             }
+        } else if (target == 1) {
+            ExpiredScreen(onResubscribe = { showPaywall() }, onRestore = restore, onRedeem = redeem)
         } else {
             HomeApp(
                 HomeState(
@@ -174,6 +212,10 @@ private fun App() {
                     promo = promo,
                     themeMode = themeMode,
                     version = BuildConfig.VERSION_NAME,
+                    paused = paused,
+                    unlockAt = unlockAt,
+                    now = now,
+                    nextWaitMinutes = nextWait,
                 ),
                 HomeActions(
                     turnOn = { showSetup = true },
@@ -194,6 +236,26 @@ private fun App() {
                     manageSubscription = { openUrl(context, FShortsApp.PLAY_SUBSCRIPTIONS) },
                     rateApp = { openUrl(context, "https://play.google.com/store/apps/details?id=${context.packageName}") },
                     redeem = redeem,
+                    startUnlockWait = {
+                        unlockAt = System.currentTimeMillis() + nextWait * 60_000L
+                        Prefs.setUnlockAt(context, unlockAt)
+                    },
+                    cancelUnlockWait = {
+                        unlockAt = 0L
+                        Prefs.setUnlockAt(context, 0L)
+                    },
+                    pauseProtection = {
+                        unlockAt = 0L
+                        Prefs.setUnlockAt(context, 0L)
+                        Protection.setPaused(context, true)
+                        paused = true
+                    },
+                    resumeProtection = { minutes ->
+                        nextWait = minutes.coerceAtLeast(Protection.MIN_WAIT_MINUTES)
+                        Prefs.setNextWaitMinutes(context, nextWait)
+                        Protection.setPaused(context, false)
+                        paused = false
+                    },
                     restartSetup = {
                         Prefs.setOnboardingDone(context, false)
                         onboardingDone = false
@@ -203,6 +265,7 @@ private fun App() {
                 ),
             )
         }
+      }
     }
 }
 
