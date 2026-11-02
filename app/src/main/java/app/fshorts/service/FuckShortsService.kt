@@ -2148,6 +2148,11 @@ class FuckShortsService : AccessibilityService() {
     private fun foregroundWindow(): AccessibilityWindowInfo? {
         val all = windows
         val active = all.firstOrNull { it.isActive }
+        // Unsere eigene App ist vorne (nicht unsere Leiste): YouTube ist dann höchstens als Bild-in-Bild-Fenster da
+        // und darf nicht als "vorne" gelten, sonst liegt unsere Leiste über unserer eigenen App.
+        if (active != null && active.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
+            active.root?.packageName?.toString() == packageName
+        ) return null
         if (active != null && !isOurs(active)) {
             // Splitscreen: Die andere App ist aktiv, YouTube aber daneben zu sehen – mit seiner Leiste.
             if (splitBounds != null && active.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
