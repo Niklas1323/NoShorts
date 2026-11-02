@@ -126,7 +126,7 @@ fun Onboarding(
             when (page) {
                 0 -> WelcomePage(onNext = { step = 1 })
                 1 -> BeforeAfterPage(onNext = { step = 2 })
-                2 -> TurnOnPage(accepted, enabled, onAgree, onContinue, onOpenSettings, onOpenAppInfo)
+                2 -> TurnOnPage(accepted, enabled, isPro, onAgree, onContinue, onOpenSettings, onOpenAppInfo, onRestore, onRedeem)
                 else -> TrialPage(isPro, onStartTrial, onRestore, onRedeem, onDone)
             }
         }
@@ -332,17 +332,24 @@ private fun PlusCircle() {
 private fun TurnOnPage(
     accepted: Boolean,
     enabled: Boolean,
+    isPro: Boolean,
     onAgree: () -> Unit,
     onContinue: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAppInfo: () -> Unit,
+    onRestore: () -> Unit,
+    onRedeem: (String) -> String,
 ) {
     var declined by remember { mutableStateOf(false) }
+    var redeemOpen by remember { mutableStateOf(false) }
+    // Alles erledigt bis auf die Testzeit: Knopf öffnet die Paywall, darunter Code und Wiederherstellen.
+    val needsTrial = accepted && enabled && !isPro
     var lockedSheet by remember { mutableStateOf(false) }
     Page(
         step = 2,
         button = when {
             !accepted -> "Agree & open settings"
+            needsTrial -> "Start 3 days free"
             enabled -> "Continue"
             else -> "Open settings"
         },
@@ -352,6 +359,25 @@ private fun TurnOnPage(
             else -> onOpenSettings
         },
         footer = {
+            if (needsTrial) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    Text(
+                        "Restore purchases",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 14.sp,
+                        modifier = Modifier.clickable(onClick = onRestore).padding(6.dp),
+                    )
+                    Text(
+                        "Have a code?",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 14.sp,
+                        modifier = Modifier.clickable { redeemOpen = true }.padding(6.dp),
+                    )
+                }
+            }
             if (!accepted) {
                 Text(
                     if (declined) {
@@ -397,6 +423,7 @@ private fun TurnOnPage(
             Spacer(Modifier.height(16.dp))
         }
     }
+    if (redeemOpen) RedeemDialog(onRedeem, onClose = { redeemOpen = false })
     if (lockedSheet) {
         ModalBottomSheet(
             onDismissRequest = { lockedSheet = false },

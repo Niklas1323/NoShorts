@@ -324,6 +324,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
 
     when (dialog) {
         ProtectionDialog.Quote -> QuoteDialog(
+            stat = progressLine(state.shortsClosed),
             waitLabel = if (state.fastTimer) "5 sec" else "${state.nextWaitMinutes} min",
             onKeep = { dialog = null },
             onTurnOff = {
@@ -346,6 +347,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
         ProtectionDialog.ConfirmOff -> ProtectionSheet(
             kicker = "Last chance.",
             quote = remember { SHORTS_QUOTES.random() },
+            stat = progressLine(state.shortsClosed),
             note = "Shorts will play again. Your bar without the Shorts button stays.",
             primary = "Keep protection on",
             onPrimary = {
@@ -385,6 +387,12 @@ private val SHORTS_QUOTES = listOf(
     "Nobody on their deathbed wished they'd watched more Shorts.",
 )
 
+/** "Das wirfst du weg": eigene Zahlen im Ausschalt-Fenster. */
+private fun progressLine(shortsClosed: Int): String =
+    if (shortsClosed <= 0) "You just started. Don't quit on day one."
+    else "$shortsClosed Shorts blocked. ${timeSaved(shortsClosed).removePrefix("≈ ")} of your life back. " +
+        "Turning it off throws that away."
+
 private fun countdown(ms: Long): String {
     val total = (ms + 999) / 1000
     val h = total / 3600
@@ -394,11 +402,13 @@ private fun countdown(ms: Long): String {
 }
 
 @Composable
-private fun QuoteDialog(waitLabel: String, onKeep: () -> Unit, onTurnOff: () -> Unit) {
+private fun QuoteDialog(stat: String, waitLabel: String, onKeep: () -> Unit, onTurnOff: () -> Unit) {
     ProtectionSheet(
         kicker = "Wait.",
         quote = remember { SHORTS_QUOTES.random() },
-        note = "Still want to turn it off? Then you have to wait $waitLabel first.",
+        stat = stat,
+        note = "Still want to turn it off? Then you have to sit through $waitLabel first. The urge will be gone " +
+            "before the timer is.",
         primary = "Keep protection on",
         onPrimary = onKeep,
         secondary = "Start $waitLabel timer",
@@ -416,6 +426,7 @@ private fun ProtectionSheet(
     kicker: String,
     quote: String,
     note: String,
+    stat: String? = null,
     primary: String,
     onPrimary: () -> Unit,
     secondary: String,
@@ -442,6 +453,19 @@ private fun ProtectionSheet(
             Text(kicker, style = headline(22.sp), color = Color.White.copy(alpha = 0.55f))
             Spacer(Modifier.height(6.dp))
             Text(quote, style = headline(34.sp), color = Color.White, lineHeight = 38.sp)
+            if (stat != null) {
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    stat,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.3f))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
             Spacer(Modifier.height(18.dp))
             Text(note, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp)
             Spacer(Modifier.height(28.dp))
@@ -504,92 +528,126 @@ private fun InfoDialog(
     )
 }
 
-/** Wieder einschalten: Wie lange muss man nächstes Mal warten, bis man ausschalten kann? Mindestens 5 Minuten. */
+/**
+ * Wieder einschalten: Wie lange muss man nächstes Mal warten, bis man ausschalten kann? Mindestens 5 Minuten.
+ * Gleicher Stil wie [ProtectionSheet]; kurze Wartezeiten werden bewusst madig gemacht.
+ */
 @Composable
 private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> Unit) {
     val options = listOf(5, 10, 15, 20, 30, 45, 60, 120)
     var selected by remember { mutableStateOf(if (current in options) current else -1) }
     var custom by remember { mutableStateOf(if (current in options) "" else current.toString()) }
-    val customMinutes = custom.toIntOrNull()
-    val minutes = if (selected > 0) selected else customMinutes
+    val minutes = if (selected > 0) selected else custom.toIntOrNull()
     val valid = minutes != null && minutes >= Protection.MIN_WAIT_MINUTES
-    AlertDialog(
-        onDismissRequest = onClose,
-        containerColor = Color(0xFF1A1A1C),
-        title = { Text("Turn protection back on", style = headline(24.sp), color = Color.White) },
-        text = {
-            Column {
-                Text(
-                    "Next time you want to turn it off, you'll have to wait:",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
-                options.chunked(4).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                        row.forEach { m ->
-                            val on = selected == m
-                            Box(
-                                Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (on) Color.White else Color.White.copy(alpha = 0.08f))
-                                    .clickable { selected = m }
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    if (m >= 60) "${m / 60} h" else "$m min",
-                                    color = if (on) Brand.RedText else Color.White,
-                                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 14.sp,
-                                )
-                            }
+    val warning = when {
+        minutes == null || !valid -> null
+        minutes < 15 -> "$minutes minutes is a speed bump, not a wall. You'll be back here in no time."
+        minutes < 45 -> "Better. But be honest: will $minutes minutes really stop you next time?"
+        else -> "Now that's a wall. Future you will thank you."
+    }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .clip(RoundedCornerShape(32.dp))
+                .background(Brand.strongGradient)
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(32.dp))
+                .padding(horizontal = 24.dp, vertical = 28.dp),
+        ) {
+            Text("Welcome back.", style = headline(22.sp), color = Color.White.copy(alpha = 0.55f))
+            Spacer(Modifier.height(6.dp))
+            Text("Make quitting hard next time.", style = headline(32.sp), color = Color.White, lineHeight = 36.sp)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "The last time you gave in, the timer was all that stood in your way. Pick how long you'll have to " +
+                    "wait before you can turn it off again.",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 15.sp,
+            )
+            Spacer(Modifier.height(18.dp))
+            options.chunked(4).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                    row.forEach { m ->
+                        val on = selected == m
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (on) Color.White else Color.Black.copy(alpha = 0.3f))
+                                .clickable { selected = m }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (m >= 60) "${m / 60} h" else "$m min",
+                                color = if (on) Brand.RedText else Color.White,
+                                fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 15.sp,
+                            )
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = custom,
-                    onValueChange = { v ->
-                        custom = v.filter { it.isDigit() }.take(4)
-                        selected = -1
-                    },
-                    singleLine = true,
-                    placeholder = { Text("Custom (minutes)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color.White,
-                        cursorColor = Color.White,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (selected < 0 && custom.isNotEmpty() && !valid) {
-                    Text(
-                        "At least ${Protection.MIN_WAIT_MINUTES} minutes.",
-                        color = Brand.Red,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
             }
-        },
-        confirmButton = {
+            OutlinedTextField(
+                value = custom,
+                onValueChange = { v ->
+                    custom = v.filter { it.isDigit() }.take(4)
+                    selected = -1
+                },
+                singleLine = true,
+                placeholder = { Text("Custom (minutes)", color = Color.White.copy(alpha = 0.5f)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color.White,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                    cursorColor = Color.White,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            val hint = when {
+                selected < 0 && custom.isNotEmpty() && !valid -> "At least ${Protection.MIN_WAIT_MINUTES} minutes."
+                else -> warning
+            }
+            if (hint != null) {
+                Text(
+                    hint,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+            Spacer(Modifier.height(22.dp))
             Row(
                 Modifier
-                    .clip(CircleShape)
-                    .background(if (valid) Color.White else Color.White.copy(alpha = 0.3f))
-                    .clickable(enabled = valid) { minutes?.let(onConfirm) }
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                    .fillMaxWidth()
+                    .height(58.dp)
+                    .clip(RoundedCornerShape(29.dp))
+                    .background(if (valid) Color.White else Color.White.copy(alpha = 0.35f))
+                    .clickable(enabled = valid) { minutes?.let(onConfirm) },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Turn on", color = Brand.RedText, fontWeight = FontWeight.Bold)
+                Text("Turn protection back on", color = Brand.RedText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onClose) { Text("Cancel", color = Color.White.copy(alpha = 0.6f)) }
-        },
-    )
+            Text(
+                "Keep Shorts on for now",
+                color = Color.White.copy(alpha = 0.45f),
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onClose)
+                    .padding(12.dp),
+            )
+        }
+    }
 }
 
 /** Grosser Kreis mit Schild: grün (an), orange (Wartezeit läuft), rot (aus). Antippen = Schutz-Einstellungen. */

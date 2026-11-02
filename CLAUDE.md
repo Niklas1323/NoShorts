@@ -560,6 +560,12 @@ weiterhin. Hinweis-Schlüssel bleibt v3 (v3 war nur im Test).
   Onboarding von vorne), "Ningeningetimer" = Wartezeit 5 s (Prefs `fast_timer`).
 - Ausschalt-Fenster gross im Paywall-Stil (`ProtectionSheet`), härtere Sprüche (`SHORTS_QUOTES`).
 
+### 03.11.2026, Abend (Cloud, NICHT am Handy getestet)
+- Onboarding "Turn it on": Ist alles erledigt ausser der Testzeit, heisst der Knopf "Start 3 days free" (Paywall), dazu
+  "Restore purchases" und "Have a code?" (vorher kam man ohne Paywall nicht mehr raus, z. B. bei "no audience match").
+- Ausschalt-Fenster zeigen die eigenen Zahlen (`progressLine`), Wieder-Einschalten (`RelockDialog`) jetzt gross im
+  Paywall-Stil, kurze Wartezeiten werden madig gemacht.
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit
