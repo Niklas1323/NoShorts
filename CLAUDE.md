@@ -690,3 +690,17 @@ Arbeits-Branch: `claude/intelligent-volta-4lochv`.
   übersprungen), nur nach Tipp auf "Continue". Knopf heisst "Continue" statt "Start 3 days free", darunter nur noch
   "Have a code?" (Wiederherstellen gibt es in der Paywall).
 - "Run setup again" läuft ohne Paywall (`rerunSetup`, "Continue" beendet direkt; `onboarding_done` bleibt gesetzt).
+
+### Nachttest 02./03.11.2026 (Pixel 9, YouTube 21.43, Build 0.1.1 / lokal): Ergebnis
+Einzelheiten und Belege: `docs/nachttest.md`.
+
+| Punkt | Ergebnis Handy |
+|---|---|
+| A1 Onboarding | OK: neuer Nutzer und "Run setup again", Zurück, Show details, "Switch locked?", Continue → Paywall. "Have a code?" steht über "Continue" (nicht darunter) |
+| A2/A3 Paywall, Abo beendet | OK mit Testmodus. Ohne Testzeit: Paywall-Text bleibt "Try 3 days free" (Dashboard-Text, nicht der Code) |
+| A4 Codes, A5 Start, A7 Settings, A8 Pro, A9 | OK |
+| A6 Schutz aus/an | OK, auch echter 10-min-Timer (601 s) |
+| B10–B13, B15 | OK hell und dunkel; echte Leiste nie sichtbar (ausser gesperrt: gewollt) |
+| B14 Regale | Abos OK. Startseite: nie ein Regal (⛔, ~150 Wischer) |
+| Behoben | Statusleiste im Light-Theme (`MainActivity`); Leiste über eigener App bei Bild-in-Bild (`foregroundWindow`) |
+| Nicht lösbar | Drehen per Befehl, Paywall-Text ohne Testzeit |
