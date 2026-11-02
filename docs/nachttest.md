@@ -3,7 +3,7 @@
 Status: ⬜ offen · 🔧 in Arbeit · ✅ ok (am Handy gesehen) · ⛔ nicht lösbar (Grund + Beweis)
 
 ## Stand (wird jede Runde aktualisiert)
-- Start: 02.11.2026 ~21:00. Phase 0 (Vorbereitung) läuft.
+- 02.11. 21:01: Phase 0 fertig. /loop läuft. Bei A2/A3. Zustand jetzt: Testmodus-Abo aktiv (`subscribed=true`), Startseite "Protection on". Dienst ist damit freigeschaltet, B15 (gesperrt) wurde noch NICHT gesehen, kommt mit Entitlement-Entzug später nochmal dran.
 
 ## Ausgangszustand (gesichert in `C:\Users\Admin\ptest\baseline`)
 - Bedienungshilfen: `com.screenzen/com.screenzen.service.MyAccessibilityService:app.fshorts/app.fshorts.service.FuckShortsService`, `accessibility_enabled=1`
@@ -15,8 +15,8 @@ Status: ⬜ offen · 🔧 in Arbeit · ✅ ok (am Handy gesehen) · ⛔ nicht l�
 | # | Punkt | Status | Beleg / Notiz |
 |---|---|---|---|
 | A1 | Onboarding komplett (Willkommen → Vorher/Nachher → "Turn it on", Zurück-Geste, "Show details", "Not now", "Switch locked?", Seite nicht übersprungen wenn Dienst an, Paywall erst nach "Continue", Knopf "Continue" + nur "Have a code?") – erstes Onboarding (neuer Nutzer) UND "Run setup again" | ⬜ | |
-| A2 | Paywall (Testmodus): Texte (monatlich, "Or go yearly"), Kauf simulieren → App frei → Startseite; Variante ohne Testzeit ("Subscribe now") | ⬜ | Testmodus-Fenster kommt beim Start (Bild baseline/start.png) |
-| A3 | "Abo beendet" (ExpiredScreen): Resubscribe, Restore ("No active subscription found"/"Purchases restored"), "Have a code?" | ⬜ | |
+| A2 | Paywall (Testmodus): Texte (monatlich, "Or go yearly"), Kauf simulieren → App frei → Startseite; Variante ohne Testzeit ("Subscribe now") | 🔧 | 21:00: Texte ok ("Try 3 days free", "3 days free, then US$ 7.00/month", "Or go yearly: US$ 84.00/year"), Test-Schublade "Start Free Trial" (kein Google-Fenster), danach Startseite "Protection on", `subscribed=true` ✅. Offen: Variante ohne Testzeit (Free-Trial-Override) |
+| A3 | "Abo beendet" (ExpiredScreen): Resubscribe, Restore ("No active subscription found"/"Purchases restored"), "Have a code?" | 🔧 | 21:00: Seite kommt, Restore → "No active subscription found" ✅, Resubscribe → Paywall ✅. Offen: "Purchases restored" (Simulate-Restore mit pro=Active), "Have a code?" |
 | A4 | Codes: "Ningeninge", "Ningeningetimer" (5 s), falscher Code → Meldung | ⬜ | |
 | A5 | Startseite: Status, Zahlen, "Open YouTube", nichts scrollt, hell + dunkel | ⬜ | |
 | A6a | Schutz ausschalten: Schild → Spruch → Timer, läuft bei geschlossener App, "Keep protection on" | ⬜ | |
