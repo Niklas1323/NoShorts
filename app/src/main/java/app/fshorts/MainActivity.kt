@@ -18,7 +18,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
+import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -174,6 +179,17 @@ private fun App() {
         !onboardingDone || showSetup || rerunSetup || !accepted -> 0
         !isPro -> 1
         else -> 2
+    }
+    // Symbole der Statusleiste/Navigation: helle Symbole nur auf dunklem Grund (Einrichtung und "Abo beendet" sind
+    // immer dunkel, die Startseite folgt dem gewählten Design, nicht dem des Handys).
+    val systemDark = isSystemInDarkTheme()
+    val darkBackground = screen != 2 || themeMode == 1 || (themeMode == 0 && systemDark)
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        val controller = WindowCompat.getInsetsController(window, view)
+        controller.isAppearanceLightStatusBars = !darkBackground
+        controller.isAppearanceLightNavigationBars = !darkBackground
     }
     FShortsTheme(themeMode) {
       AnimatedContent(
