@@ -1,9 +1,12 @@
 package app.fshorts.ui
 
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -104,6 +107,8 @@ fun Onboarding(
     }
     // Testzeit gestartet (oder Code): fertig.
     LaunchedEffect(isPro) { if (isPro && paywallShown) onDone() }
+    // Zurück (Wischen oder Taste) führt auf die vorige Seite.
+    BackHandler(enabled = step > startStep) { step-- }
     Box(
         Modifier
             .fillMaxSize()
@@ -111,7 +116,11 @@ fun Onboarding(
     ) {
         AnimatedContent(
             targetState = step,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            transitionSpec = {
+                val forward = targetState > initialState
+                (slideInHorizontally { w -> if (forward) w / 4 else -w / 4 } + fadeIn()) togetherWith
+                    (slideOutHorizontally { w -> if (forward) -w / 4 else w / 4 } + fadeOut())
+            },
             label = "onboarding",
         ) { page ->
             when (page) {

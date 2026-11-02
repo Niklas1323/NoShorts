@@ -51,6 +51,8 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -91,6 +93,8 @@ class HomeState(
     val now: Long = 0L,
     /** Wartezeit fürs nächste Ausschalten in Minuten. */
     val nextWaitMinutes: Int = 15,
+    /** Test-Code aktiv: Wartezeit nur 5 Sekunden. */
+    val fastTimer: Boolean = false,
 )
 
 class HomeActions(
@@ -219,10 +223,11 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             BrandName(22.sp, p.text)
         }
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()),
+            // Kein Scrollen: Alles passt auf eine Seite, Abstände wachsen mit dem Platz.
+            Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.weight(0.6f))
             // Nur über das Schild lässt sich der Schutz ausschalten (mit Spruch und Wartezeit).
             StatusOrb(
                 active = active,
@@ -280,7 +285,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.weight(0.6f))
             // Zahlen: geschlossene Shorts (zählt der Dienst mit) und die daraus geschätzte Zeit.
             GlassCard(padding = 20.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -307,7 +312,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.weight(0.4f))
         }
         if (state.enabled) {
             MainButton("Open YouTube", actions.openYouTube, Icons.AutoMirrored.Outlined.OpenInNew)
@@ -319,7 +324,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
 
     when (dialog) {
         ProtectionDialog.Quote -> QuoteDialog(
-            waitMinutes = state.nextWaitMinutes,
+            waitLabel = if (state.fastTimer) "5 sec" else "${state.nextWaitMinutes} min",
             onKeep = { dialog = null },
             onTurnOff = {
                 dialog = null
@@ -338,19 +343,21 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             dismiss = "OK",
             onDismiss = { dialog = null },
         )
-        ProtectionDialog.ConfirmOff -> InfoDialog(
-            title = "Turn protection off?",
-            text = remember { SHORTS_QUOTES.random() } + "\n\nShorts will play again. Our bar stays.",
-            confirm = "Keep protection on",
-            onConfirm = {
+        ProtectionDialog.ConfirmOff -> ProtectionSheet(
+            kicker = "Last chance.",
+            quote = remember { SHORTS_QUOTES.random() },
+            note = "Shorts will play again. Your bar without the Shorts button stays.",
+            primary = "Keep protection on",
+            onPrimary = {
                 dialog = null
                 actions.cancelUnlockWait()
             },
-            dismiss = "Turn off",
-            onDismiss = {
+            secondary = "Turn off protection",
+            onSecondary = {
                 dialog = null
                 actions.pauseProtection()
             },
+            onDismiss = { dialog = null },
         )
         ProtectionDialog.Relock -> RelockDialog(
             current = state.nextWaitMinutes,
@@ -366,12 +373,16 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
 
 /** Sprüche, die vom Ausschalten abhalten sollen. */
 private val SHORTS_QUOTES = listOf(
-    "Shorts are built to keep you scrolling, not to make you happy.",
-    "One Short becomes ten. Ten become an hour you never get back.",
-    "You turned this on for a reason. That reason hasn't changed.",
-    "Every Short you skip is time for something real.",
-    "Nobody ever looked back and wished they had watched more Shorts.",
     "The feed never ends. Your day does.",
+    "One Short becomes ten. Ten become an hour you'll never get back.",
+    "You won't remember a single one of them tomorrow.",
+    "You're not bored. You're being farmed.",
+    "This is exactly the moment you installed this app for.",
+    "Future you is begging you not to do this.",
+    "\"Just five minutes\" is how they get you. Every single time.",
+    "Your attention is the product. Stop giving it away for free.",
+    "Close this. Go do the thing you're avoiding.",
+    "Nobody on their deathbed wished they'd watched more Shorts.",
 )
 
 private fun countdown(ms: Long): String {
@@ -383,40 +394,83 @@ private fun countdown(ms: Long): String {
 }
 
 @Composable
-private fun QuoteDialog(waitMinutes: Int, onKeep: () -> Unit, onTurnOff: () -> Unit) {
-    val quote = remember { SHORTS_QUOTES.random() }
-    AlertDialog(
-        onDismissRequest = onKeep,
-        containerColor = Color(0xFF1A1A1C),
-        title = { Text("Wait.", style = headline(30.sp), color = Color.White) },
-        text = {
-            Column {
-                Text("“$quote”", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "If you still want to turn it off, you have to wait $waitMinutes minutes first.",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
+private fun QuoteDialog(waitLabel: String, onKeep: () -> Unit, onTurnOff: () -> Unit) {
+    ProtectionSheet(
+        kicker = "Wait.",
+        quote = remember { SHORTS_QUOTES.random() },
+        note = "Still want to turn it off? Then you have to wait $waitLabel first.",
+        primary = "Keep protection on",
+        onPrimary = onKeep,
+        secondary = "Start $waitLabel timer",
+        onSecondary = onTurnOff,
+        onDismiss = onKeep,
+    )
+}
+
+/**
+ * Grosses Fenster im Paywall-Stil: Spruch gross in der Mitte, "Schutz anlassen" als weisser Hauptknopf,
+ * das Ausschalten nur klein und grau darunter.
+ */
+@Composable
+private fun ProtectionSheet(
+    kicker: String,
+    quote: String,
+    note: String,
+    primary: String,
+    onPrimary: () -> Unit,
+    secondary: String,
+    onSecondary: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .clip(RoundedCornerShape(32.dp))
+                .background(Brand.strongGradient)
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(32.dp))
+                .padding(horizontal = 24.dp, vertical = 28.dp),
+        ) {
+            Box(
+                Modifier.size(64.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.GppGood, null, tint = Color.White, modifier = Modifier.size(34.dp))
             }
-        },
-        confirmButton = {
+            Spacer(Modifier.height(22.dp))
+            Text(kicker, style = headline(22.sp), color = Color.White.copy(alpha = 0.55f))
+            Spacer(Modifier.height(6.dp))
+            Text(quote, style = headline(34.sp), color = Color.White, lineHeight = 38.sp)
+            Spacer(Modifier.height(18.dp))
+            Text(note, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp)
+            Spacer(Modifier.height(28.dp))
             Row(
                 Modifier
-                    .clip(CircleShape)
+                    .fillMaxWidth()
+                    .height(58.dp)
+                    .clip(RoundedCornerShape(29.dp))
                     .background(Color.White)
-                    .clickable(onClick = onKeep)
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                    .clickable(onClick = onPrimary),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Keep protection on", color = Brand.RedText, fontWeight = FontWeight.Bold)
+                Text(primary, color = Brand.RedText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onTurnOff) {
-                Text("Start $waitMinutes min timer", color = Color.White.copy(alpha = 0.6f))
-            }
-        },
-    )
+            Text(
+                secondary,
+                color = Color.White.copy(alpha = 0.45f),
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onSecondary)
+                    .padding(12.dp),
+            )
+        }
+    }
 }
 
 @Composable

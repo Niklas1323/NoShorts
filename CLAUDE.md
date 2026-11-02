@@ -553,6 +553,13 @@ weiterhin. Hinweis-Schlüssel bleibt v3 (v3 war nur im Test).
 - **App-Icon:** adaptives Icon, roter Hintergrund #E5172B, weisse Karte mit Schnitt (wie `BrandLogo`), PNGs gelöscht.
 - Überblendung beim Wechsel Onboarding → Startseite (`AnimatedContent` in `App()`).
 
+### 03.11.2026, später (Cloud, NICHT am Handy getestet)
+- Startseite scrollt nicht mehr (Abstände mit `weight`). Onboarding: Zurück-Geste/Taste → vorige Seite
+  (`BackHandler`), Seitenwechsel gleiten seitlich.
+- Codes: "Ningeningestop" setzt die **ganze App** zurück (`Prefs.clearAll`, `Superwall.instance.reset()`,
+  Onboarding von vorne), "Ningeningetimer" = Wartezeit 5 s (Prefs `fast_timer`).
+- Ausschalt-Fenster gross im Paywall-Stil (`ProtectionSheet`), härtere Sprüche (`SHORTS_QUOTES`).
+
 ## Was bis "Overlay KOMPLETT fertig" noch fehlt (Stand 27.10.2026, 23:35)
 
 Siehe "Noch offen" direkt oben. Danach: längerer Alltagstest durch den Nutzer (ein paar Tage), Fehler mit

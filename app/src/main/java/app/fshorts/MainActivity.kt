@@ -79,6 +79,7 @@ private fun App() {
     var unlockAt by remember { mutableLongStateOf(Prefs.unlockAt(context)) }
     var nextWait by remember { mutableIntStateOf(Prefs.nextWaitMinutes(context)) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var fastTimer by remember { mutableStateOf(Prefs.fastTimer(context)) }
     LaunchedEffect(unlockAt, paused) {
         while (unlockAt > 0L && !paused) {
             now = System.currentTimeMillis()
@@ -136,9 +137,27 @@ private fun App() {
                 promo = true
                 "Unlocked. F*ck Shorts is free for you."
             }
-            Access.Redeem.Stopped -> {
+            Access.Redeem.Reset -> {
+                // Alles auf Anfang: Einstellungen, Zahlen, Zustimmung, Code, Testzeit-Konto bei Superwall.
+                Protection.setPaused(context, false)
+                Superwall.instance.reset()
                 promo = false
-                "Code removed. Pro now needs a subscription again."
+                paused = false
+                unlockAt = 0L
+                nextWait = Prefs.nextWaitMinutes(context)
+                fastTimer = false
+                shortsClosed = 0
+                themeMode = 0
+                accepted = false
+                showSetup = false
+                awaitingEnable = false
+                onboardingDone = false
+                onboardingKey++
+                "App reset."
+            }
+            Access.Redeem.FastTimer -> {
+                fastTimer = true
+                "Timer is now 5 seconds."
             }
             Access.Redeem.Invalid -> "This code isn't valid."
         }
@@ -216,6 +235,7 @@ private fun App() {
                     unlockAt = unlockAt,
                     now = now,
                     nextWaitMinutes = nextWait,
+                    fastTimer = fastTimer,
                 ),
                 HomeActions(
                     turnOn = { showSetup = true },
@@ -237,7 +257,7 @@ private fun App() {
                     rateApp = { openUrl(context, "https://play.google.com/store/apps/details?id=${context.packageName}") },
                     redeem = redeem,
                     startUnlockWait = {
-                        unlockAt = System.currentTimeMillis() + nextWait * 60_000L
+                        unlockAt = System.currentTimeMillis() + if (fastTimer) 5_000L else nextWait * 60_000L
                         Prefs.setUnlockAt(context, unlockAt)
                     },
                     cancelUnlockWait = {
