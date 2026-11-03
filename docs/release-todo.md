@@ -15,7 +15,8 @@ Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · �
 - ✅ 🤖 Fertiger Text mit allen Korrekturen: `docs/play-store/privacy-policy-final.md` (gegen Code und Superwall-SDK
       geprüft: IP + ungefährer Ort, Android-ID, Installationsquelle, App öffnen/schliessen; MMP-Werbe-Zuordnung im
       Superwall-Konto aus; Superwall = Nest 22, Inc., USA)
-- ⬜ 👤 Claude in Chrome ersetzt den Text in "Edit Text" komplett durch `privacy-policy-final.md`, danach kurzer Blick von Claude
+- ✅ Live-Seite = `privacy-policy-final.md` (03.11., von Claude direkt von der Live-Seite geladen und Zeile für Zeile
+      verglichen: alle 153 Zeilen da, kein alter Text übrig, nur der Seitentitel kommt dazu)
 - ⬜ 🤖 Hinweis in der App (Onboarding `Disclosure`) angleichen: Superwall bekommt auch IP-Adresse und anonyme IDs
 - ⬜ 🤖 Formular "Datensicherheit": IP-Adresse/Geräte-IDs, Kaufverlauf, App-Interaktionen (Paywall) durch Superwall
 - ⬜ 👤 Eigene E-Mail für die App anlegen (z. B. fckshorts.support@gmail.com)
