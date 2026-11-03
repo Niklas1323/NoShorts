@@ -81,4 +81,6 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 - ✅ 🤖 Version 4: Einwilligung vs. Vertrag erklärt, Widerspruchsrecht eigener Absatz, Kinder-Abschnitt ohne
       Widerspruch, Gmail-Rolle, keine Übertreibungen, Schweizer Pflichten, Install-Info. Play-Store-Version schreibt
       KEINE Fehler-Dateien mehr (nur Test-Versionen) → Erklärung ohne Fehler-Dateien.
-
+- ✅ Version 4 mit echten Daten LIVE (03.11., von Claude Zeile für Zeile mit der Live-Seite verglichen; E-Mail-Adressen
+      sind auf der Seite per Spam-Schutz verschlüsselt, im Browser normal sichtbar). EU-Vertreter: Variante C gewählt
+      (überall verkaufen, ohne Vertreter; bei Brief einer Behörde sofort einen beauftragen).
