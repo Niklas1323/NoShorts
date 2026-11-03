@@ -704,3 +704,10 @@ Einzelheiten und Belege: `docs/nachttest.md`.
 | B14 Regale | Abos OK. Startseite: nie ein Regal (⛔, ~150 Wischer) |
 | Behoben | Statusleiste im Light-Theme (`MainActivity`); Leiste über eigener App bei Bild-in-Bild (`foregroundWindow`) |
 | Nicht lösbar | Drehen per Befehl, Paywall-Text ohne Testzeit |
+### 03.11.2026 (Cloud): Paywall-Links, Datenschutzerklärung
+- Superwall-Paywall 287624: "Terms of Service" + "and" gelöscht (Vorlage zeigte auf Apples Standard-EULA). "Privacy Policy"
+  zeigt jetzt auf https://www.freeprivacypolicy.com/live/478be282-9e4c-4797-83de-8e73fbdf6626 (vorher auch Apple-EULA).
+  Nutzer muss im Editor Save/Publish drücken. Keine eigenen AGB (Wunsch des Nutzers, nicht Pflicht).
+- Datenschutzerklärung: FreePrivacyPolicy (Konto des Nutzers), GDPR + Payments gekauft (48 $), Text wird per "Edit Text"
+  korrigiert (keine Cookies/IP/Konten/Marketing, Alter 13, Absatz Bedienungshilfe, Superwall). Anbieter = Elternteil
+  (Platzhalter). Prüfung: Gratis-Rechtsauskunft ZAV (15 Min.), HSG Law Clinic.
