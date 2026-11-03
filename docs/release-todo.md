@@ -71,3 +71,14 @@ Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · �
 ## 6. Nicht nötig (geprüft, TikTok-Liste)
 Cookie-Banner/Cookie-Policy, Refund-Policy (macht Google), Formular-Zustimmung, Abmelde-Link in E-Mails,
 Kinder-Einwilligung (App sammelt keine Kinderdaten).
+
+## 7. Aus der dritten Prüfung (Claude, 03.11.) – noch offen
+- ⬜ 👤 Rechtsauskunft: EU-/UK-Vertreter (3 von 4 KI-Prüfungen: "wahrscheinlich nötig"; Dienste ca. 100–300 €/Jahr)
+- ⬜ 👤 Rechtsauskunft: Einwilligung für Superwall-Statistik in der EU (ePrivacy) bzw. Hinweis nach Schweizer FMG
+- ⬜ 👤 Optional: Support-E-Mail über Google Workspace (mit Auftragsverarbeitungsvertrag) statt Gratis-Gmail
+- ⬜ 👤 Play Console: Entwicklername = "Lucien Rahm" (muss zur Datenschutzerklärung passen), Zielgruppe nur 13+
+- ⬜ 🤖 Prüfen, ob Superwall inaktive Nutzer automatisch löschen kann (dann feste Löschfrist in die Erklärung)
+- ✅ 🤖 Version 4: Einwilligung vs. Vertrag erklärt, Widerspruchsrecht eigener Absatz, Kinder-Abschnitt ohne
+      Widerspruch, Gmail-Rolle, keine Übertreibungen, Schweizer Pflichten, Install-Info. Play-Store-Version schreibt
+      KEINE Fehler-Dateien mehr (nur Test-Versionen) → Erklärung ohne Fehler-Dateien.
+

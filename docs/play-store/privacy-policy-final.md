@@ -52,7 +52,7 @@ For the purposes of this Privacy Policy:
 
 ### Types of Data Collected
 
-We do not ask You for Your name, email address, phone number or postal address, and the Application does not use Your device's location services or access Your contacts or photos. The Service has no user accounts, does not use advertising services, and does not send information about Your use of other apps or websites to Us or anyone else.
+We do not ask You for Your name, email address, phone number or postal address, and the Application does not use Your device's location services or access Your contacts or photos. The Service has no user accounts, does not use advertising services, and does not send information about Your use of other apps or websites to Us or anyone else, apart from the install information from Google Play described below.
 
 #### Device Data
 
@@ -73,7 +73,7 @@ If You buy a subscription, information about Your purchase and subscription stat
 
 #### Messages You Send Us
 
-If You contact Us by email, We process Your email address and the content of Your message to answer You. Emails are stored with Our email provider, Google (Gmail), which may process them in the United States and other countries.
+If You contact Us by email, We process Your email address and the content of Your message to answer You. Emails are stored in Our Gmail account. Google provides this email service under its own terms and Privacy Policy and may process emails in the United States and other countries.
 
 #### Information from Google Play
 
@@ -81,13 +81,13 @@ Google Play provides Us with information about purchases (for example order numb
 
 ### Accessibility Service
 
-Before You turn on the Accessibility Service, the Application shows an in-app notice that explains the processing described in this section and asks for Your agreement. You can read it again at any time in the Application's settings under "Privacy & permissions".
+Before You turn on the Accessibility Service, the Application shows an in-app notice that explains the processing described in this section and asks for Your agreement. This agreement is the consent that Google Play requires; under data protection law, this on-device processing is based on Our contract with You (see "Legal Basis"). You can read the notice again at any time in the Application's settings under "Privacy & permissions".
 
 F*ck Shorts uses Android's Accessibility Service API only to detect and hide YouTube Shorts in the YouTube app. To do this, the Application reads the on-screen structure of the YouTube app (for example buttons, labels, text shown on screen and their positions), which app is in the foreground, and the position of other windows on the screen. For the notification shade and the keyboard it only reads their position, not their content. It notices when the screen is touched, but not where. The Application also performs actions in the YouTube app for You: it leaves Shorts, keeps a Short opened from a link from moving on to other Shorts, selects "Not interested" or "Hide" on Shorts shelves, and, when You tap its navigation bar, taps the matching YouTube button (scrolling YouTube's list if needed to reach it). It performs no other actions.
 
-The Application may take screenshots of the YouTube window (or, if this is not possible, of the screen) to match colors and to show Your profile picture in its replacement navigation bar, and screenshots of the screen to measure a single color. A screenshot of the whole screen may contain anything visible at that moment (for example a notification). From screenshots, the Application keeps only the profile picture crop and the image of the YouTube navigation bar described below; everything else is discarded right away.
+The Application may take screenshots of the YouTube window (or, if this is not possible, of the screen) to match colors and to show Your profile picture in its replacement navigation bar, and screenshots of the screen to measure a single color. A screenshot of the whole screen may contain anything visible at that moment (for example a notification). From screenshots, the Application keeps only the profile picture crop; everything else is discarded right away.
 
-All of this is processed on Your Device only. It is never sent to Us or to any third party. The Application stores on Your Device only: a small crop of Your profile picture, the position of the YouTube navigation bar, Your settings and counters (for example how many Shorts were closed), and up to 12 small troubleshooting files about the YouTube screen layout (which may contain text shown on screen, such as video titles, and an image of the YouTube navigation bar; only the 12 most recent files are kept, older ones are deleted). The Application does not analyse screen content for any purpose other than finding Shorts and YouTube's navigation elements. These stay on Your Device: they are not included in Android backups or transfers to a new device, and they are deleted when You uninstall the Application.
+All of this is processed on Your Device only. It is never sent to Us or to any third party. The Application stores on Your Device only: a small crop of Your profile picture, the position of the YouTube navigation bar, and Your settings and counters (for example how many Shorts were closed). It does not store any text shown on screen. (Separately, the Superwall component stores its identifiers and cached paywall data in the Application's storage.) The Application does not use screen content for any purpose other than finding Shorts and YouTube's navigation elements, matching colors and showing Your profile picture in its navigation bar. This data stays on Your Device: it is not included in Android backups or transfers to a new device, and it is deleted when You uninstall the Application.
 
 You can stop this processing at any time by turning off F*ck Shorts in Android Settings > Accessibility, or by uninstalling the Application.
 
@@ -106,7 +106,7 @@ We share Your Personal Data only in the following situations:
 
 - __With Superwall, Our Processor:__ to display the paywall and manage subscriptions, as described in "Detailed Information on the Processing of Your Personal Data".
 - __With Google:__ Google processes payment and purchase data as an independent controller (see "Payments").
-- __With Google (Gmail), Our email provider:__ if You email Us, Your message is stored with Google.
+- __With Google (Gmail), Our email service:__ if You email Us, Your message is stored in Our Gmail account.
 - __If the Application is transferred:__ to the new owner of the Application. We will provide notice before Your Personal Data becomes subject to a different privacy policy.
 - __With Your consent__: for any other purpose, only with Your consent.
 
@@ -129,7 +129,7 @@ Personal Data processed by Superwall and Google is transferred outside Switzerla
 
 ### Delete Your Personal Data
 
-You have the right to have the Personal Data We hold about You deleted.
+You can ask Us to delete the Personal Data We hold about You.
 
 All data that the Application stores on Your Device is deleted when You uninstall the Application. To access or delete data held by Superwall, first copy the Support ID shown in the Application's settings, then uninstall the Application (otherwise new data is created the next time it is opened). Email Us at [OWNER EMAIL] with the Support ID (or Your Google Play order number, starting with "GPA."). We will instruct Superwall to delete the data and tell You when this is done, normally within one month. Deleting data does not cancel Your subscription; You can cancel it in Google Play. Purchase records kept by Google are governed by Google's Privacy Policy.
 
@@ -183,7 +183,7 @@ The legal basis We rely on depends on the purpose of the processing:
 
 - __Performance of a contract:__ the on-device processing through the Accessibility Service described above, which is the core function of the Service; providing and maintaining the Service; displaying the paywall; processing purchases and subscriptions; and providing support.
 - __Legitimate interests:__ securing the Service and preventing fraud and abuse; understanding how the paywall performs; fixing errors (crash reports from Google Play); answering Your messages; enforcing Our agreements and establishing, exercising, or defending legal claims; and evaluating or completing a transfer of the Application. Our legitimate interest is to operate, secure, fix and improve the Service. Where We rely on legitimate interests, We balance that interest against Your rights and freedoms.
-- __Legal obligation:__ retaining transaction, tax, and accounting records, and responding to lawful requests from courts and public authorities.
+- __Legal obligation__ (and, for obligations under Swiss law, Our legitimate interest in complying with them): retaining transaction, tax, and accounting records, and responding to lawful requests from courts and public authorities.
 
 Providing purchase information is necessary to buy a subscription; without it, You cannot subscribe.
 
@@ -199,7 +199,7 @@ You may contact Us using the details in the "Contact Us" section to request furt
 
 ### Your Rights under the GDPR and the FADP
 
-We respect the confidentiality of Your Personal Data and guarantee that You can exercise Your rights.
+We respect the confidentiality of Your Personal Data. You can exercise Your rights as described below.
 
 You have the right under this Privacy Policy, and by law where the GDPR or the UK GDPR applies to Our processing of Your Personal Data (including, in particular, if You are in the European Economic Area (EEA) or the United Kingdom (UK)), to:
 
@@ -213,6 +213,8 @@ You have the right under this Privacy Policy, and by law where the GDPR or the U
 
 If You are in Switzerland, You have corresponding rights under the FADP, in particular the right to access, correction, deletion and data portability.
 
+__Your right to object:__ Where We rely on legitimate interests, You can object at any time by emailing Us with Your Support ID. The paywall statistics cannot be switched off for a single installation; if You object, We will have the data linked to Your Support ID deleted, and You can stop all processing by uninstalling the Application.
+
 ### Exercising of Your Data Protection Rights
 
 You may exercise any of the rights described above by contacting Us. Please include the Support ID shown in the Application's settings, so that We can find the data that relates to You. We may ask You to verify Your identity before responding to such requests. We generally respond within one month, and may extend by two further months where necessary, in accordance with applicable law.
@@ -225,11 +227,7 @@ We do not make decisions based solely on automated processing, including profili
 
 ## Children's and Minors' Privacy
 
-The Service is not directed to, and We do not knowingly collect Personal Information from, anyone under the age of 13.
-
-A parent or guardian may set up the Application on a child's device. In that case, the same limited processing described in this Privacy Policy applies, and the parent or guardian can ask Us to delete the related data at any time.
-
-If You are a parent or guardian and You believe Your child has provided Us with Personal Information, please contact Us. If We become aware that We have collected Personal Information from anyone under the age of 13, We will take steps to remove that information as soon as reasonably possible.
+The Service is not directed to children under 13. A parent or guardian may install the Application on a child's device. In that case, the parent or guardian is responsible for the subscription, the same limited processing described in this Privacy Policy applies, and the parent or guardian can exercise the rights described here on the child's behalf, including deletion.
 
 ## Links to Other Websites
 

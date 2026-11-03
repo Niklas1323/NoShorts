@@ -723,3 +723,6 @@ Einzelheiten und Belege: `docs/nachttest.md`.
   Cloud-Backup, kein Gerät-zu-Gerät-Umzug; allowBackup=false reicht ab Android 12 nicht), Disclosure: Berührungen,
   Screenshots, Superwall-Daten (IP, Geräte-ID), Ausschalten. Hinweis-Schlüssel bleibt v3.
 - Offen für die Rechtsauskunft: EU-/UK-Vertreter (Art. 27), ePrivacy-Einwilligung für Superwall-Statistik.
+- 03.11. Abend: Datenschutz Version 4 nach dritter Prüfung. Play-Store-Version (Release) schreibt KEINE Fehler-Dateien
+  mehr (`TreeDumper.dump`, `BarStyle.saveDebugImage`, `tapLog` nur bei `BuildConfig.DEBUG`), Hinweis in der App nennt sie
+  nur in Test-Versionen. Live-Datei mit echten Daten liegt nur im Scratchpad (nicht ins Git: Adresse des Vaters).

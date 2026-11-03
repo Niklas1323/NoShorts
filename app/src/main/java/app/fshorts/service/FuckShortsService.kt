@@ -2092,6 +2092,7 @@ class FuckShortsService : AccessibilityService() {
 
     private fun tapLog(line: String) {
         Log.i(TAG, "Tipp: $line")
+        if (!app.fshorts.BuildConfig.DEBUG) return // Play-Store-Version: keine Fehler-Dateien
         runCatching {
             val file = java.io.File(TreeDumper.dumpDir(this).apply { mkdirs() }, "tipps.txt")
             if (file.length() > 20_000) file.delete()

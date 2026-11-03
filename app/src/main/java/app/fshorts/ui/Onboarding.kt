@@ -585,8 +585,11 @@ fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
                 Text("Your data", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Bullet("Everything it reads from YouTube stays on your phone and is never sent anywhere.", sub)
                 Bullet(
-                    "Stored on your phone only: a crop of your profile picture, the position of YouTube's bar and up " +
-                        "to 12 small troubleshooting files about YouTube's screen layout.",
+                    "Stored on your phone only: a crop of your profile picture, the position of YouTube's bar, " +
+                        "your settings and counters." +
+                        // Test-Versionen schreiben zusätzlich Fehler-Dateien, die Play-Store-Version nicht.
+                        if (app.fshorts.BuildConfig.DEBUG) " Test version only: up to 12 small troubleshooting files " +
+                            "about YouTube's screen layout." else "",
                     sub,
                 )
                 Bullet(

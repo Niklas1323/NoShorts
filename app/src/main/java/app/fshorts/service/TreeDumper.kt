@@ -19,7 +19,11 @@ import java.util.Locale
  */
 class TreeDumper(private val context: Context) {
 
-    fun dump(root: AccessibilityNodeInfo, windows: List<AccessibilityWindowInfo>, reason: String): File? = try {
+    /** Nur in Test-Versionen (Debug): Die Play-Store-Version schreibt keine Fehler-Dateien (Datenschutzerklärung). */
+    fun dump(root: AccessibilityNodeInfo, windows: List<AccessibilityWindowInfo>, reason: String): File? =
+        if (!BuildConfig.DEBUG) null else dumpNow(root, windows, reason)
+
+    private fun dumpNow(root: AccessibilityNodeInfo, windows: List<AccessibilityWindowInfo>, reason: String): File? = try {
         val text = buildString {
             appendLine("F*ck Shorts – Struktur")
             appendLine("Grund: $reason")

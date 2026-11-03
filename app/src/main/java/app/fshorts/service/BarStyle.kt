@@ -205,6 +205,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
 
     /** Bild der echten Leiste für die Fehlersuche (landet bei "Struktur teilen"). */
     private fun saveDebugImage(bitmap: Bitmap, r: Rect) {
+        if (!app.fshorts.BuildConfig.DEBUG) return // Play-Store-Version: keine Fehler-Dateien
         runCatching {
             val crop = Bitmap.createBitmap(bitmap, r.left, r.top, r.width(), r.height())
             val dumps = TreeDumper.dumpDir(service).apply { mkdirs() }
