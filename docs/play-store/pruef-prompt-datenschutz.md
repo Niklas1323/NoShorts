@@ -8,8 +8,8 @@ Please review the privacy policy of my Android app very carefully. This is versi
 already applied). I am not asking for a rewrite; I want a list of concrete problems that are still left.
 
 ## The privacy policy
-Live link: https://www.freeprivacypolicy.com/live/478be282-9e4c-4797-83de-8e73fbdf6626
-(If you cannot open links, I will paste the full text below this prompt.)
+The full text is in the attached file privacy-policy-final.md. Review only that file (it is not published yet).
+The placeholders [OWNER NAME], [OWNER ADDRESS] and [OWNER EMAIL] will be filled in before publishing; ignore them.
 
 ## Facts about the app (verified in the source code — treat these as true)
 App: "F*ck Shorts", Android only, distributed via Google Play. Paid subscription (monthly with 3-day free trial,
