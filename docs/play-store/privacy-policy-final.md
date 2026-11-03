@@ -81,6 +81,8 @@ Google Play provides Us with information about purchases (for example order numb
 
 ### Accessibility Service
 
+Before You turn on the Accessibility Service, the Application shows an in-app notice that explains the processing described in this section and asks for Your agreement. You can read it again at any time in the Application's settings under "Privacy & permissions".
+
 F*ck Shorts uses Android's Accessibility Service API only to detect and hide YouTube Shorts in the YouTube app. To do this, the Application reads the on-screen structure of the YouTube app (for example buttons, labels, text shown on screen and their positions), which app is in the foreground, and the position of other windows on the screen. For the notification shade and the keyboard it only reads their position, not their content. It notices when the screen is touched, but not where. The Application also performs actions in the YouTube app for You: it leaves Shorts, keeps a Short opened from a link from moving on to other Shorts, selects "Not interested" or "Hide" on Shorts shelves, and, when You tap its navigation bar, taps the matching YouTube button (scrolling YouTube's list if needed to reach it). It performs no other actions.
 
 The Application may take screenshots of the YouTube window (or, if this is not possible, of the screen) to match colors and to show Your profile picture in its replacement navigation bar, and screenshots of the screen to measure a single color. A screenshot of the whole screen may contain anything visible at that moment (for example a notification). From screenshots, the Application keeps only the profile picture crop and the image of the YouTube navigation bar described below; everything else is discarded right away.
