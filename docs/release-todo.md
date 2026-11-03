@@ -17,7 +17,13 @@ Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · �
       Superwall-Konto aus; Superwall = Nest 22, Inc., USA)
 - ✅ Live-Seite = `privacy-policy-final.md` (03.11., von Claude direkt von der Live-Seite geladen und Zeile für Zeile
       verglichen: alle 153 Zeilen da, kein alter Text übrig, nur der Seitentitel kommt dazu)
-- ⬜ 🤖 Hinweis in der App (Onboarding `Disclosure`) angleichen: Superwall bekommt auch IP-Adresse und anonyme IDs
+- ✅ 🤖 Zweitmeinungen (Gemini, Claude, ChatGPT) geprüft → Version 2 der Erklärung (`privacy-policy-final.md`):
+      Privatperson als Anbieter, Superwall = Auftragsverarbeiter (DPA), Google eigenständig, Standardvertragsklauseln
+      statt DPF, Aufbewahrung, Löschen mit Support-ID, Sicherheit, Gmail als E-Mail-Anbieter
+- ⬜ 👤 Version 2 per Claude in Chrome komplett ersetzen (wieder "Edit Text"), dann Endvergleich durch Claude
+- ✅ 🤖 App: Link zur Datenschutzerklärung (Einstellungen + Hinweis), Support-ID in Einstellungen, kein Backup/Umzug
+      (`data_extraction_rules.xml`), Hinweis angeglichen (IP, Geräte-ID, Ausschalten) – am Handy noch NICHT getestet
+- ⬜ 👤 Falls die App-E-Mail NICHT Gmail ist: "Google (Gmail)" in der Erklärung anpassen (2 Stellen)
 - ⬜ 🤖 Formular "Datensicherheit": IP-Adresse/Geräte-IDs, Kaufverlauf, App-Interaktionen (Paywall) durch Superwall
 - ⬜ 👤 Eigene E-Mail für die App anlegen (z. B. fckshorts.support@gmail.com)
 - ⬜ 👤 Name/Kontakt eines Elternteils eintragen (erst nach der Rechtsauskunft)
@@ -27,6 +33,7 @@ Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · �
 - ⬜ 👤 15 Min. Gratis-Rechtsauskunft Zürcher Anwaltsverband (Strassburgstrasse 9, Zürich, zav.ch),
       Fragen: Adresse nötig? Anmeldung/Steuern? Google-Play-/YouTube-Regeln (App verändert YouTube)?
 - ⬜ 👤 Optional: HSG Law Clinic (gratis, für alle) Text kurz anschauen lassen
+- ⬜ 👤 Rechtsauskunft zusätzlich fragen: EU-/UK-Vertreter nötig (Art. 27, KIs uneinig)? Einwilligung für Superwall-Statistik in der EU (ePrivacy)?
 - ⬜ 👤 Später, wenn Geld reinkommt: Treuhänder (Steuern), evtl. volle Anwaltsprüfung, AGB
 
 ## 3. Google Play

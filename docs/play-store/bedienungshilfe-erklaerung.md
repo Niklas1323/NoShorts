@@ -34,7 +34,12 @@ für Menschen mit Behinderung. Mit `true` zu lügen wäre ein Grund zum Sperren.
 - **Speichert nur auf dem Gerät:** Profilbild-Ausschnitt, Lage der Leiste, Einstellungen, max. 12 Fehler-Dateien
   (Struktur der YouTube-Seite, Bild der Leiste). Seit 02.11. nicht mehr in der App teilbar (nur per USB/adb).
 - **Internet nur für Abos (seit 02.11.2026, Superwall):** Die App hat jetzt `INTERNET` und `BILLING`. Superwall
-  (Paywall, Abo-Status) und Google Play bekommen Kauf- und einfache Geräte-Infos (Modell, Sprache, App-Version).
+  (Paywall, Abo-Status, Auftragsverarbeiter) bekommt Kaufdaten und Geräte-Infos: app-spezifische Android-ID und
+  Superwall-IDs, IP-Adresse (ungefährer Ort ableitbar), Modell, Android-Version, App-Version, Sprache/Region/Zeitzone,
+  Installationsquelle, App öffnen/schliessen, Paywall-Statistik. Google Play: Zahlungen (eigenständig verantwortlich).
+  Superwall-Werbe-Zuordnung (MMP) ist aus, keine Werbe-ID. Formular "Datensicherheit": Gerät-/andere IDs, App-Interaktionen,
+  Kaufverlauf, evtl. ungefährer Standort (in Superwall prüfen); gesammelt, nicht geteilt (Auftragsverarbeiter);
+  verschlüsselt übertragen; Löschung per E-Mail mit Support-ID.
   Was der Dienst aus YouTube liest, geht weiterhin nirgendwohin (kein Netzwerk-Code im Dienst).
   `POST_NOTIFICATIONS` von Superwall ist im Manifest entfernt. Hinweis in der App ist angepasst (`Disclosure` in
   `ui/Onboarding.kt`, Schlüssel `disclosure_accepted_v3`).
@@ -60,8 +65,9 @@ No.
 > single color and are discarded immediately. All of this is processed on the device only and is never
 > transmitted or shared. A small cropped profile picture, the bar position and up to 12 local troubleshooting files
 > are stored on the device only (deleted when the app is uninstalled or its data is cleared). The app's only network use is for
-> subscriptions: Google Play Billing and our paywall provider Superwall receive purchase and basic device
-> information (device model, language, app version). No data obtained through the AccessibilityService API is
+> subscriptions: Google Play Billing and our paywall provider Superwall (our processor) receive purchase information
+> and device information (app-specific Android ID, IP address, device model, OS and app version, language and
+> region settings, paywall interactions). No data obtained through the AccessibilityService API is
 > ever sent to them or anywhere else.
 
 **Does the app perform actions on behalf of the user? / Autonomous behavior?**

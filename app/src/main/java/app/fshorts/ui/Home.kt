@@ -11,6 +11,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import app.fshorts.Protection
+import app.fshorts.FShortsApp
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
@@ -97,6 +104,8 @@ class HomeState(
     val startedAt: Long = 0L,
     /** Test-Code aktiv: Wartezeit nur 5 Sekunden. */
     val fastTimer: Boolean = false,
+    /** Kennung bei Superwall, für Auskunft/Löschung per E-Mail (Einstellungen). */
+    val supportId: String = "",
 )
 
 class HomeActions(
@@ -858,6 +867,27 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
             LinkRow(Icons.Outlined.StarOutline, "Rate the app", null, actions.rateApp)
             Divider()
             LinkRow(Icons.Outlined.Description, "Privacy & permissions", null, onPrivacy)
+            Divider()
+            val uriHandler = LocalUriHandler.current
+            LinkRow(Icons.AutoMirrored.Outlined.OpenInNew, "Privacy policy", null) {
+                runCatching { uriHandler.openUri(FShortsApp.PRIVACY_POLICY_URL) }
+            }
+            Divider()
+            // Für Auskunft/Löschung bei Superwall: Nutzer schicken diese Kennung per E-Mail mit.
+            val context = LocalContext.current
+            LinkRow(
+                Icons.Outlined.ContentCopy,
+                "Support ID",
+                "${state.supportId.ifEmpty { "–" }}\nInclude it if you email us about your data. Tap to copy.",
+            ) {
+                if (state.supportId.isNotEmpty()) {
+                    runCatching {
+                        context.getSystemService(ClipboardManager::class.java)
+                            ?.setPrimaryClip(ClipData.newPlainText("Support ID", state.supportId))
+                        Toast.makeText(context, "Support ID copied", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(28.dp))

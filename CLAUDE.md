@@ -711,3 +711,15 @@ Einzelheiten und Belege: `docs/nachttest.md`.
 - Datenschutzerklärung: FreePrivacyPolicy (Konto des Nutzers), GDPR + Payments gekauft (48 $), Text wird per "Edit Text"
   korrigiert (keine Cookies/IP/Konten/Marketing, Alter 13, Absatz Bedienungshilfe, Superwall). Anbieter = Elternteil
   (Platzhalter). Prüfung: Gratis-Rechtsauskunft ZAV (15 Min.), HSG Law Clinic.
+
+### 03.11.2026, Nachmittag (Cloud, NICHT am Handy getestet): Datenschutz Version 2 + App
+- Erklärung live (FreePrivacyPolicy, 48 $ GDPR+Payments), Version 1 Zeile für Zeile mit der Live-Seite verglichen.
+  Zweitmeinungen geprüft → `docs/play-store/privacy-policy-final.md` Version 2 (noch NICHT live): Anbieter = Privatperson,
+  Superwall Auftragsverarbeiter laut DPA (SCC Modul 2, UK-Addendum, Schweizer Anpassung; KEIN DPF), Google eigenständig,
+  Löschen über Support-ID. Superwall-SDK-Fakten: Android-ID (`Settings.Secure.ANDROID_ID`), IP über superwall-Hosts,
+  Install-Referrer, App-Events; MMP-Attribution im Konto aus (`static_config`: mmp.enabled=false), keine Werbe-ID.
+- App: `FShortsApp.PRIVACY_POLICY_URL` (Link in Settings "Privacy policy" + im `Disclosure`), `FShortsApp.supportId()`
+  (= `Superwall.instance.userId`, Settings "Support ID", Tippen kopiert), `res/xml/data_extraction_rules.xml` (kein
+  Cloud-Backup, kein Gerät-zu-Gerät-Umzug; allowBackup=false reicht ab Android 12 nicht), Disclosure: Berührungen,
+  Screenshots, Superwall-Daten (IP, Geräte-ID), Ausschalten. Hinweis-Schlüssel bleibt v3.
+- Offen für die Rechtsauskunft: EU-/UK-Vertreter (Art. 27), ePrivacy-Einwilligung für Superwall-Statistik.

@@ -12,6 +12,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextDecoration
+import app.fshorts.FShortsApp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -565,7 +568,12 @@ fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
                 Text("What it reads", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Bullet("The layout of the YouTube app: buttons, text (e.g. video titles) and where they are on screen.", sub)
                 Bullet("Which app is in front. For notifications and the keyboard only where they are, not what's in them.", sub)
-                Bullet("Screenshots, to copy colors and your profile picture into its own bar.", sub)
+                Bullet("That you touch the screen, not where.", sub)
+                Bullet(
+                    "Screenshots, to copy colors and your profile picture into its own bar. Only those are kept; " +
+                        "the rest of the picture is thrown away right away.",
+                    sub,
+                )
                 Text("What it does in YouTube", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Bullet("Places its own bar without the Shorts button over YouTube's bar. Tapping it taps the matching YouTube button.", sub)
                 Bullet("Presses Back as soon as a Short opens. A Short opened from a link may play; swipe on and the app swipes back.", sub)
@@ -583,10 +591,24 @@ fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
                 )
                 Bullet(
                     "Subscriptions are handled by Google Play and our payment provider Superwall. They receive purchase " +
-                        "and basic device info (e.g. device model, language, app version), never anything from YouTube.",
+                        "and device info (e.g. device model, language, app version, IP address, an app-specific " +
+                        "device ID), never anything from YouTube.",
                     sub,
                 )
-                Bullet("It doesn't read passwords, messages or the content of other apps.", sub)
+                Bullet("It doesn't read passwords or messages, and it doesn't look into other apps.", sub)
+                Bullet("You can stop it anytime: turn it off in Android Settings → Accessibility, or uninstall the app.", sub)
+                val uriHandler = LocalUriHandler.current
+                Text(
+                    "Read the full privacy policy",
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { runCatching { uriHandler.openUri(FShortsApp.PRIVACY_POLICY_URL) } }
+                        .padding(vertical = 6.dp),
+                )
             }
         }
     }

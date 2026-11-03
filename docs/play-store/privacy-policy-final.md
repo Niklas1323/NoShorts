@@ -2,9 +2,9 @@
 
 Last updated: November 03, 2026
 
-This Privacy Policy describes Our policies and procedures on the collection, use and disclosure of Your information when You use the Service and tells You about Your privacy rights and how the law protects You.
+This Privacy Policy describes how the Provider collects, uses and discloses Your information when You use the Service and tells You about Your privacy rights and how the law protects You.
 
-We use Your Personal Data to provide and improve the Service. We collect, use, and disclose Your information as described in this Privacy Policy and, where required by applicable law, only where We have a valid legal basis to do so, including Your consent (where consent is required).
+We use Your Personal Data to provide and improve the Service. We collect, use, and disclose Your information as described in this Privacy Policy and, where required by applicable law, only where We have a valid legal basis to do so.
 
 ## Interpretation and Definitions
 
@@ -16,19 +16,19 @@ The words whose initial letters are capitalized have meanings defined under the 
 
 For the purposes of this Privacy Policy:
 
-- __Application__ refers to F*ck Shorts, the software program provided by the Company.
+- __Application__ refers to F*ck Shorts, the software program provided by the Provider.
 
-- __Company__ (referred to as either "the Company", "We", "Us" or "Our" in this Privacy Policy) refers to [OWNER NAME], [OWNER ADDRESS], Switzerland.
+- __Provider__ (referred to as either "the Provider", "We", "Us" or "Our" in this Privacy Policy) refers to [OWNER NAME], a private individual, [OWNER ADDRESS], Switzerland, email: [OWNER EMAIL].
 
-    For the purposes of the GDPR, the Company is the Data Controller.
-
-- __Country/State__ refers to: Switzerland.
-
-- __Data Controller__, for the purposes of the GDPR (General Data Protection Regulation), refers to the Company as the person which alone or jointly with others determines the purposes and means of the processing of Personal Data.
+    The Provider is the controller under the GDPR and the Swiss Federal Act on Data Protection (FADP).
 
 - __Device__ means any device that can access the Service, such as a cell phone or a digital tablet.
 
-- __GDPR__ refers to the EU General Data Protection Regulation.
+- __Device Data__ refers to technical information about Your Device and Your use of the Service that is processed by Our subscription provider, as described below.
+
+- __FADP__ refers to the Swiss Federal Act on Data Protection.
+
+- __GDPR__ refers to the EU General Data Protection Regulation and, where applicable, the UK GDPR.
 
 - __Personal Data__ (or "Personal Information") is any information that relates to an identified or identifiable individual.
 
@@ -36,17 +36,15 @@ For the purposes of this Privacy Policy:
 
     We use "Personal Data" and "Personal Information" interchangeably unless a law uses a specific term.
 
+- __Processor__ means a company that processes Personal Data on Our behalf and only on Our instructions.
+
 - __Service__ refers to the Application.
 
-- __Service Provider__ means any natural or legal person who processes the data on behalf of the Company. It refers to third-party companies or individuals employed by the Company to facilitate the Service, to provide the Service on behalf of the Company or to perform services related to the Service.
-
-    For the purposes of the GDPR, Service Providers are considered Data Processors.
-
-- __Device Data__ refers to technical information about Your Device and Your use of the Service that is processed by Our subscription provider, as described below.
+- __Support ID__ means the identifier of Your installation that is shown in the Application's settings.
 
 - __User__ means any individual who accesses or uses the Service.
 
-- __You__ means the individual accessing or using the Service, or the company, or other legal entity on behalf of which such individual is accessing or using the Service, as applicable.
+- __You__ means the individual accessing or using the Service.
 
     Under GDPR, You can be referred to as the Data Subject since You are the individual using the Service.
 
@@ -60,12 +58,14 @@ We do not ask You for Your name, email address, phone number or postal address, 
 
 When You use the Service, Our subscription provider Superwall (see "Subscription Management") automatically receives technical information about Your Device and Your use of the Application and its paywall, in particular:
 
-- identifiers for Your Device and Your installation of the Application (an app-specific Android ID and anonymous identifiers created by Superwall; not linked to Your name or email address)
+- identifiers for Your Device and Your installation of the Application (an app-specific Android ID and anonymous identifiers created by Superwall, including the Support ID; not linked to Your name or email address)
 - Your IP address, and an approximate location (for example country or city) that can be derived from it
 - device model, operating system version and application version
 - language, region, currency and time zone settings
 - technical settings such as dark mode, font size, network type and power-saving mode
 - the installation date, information from Google Play about how the Application was installed (if available), when the Application is opened and closed, and when and how often the paywall was shown and used
+
+The processing of Device Data by Superwall is required to display the paywall and check Your subscription; without it, the Service cannot be used.
 
 #### Purchase and Subscription Data
 
@@ -73,7 +73,7 @@ If You buy a subscription, information about Your purchase and subscription stat
 
 #### Messages You Send Us
 
-If You contact Us by email, We process Your email address and the content of Your message to answer You.
+If You contact Us by email, We process Your email address and the content of Your message to answer You. Emails are stored with Our email provider, Google (Gmail), which may process them in the United States and other countries.
 
 #### Information from Google Play
 
@@ -83,87 +83,77 @@ Google Play provides Us with information about purchases (for example order numb
 
 F*ck Shorts uses Android's Accessibility Service API only to detect and hide YouTube Shorts in the YouTube app. To do this, the Application reads the on-screen structure of the YouTube app (for example buttons, labels, text shown on screen and their positions), which app is in the foreground, and the position of other windows on the screen. For the notification shade and the keyboard it only reads their position, not their content. It notices when the screen is touched, but not where. The Application also performs actions in the YouTube app for You: it leaves Shorts, keeps a Short opened from a link from moving on to other Shorts, and selects "Not interested" or "Hide" on Shorts shelves.
 
-The Application may take screenshots of the YouTube window (or, if this is not possible, of the screen) to match colors and to show Your profile picture in its replacement navigation bar, and screenshots of the screen to measure a single color. Screenshots are processed in memory and discarded right away.
+The Application may take screenshots of the YouTube window (or, if this is not possible, of the screen) to match colors and to show Your profile picture in its replacement navigation bar, and screenshots of the screen to measure a single color. A screenshot of the whole screen may contain anything visible at that moment (for example a notification). From screenshots, the Application keeps only the profile picture crop and the image of the YouTube navigation bar described below; everything else is discarded right away.
 
-All of this is processed on Your Device only. It is never sent to Us or to any third party. The Application stores on Your Device only: a small crop of Your profile picture, the position of the YouTube navigation bar, Your settings and counters (for example how many Shorts were closed), and up to 12 small troubleshooting files about the YouTube screen layout (which may contain text shown on screen, such as video titles, and an image of the YouTube navigation bar). These stay on Your Device and are deleted when You uninstall the Application.
+All of this is processed on Your Device only. It is never sent to Us or to any third party. The Application stores on Your Device only: a small crop of Your profile picture, the position of the YouTube navigation bar, Your settings and counters (for example how many Shorts were closed), and up to 12 small troubleshooting files about the YouTube screen layout (which may contain text shown on screen, such as video titles, and an image of the YouTube navigation bar). These stay on Your Device: they are not included in Android backups or transfers to a new device, and they are deleted when You uninstall the Application.
+
+You can stop this processing at any time by turning off F*ck Shorts in Android Settings > Accessibility, or by uninstalling the Application.
 
 ### Use of Your Personal Data
 
-The Company may use Personal Data for the following purposes:
+We use Personal Data for the following purposes:
 
-- __To provide and maintain Our Service__, including to unlock paid features and check Your subscription status.
+- __To provide and maintain Our Service__, including the on-device processing described in "Accessibility Service", unlocking paid features and checking Your subscription status.
 - __To understand how the paywall performs:__ Superwall provides Us with statistics about how often the paywall is shown and how many purchases are made.
-- __For the performance of a contract:__ the development, compliance and undertaking of the purchase contract for the products, items or services You have purchased or of any other contract with Us through the Service.
-- __To manage Your requests:__ To attend and manage Your requests to Us.
+- __For the performance of a contract:__ the development, compliance and undertaking of the purchase contract for the subscription You have purchased through the Service.
+- __To manage Your requests:__ to answer Your messages and handle requests about Your data.
+- __If the Application is transferred:__ to evaluate or carry out a sale or transfer of the Application to another person or company.
 
-- __For business transfers:__ We may use Your Personal Data to evaluate or conduct a merger, divestiture, restructuring, reorganization, dissolution, or other sale or transfer of some or all of Our assets, whether as a going concern or as part of bankruptcy, liquidation, or similar proceeding, in which Personal Data held by Us about Our Service users is among the assets transferred.
+We share Your Personal Data only in the following situations:
 
-We may share Your Personal Data in the following situations:
-
-- __With Service Providers:__ We may share Your Personal Data with Service Providers for payment processing and to manage subscriptions, as described in the "Detailed Information on the Processing of Your Personal Data" section.
-- __For business transfers:__ We may share or transfer Your Personal Data in connection with, or during negotiations of, any merger, sale of Company assets, financing, or acquisition of all or a portion of Our business to another company.
-- __With Your consent__: We may disclose Your Personal Data for any other purpose with Your consent.
+- __With Superwall, Our Processor:__ to display the paywall and manage subscriptions, as described in "Detailed Information on the Processing of Your Personal Data".
+- __With Google:__ Google processes payment and purchase data as an independent controller (see "Payments").
+- __If the Application is transferred:__ to the new owner of the Application. We will provide notice before Your Personal Data becomes subject to a different privacy policy.
+- __With Your consent__: for any other purpose, only with Your consent.
 
 ### Retention of Your Personal Data
 
-The Company will retain Your Personal Data only for as long as is necessary for the purposes set out in this Privacy Policy. We will retain and use Your Personal Data to the extent necessary to comply with Our legal obligations (for example, if We are required to retain Your data to comply with applicable laws), resolve disputes, and enforce Our legal agreements and policies.
+We retain Your Personal Data only for as long as is necessary for the purposes set out in this Privacy Policy, and to comply with Our legal obligations, resolve disputes and enforce Our agreements:
 
-Where possible, We apply shorter retention periods and/or reduce identifiability by deleting, aggregating, or anonymizing data. Unless otherwise stated, the retention periods below are maximum periods ("up to") and We may delete or anonymize data sooner when it is no longer needed for the relevant purpose:
-
-- Financial and Transaction Data
-- Payment information: credit/debit card details are not stored by Us; they are processed by Google Play. Transaction records (purchase history, amounts) may be retained for up to 10 years from the date of transaction to comply with tax laws and financial regulations.
-- Data received by Superwall: retained as described in Superwall's Privacy Policy. On request, We will ask Superwall to delete data linked to Your installation.
+- Data processed by Superwall: kept for as long as We use Superwall to provide the Service, unless deleted earlier on Your request or because it is no longer needed.
+- Transaction records (purchase history, amounts): may be retained for up to 10 years from the date of transaction to comply with tax laws and financial regulations. Payment card details are never stored by Us; they are processed by Google Play.
 - Emails You send Us: kept as long as needed to handle Your request and any follow-up, then deleted.
+- Data stored on Your Device by the Application: until You uninstall the Application.
 
-We may retain Personal Data beyond the periods stated above for different reasons:
+We may retain Personal Data longer only where the law requires it (e.g. financial records for tax authorities) or where it is necessary to establish, exercise, or defend legal claims.
 
-- Legal obligation: We are required by law to retain specific data (e.g., financial records for tax authorities).
-- Legal claims: Data is necessary to establish, exercise, or defend legal claims.
-- Your explicit request: You ask Us to retain specific information.
-
-You may request information about how long We will retain Your Personal Data by contacting Us.
+You may request information about how long We retain Your Personal Data by contacting Us.
 
 ### Transfer of Your Personal Data
 
-Your information, including Personal Data, is processed at the Company's operating offices and in any other places where the parties involved in the processing are located. This means that this information may be transferred to — and maintained on — computers located outside of Your state, province, country or other governmental jurisdiction where the data protection laws may differ from those of Your jurisdiction.
-
-Where required by applicable law, We will ensure that international transfers of Your Personal Data are subject to appropriate safeguards and, where relevant, supplementary measures. The Company will take all steps reasonably necessary to ensure that Your data is treated securely and in accordance with this Privacy Policy and no transfer of Your Personal Data will take place to an organization or a country unless there are adequate controls in place, including the security of Your data and other personal information.
+Personal Data processed by Superwall and Google is transferred outside Switzerland and the European Economic Area, in particular to the United States. See "International Transfer of Personal Data" below for the safeguards We rely on.
 
 ### Delete Your Personal Data
 
-You have the right to delete or request that We assist in deleting the Personal Data that We have collected about You.
+You have the right to have the Personal Data We hold about You deleted.
 
-All data that the Application stores on Your Device is deleted when You uninstall the Application. To request deletion of data held by Superwall in connection with Your installation, or of emails You sent Us, contact Us at [OWNER EMAIL]. Purchase records kept by Google are governed by Google's Privacy Policy.
+All data that the Application stores on Your Device is deleted when You uninstall the Application. To access or delete data held by Superwall, email Us at [OWNER EMAIL] and include the Support ID shown in the Application's settings (or Your Google Play order number, starting with "GPA."). We will have the data deleted by Superwall and confirm within one month. Purchase records kept by Google are governed by Google's Privacy Policy.
 
-Please note, however, that We may need to retain certain information when We have a legal obligation or lawful basis to do so.
+Please note, however, that We may need to retain certain information when We have a legal obligation to do so.
 
 ### Disclosure of Your Personal Data
 
-#### Business Transactions
-
-If the Company is involved in a merger, acquisition or asset sale, Your Personal Data may be transferred. We will provide notice before Your Personal Data is transferred and becomes subject to a different Privacy Policy.
-
 #### Law Enforcement
 
-Under certain circumstances, the Company may disclose Your Personal Data if required to do so by law or in response to valid requests by public authorities (e.g. a court or a government agency).
+Under certain circumstances, We may disclose Your Personal Data if required to do so by law or in response to valid requests by public authorities (e.g. a court or a government agency).
 
 #### Other Legal Requirements
 
-The Company may disclose Your Personal Data in the good-faith belief that such action is necessary to:
+We may disclose Your Personal Data in the good-faith belief that such action is necessary to:
 
 - Comply with a legal obligation
-- Protect and defend the rights or property of the Company
+- Protect and defend Our rights or property
 - Prevent or investigate possible wrongdoing in connection with the Service
 - Protect the personal safety of Users of the Service or the public
 - Protect against legal liability
 
 ### Security of Your Personal Data
 
-The security of Your Personal Data is important to Us, but remember that no method of transmission over the Internet, or method of electronic storage, is 100% secure. While We strive to use commercially reasonable means to protect Your Personal Data, We cannot guarantee its absolute security.
+Data sent to Superwall is encrypted in transit (HTTPS/TLS). Data on Your Device is kept in the Application's private storage, which other apps cannot read. No method of transmission over the Internet, or method of electronic storage, is 100% secure, so We cannot guarantee absolute security.
 
 ## Detailed Information on the Processing of Your Personal Data
 
-The Service Providers We use may have access to Your Personal Data. These third-party vendors collect, store, use, process and transfer information in accordance with their Privacy Policies.
+Superwall processes Personal Data on Our behalf and only on Our instructions, as Our Processor under its Data Processing Addendum. Google processes payment and purchase data as an independent controller under its own Privacy Policy.
 
 ### Payments
 
@@ -173,31 +163,22 @@ We will not store or collect Your payment card details. That information is prov
 
 - __Google Play (Google Play In-App Payments / Google Play Billing)__
 
-    Google Play processes payments and subscriptions. Their Privacy Policy can be viewed at [https://policies.google.com/privacy](https://policies.google.com/privacy)
+    Google Play processes payments and subscriptions as an independent controller. Their Privacy Policy can be viewed at [https://policies.google.com/privacy](https://policies.google.com/privacy)
 
 ### Subscription Management
 
 - __Superwall (paywall and subscription status)__
 
-    Superwall displays the paywall and manages Your subscription status. Superwall receives purchase and subscription information and the Device Data described in "Device Data" above, including Your IP address. Superwall is operated by Nest 22, Inc., a company based in the United States. Their Privacy Policy can be viewed at [https://superwall.com/privacy](https://superwall.com/privacy)
+    Superwall displays the paywall and manages Your subscription status as Our Processor. Superwall receives purchase and subscription information and the Device Data described in "Device Data" above, including Your IP address. Superwall is operated by Nest 22, Inc., a company based in the United States, and uses further sub-processors. Their Privacy Policy can be viewed at [https://superwall.com/legal/privacy-policy](https://superwall.com/legal/privacy-policy) and their Data Processing Addendum at [https://superwall.com/legal/dpa](https://superwall.com/legal/dpa)
 
-## GDPR Privacy
+## GDPR and FADP Privacy
 
 ### Legal Basis for Processing Personal Data under GDPR
 
-We may process Personal Data under the following conditions:
-
-- __Consent:__ You have given Your consent for processing Personal Data for one or more specific purposes.
-- __Performance of a contract:__ Provision of Personal Data is necessary for the performance of an agreement with You and/or for any pre-contractual obligations thereof.
-- __Legal obligations:__ Processing Personal Data is necessary for compliance with a legal obligation to which the Company is subject.
-- __Vital interests:__ Processing Personal Data is necessary in order to protect Your vital interests or those of another natural person.
-- __Public interests:__ Processing Personal Data is related to a task that is carried out in the public interest or in the exercise of official authority vested in the Company.
-- __Legitimate interests:__ Processing Personal Data is necessary for the purposes of the legitimate interests pursued by the Company.
-
 The legal basis We rely on depends on the purpose of the processing:
 
-- __Performance of a contract:__ providing and maintaining the Service, displaying the paywall, processing purchases and subscriptions, and providing support.
-- __Legitimate interests:__ securing the Service and preventing fraud and abuse; understanding how the paywall performs; answering Your messages; enforcing Our agreements and establishing, exercising, or defending legal claims; and evaluating or completing business transfers. Where We rely on legitimate interests, We balance that interest against Your rights and freedoms.
+- __Performance of a contract:__ the on-device processing through the Accessibility Service described above, which is the core function of the Service; providing and maintaining the Service; displaying the paywall; processing purchases and subscriptions; and providing support.
+- __Legitimate interests:__ securing the Service and preventing fraud and abuse; understanding how the paywall performs; answering Your messages; enforcing Our agreements and establishing, exercising, or defending legal claims; and evaluating or completing a transfer of the Application. Where We rely on legitimate interests, We balance that interest against Your rights and freedoms.
 - __Legal obligation:__ retaining transaction, tax, and accounting records, and responding to lawful requests from courts and public authorities.
 
 Providing purchase information is necessary to buy a subscription; without it, You cannot subscribe.
@@ -206,21 +187,15 @@ If You have questions about the legal basis for any specific processing activity
 
 ### International Transfer of Personal Data
 
-We may transfer, store, and process Personal Data in countries other than the country in which You are located, including countries outside the European Economic Area ("EEA") and the United Kingdom ("UK"), where data protection laws may differ.
+Superwall (Nest 22, Inc.) processes Personal Data in the United States and uses further sub-processors there. For these transfers We rely on the EU Standard Contractual Clauses (module two, controller to processor), the UK International Data Transfer Addendum and, for transfers from Switzerland, the same clauses adapted to Swiss law, all contained in Superwall's Data Processing Addendum ([https://superwall.com/legal/dpa](https://superwall.com/legal/dpa)).
 
-Where We transfer Personal Data outside the EEA/UK to a country that has not been recognized as providing an adequate level of protection, We rely on appropriate safeguards, such as:
+Google processes data in the United States and other countries as an independent controller and is responsible for its own transfers. Emails You send Us may be processed by Google (Gmail) in the United States and other countries.
 
-- Transfers to countries that the European Commission or the UK Government has decided provide an adequate level of data protection, including, for transfers to the United States, recipients certified under the EU-U.S. Data Privacy Framework (and its UK Extension), where applicable
-- The European Commission's Standard Contractual Clauses ("SCCs") and/or the UK International Data Transfer Agreement ("IDTA") or the UK Addendum to the SCCs (as applicable)
-- Supplementary measures where appropriate, such as encryption in transit and at rest, access controls and data minimization.
+You may contact Us using the details in the "Contact Us" section to request further information about these safeguards.
 
-We transfer Personal Data internationally only as needed to provide the Service and to work with Our Service Providers (Google Play and Superwall). You may contact Us using the details in the "Contact Us" section of Our Privacy Policy to request further information about the safeguards We use for international transfers.
+### Your Rights under the GDPR and the FADP
 
-In particular, Personal Data is transferred to the United States (Superwall) and may be processed by Google in the United States and other countries. For transfers from Switzerland, We rely on the Swiss-U.S. Data Privacy Framework where the recipient is certified, or on standard contractual clauses recognized by the Swiss Federal Data Protection and Information Commissioner (FDPIC).
-
-### Your Rights under the GDPR
-
-The Company undertakes to respect the confidentiality of Your Personal Data and to guarantee You can exercise Your rights.
+We respect the confidentiality of Your Personal Data and guarantee that You can exercise Your rights.
 
 You have the right under this Privacy Policy, and by law where the GDPR or the UK GDPR applies to Our processing of Your Personal Data (including, in particular, if You are in the European Economic Area (EEA) or the United Kingdom (UK)), to:
 
@@ -230,19 +205,19 @@ You have the right under this Privacy Policy, and by law where the GDPR or the U
 - __Object to processing of Your Personal Data.__ This right exists where We are relying on a legitimate interest as the legal basis for Our processing and there is something about Your particular situation that makes You want to object to Our processing of Your Personal Data on this ground.
 - __Request erasure of Your Personal Data.__ You have the right to ask Us to delete or remove Personal Data when there is no good reason for Us to continue processing it.
 - __Request the transfer of Your Personal Data.__ We will provide to You, or to a third-party You have chosen, Your Personal Data in a structured, commonly used, machine-readable format. Please note that this right only applies to automated information which You initially provided consent for Us to use or where We used the information to perform a contract with You.
-- __Withdraw Your consent.__ You have the right to withdraw Your consent to Our use of Your Personal Data. If You withdraw Your consent, We may not be able to provide You with access to certain specific functionalities of the Service.
+- __Withdraw Your consent.__ Where We rely on Your consent, You have the right to withdraw it at any time.
 
-If You are in Switzerland, You have corresponding rights under the Swiss Federal Act on Data Protection (FADP), in particular the right to access, correction, deletion and data portability.
+If You are in Switzerland, You have corresponding rights under the FADP, in particular the right to access, correction, deletion and data portability.
 
-### Exercising of Your GDPR Data Protection Rights
+### Exercising of Your Data Protection Rights
 
-You may exercise any of the rights described above by contacting Us. Please note that We may ask You to verify Your identity before responding to such requests. If You make a request, We will try Our best to respond to You as soon as possible. We generally respond within one month, and may extend by two further months where necessary, in accordance with applicable law.
+You may exercise any of the rights described above by contacting Us. Please include the Support ID shown in the Application's settings, so that We can find the data that relates to You. We may ask You to verify Your identity before responding to such requests. We generally respond within one month, and may extend by two further months where necessary, in accordance with applicable law.
 
 You have the right to complain to a supervisory authority about Our collection and use of Your Personal Data. If You are in the EEA, please contact Your local data protection authority. If You are in the UK, You can complain to the Information Commissioner's Office (ICO). In Switzerland, You can contact the Federal Data Protection and Information Commissioner (FDPIC).
 
 ### Automated Decision-Making
 
-We do not make decisions based solely on automated processing, including profiling, that produce legal effects concerning You or similarly significantly affect You. If this changes, We will update this Privacy Policy and provide the information and safeguards required by the GDPR.
+We do not make decisions based solely on automated processing, including profiling, that produce legal effects concerning You or similarly significantly affect You. If this changes, We will update this Privacy Policy and provide the information and safeguards required by law.
 
 ## Children's and Minors' Privacy
 
@@ -250,13 +225,9 @@ The Service is not directed to, and We do not knowingly collect Personal Informa
 
 If You are a parent or guardian and You believe Your child has provided Us with Personal Information, please contact Us. If We become aware that We have collected Personal Information from anyone under the age of 13, We will take steps to remove that information as soon as reasonably possible.
 
-Some countries and states set a higher age at which an individual can consent to the processing of their own Personal Information. Where We rely on consent as a legal basis and the law applicable to a User sets an age higher than 13, We may require the consent of that User's parent or guardian before We collect and use their Personal Information.
-
 ## Links to Other Websites
 
-Our Service may contain links to other websites that are not operated by Us. If You click on a third-party link, You will be directed to that third party's site. We strongly advise You to review the Privacy Policy of every site You visit.
-
-We have no control over and assume no responsibility for the content, privacy policies or practices of any third-party sites or services.
+The Service may contain links to other websites that are not operated by Us, such as Google Play or the privacy policies of Our providers. We have no control over and assume no responsibility for the content, privacy policies or practices of any third-party sites or services.
 
 ## Changes to this Privacy Policy
 
@@ -269,3 +240,4 @@ You are advised to review this Privacy Policy periodically for any changes. Chan
 If You have any questions about this Privacy Policy, You can contact Us:
 
 - By email: [OWNER EMAIL]
+- By post: [OWNER NAME], [OWNER ADDRESS], Switzerland

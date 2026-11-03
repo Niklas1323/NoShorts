@@ -245,6 +245,7 @@ private fun App() {
                     nextWaitMinutes = nextWait,
                     fastTimer = fastTimer,
                     startedAt = Prefs.startedAt(context),
+                    supportId = FShortsApp.supportId(),
                 ),
                 HomeActions(
                     turnOn = { showSetup = true },

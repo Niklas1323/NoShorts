@@ -37,5 +37,13 @@ class FShortsApp : Application() {
         /** Placement im Superwall-Dashboard, an dem die Paywall hängt. */
         const val PLACEMENT_START = "app_start"
         const val PLAY_SUBSCRIPTIONS = "https://play.google.com/store/account/subscriptions?sku=fckshorts_pro&package=app.fshorts"
+        /** Datenschutzerklärung (FreePrivacyPolicy, Konto des Nutzers). Google verlangt den Link auch in der App. */
+        const val PRIVACY_POLICY_URL = "https://www.freeprivacypolicy.com/live/478be282-9e4c-4797-83de-8e73fbdf6626"
+
+        /**
+         * Kennung bei Superwall für diese Installation. Nutzer schicken sie mit, wenn sie Auskunft oder Löschung
+         * ihrer Daten bei Superwall wollen (ohne Konto wüssten wir sonst nicht, welche Daten zu wem gehören).
+         */
+        fun supportId(): String = runCatching { Superwall.instance.userId }.getOrDefault("")
     }
 }
