@@ -4,8 +4,8 @@ Alles im grauen Kasten kopieren und in einen neuen Chat einfügen. Danach die An
 
 ```
 You are an experienced data protection reviewer (GDPR, Swiss FADP/revDSG, Google Play policies).
-Please review the privacy policy of my Android app very carefully. I am not asking for a rewrite;
-I want a list of concrete problems.
+Please review the privacy policy of my Android app very carefully. This is version 2 (an earlier review was
+already applied). I am not asking for a rewrite; I want a list of concrete problems that are still left.
 
 ## The privacy policy
 Live link: https://www.freeprivacypolicy.com/live/478be282-9e4c-4797-83de-8e73fbdf6626
@@ -39,7 +39,14 @@ Data that leaves the device (only via third parties):
   date, Google Play install referrer (if available), app open/close events, paywall views and interactions,
   purchase and subscription status. Superwall's ad attribution (MMP) is switched OFF. No advertising ID.
 - Google Play: payments/subscriptions; gives the developer order data, aggregated stats and crash reports.
-- Email: if a user writes to the support email address.
+- Email: if a user writes to the support email address (Gmail).
+Roles: Superwall acts as processor under its Data Processing Addendum (EU SCCs module two, UK IDTA Addendum, Swiss
+adaptation; no Data Privacy Framework mentioned). Google acts as independent controller for Play billing.
+Other facts: Android backup and device-to-device transfer of app data are disabled (allowBackup=false +
+dataExtractionRules excluding everything). The app's settings show a "Support ID" (the Superwall user ID) that
+users send by email to access/delete their Superwall data. The privacy policy is linked inside the app (settings
+and the accessibility disclosure) and will be linked in Play Console. The disclosure also tells users how to turn
+the service off.
 No user accounts, no ads, no analytics SDK besides Superwall's paywall statistics, no cookies, no location
 services, no contacts/photos access. Permissions: INTERNET, BILLING (notification permission removed).
 Before enabling the AccessibilityService, the app shows an in-app disclosure that the user must accept.
