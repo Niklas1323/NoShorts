@@ -10,7 +10,11 @@ Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · �
 - ⬜ 👤 Claude in Chrome korrigiert den Text: keine Cookies/IP/Konten/Marketing-Mails, Alter 13,
       Absatz Bedienungshilfe, Superwall, **Satz zum Löschen der Daten** ("App deinstallieren löscht alles,
       Fragen per E-Mail")
-- ⬜ 🤖 Fertigen Text Zeile für Zeile gegen die App prüfen
+- ✅ 48 $ bezahlt, Text per "Edit Text" bearbeitet (03.11.)
+- ✅ 🤖 Text gegen App und Superwall-SDK geprüft → 12 Korrekturen: `docs/play-store/privacy-policy-korrekturen.md`
+- ⬜ 👤 Korrekturen per Claude in Chrome einfügen, vollen Text nochmals an Claude zur Endprüfung
+- ⬜ 🤖 Hinweis in der App (Onboarding `Disclosure`) angleichen: Superwall bekommt auch IP-Adresse und anonyme IDs
+- ⬜ 🤖 Formular "Datensicherheit": IP-Adresse/Geräte-IDs, Kaufverlauf, App-Interaktionen (Paywall) durch Superwall
 - ⬜ 👤 Eigene E-Mail für die App anlegen (z. B. fckshorts.support@gmail.com)
 - ⬜ 👤 Name/Kontakt eines Elternteils eintragen (erst nach der Rechtsauskunft)
 
