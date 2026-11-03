@@ -20,7 +20,11 @@ Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · �
 - ✅ 🤖 Zweitmeinungen (Gemini, Claude, ChatGPT) geprüft → Version 2 der Erklärung (`privacy-policy-final.md`):
       Privatperson als Anbieter, Superwall = Auftragsverarbeiter (DPA), Google eigenständig, Standardvertragsklauseln
       statt DPF, Aufbewahrung, Löschen mit Support-ID, Sicherheit, Gmail als E-Mail-Anbieter
-- ⬜ 👤 Version 2 per Claude in Chrome komplett ersetzen (wieder "Edit Text"), dann Endvergleich durch Claude
+- ✅ 🤖 Zweite Runde (Claude) geprüft → Version 3: IDs sind pseudonym (nicht "anonym"), "nötig" nur für IDs/Abo,
+      Absturzberichte als Zweck, Gmail als Empfänger, Cloudflare weltweit + Liste der Sub-Prozessoren, Löschen: erst
+      Support-ID kopieren, dann deinstallieren, Abo bleibt; Kinder-Geräte; alle Aktionen genannt (auch Tipp auf Leiste)
+- ⬜ 👤 Version 3 mit echten Daten (Datei `privacy-policy-live.md`, NICHT im Git) per Claude in Chrome komplett ersetzen,
+      dann Endvergleich durch Claude
 - ✅ 🤖 App: Link zur Datenschutzerklärung (Einstellungen + Hinweis), Support-ID in Einstellungen, kein Backup/Umzug
       (`data_extraction_rules.xml`), Hinweis angeglichen (IP, Geräte-ID, Ausschalten) – am Handy noch NICHT getestet
 - ⬜ 👤 Falls die App-E-Mail NICHT Gmail ist: "Google (Gmail)" in der Erklärung anpassen (2 Stellen)

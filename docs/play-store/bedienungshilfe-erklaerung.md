@@ -75,8 +75,9 @@ No.
 > rules that serve the single purpose the user installed it for: when a Short opens, it performs Back; when the user
 > taps our replacement bar, it clicks the corresponding YouTube tab; when a Short opened from a shared link is swiped
 > away, it swipes back to that Short; and when a Shorts shelf appears, it opens the shelf's menu and selects
-> "Not interested" (or "Hide" on Shorts cards in Subscriptions). All of this is described in the in-app disclosure
-> the user agrees to before turning the service on.
+> "Not interested" (or "Hide" on Shorts cards in Subscriptions). It performs no other actions. All of this is
+> described in the in-app disclosure the user agrees to before turning the service on, and the user can turn the
+> service off at any time in Android Settings > Accessibility.
 
 **Prominent disclosure – where is it shown?**
 > On the last onboarding screen ("Turn it on"), before the user is sent to the Accessibility settings. A short
