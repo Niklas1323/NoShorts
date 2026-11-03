@@ -34,6 +34,10 @@ Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · �
 - ⬜ 🤖 "Ningeningetimer" und Protokolle mit YouTube-Texten im Release aus
 - ⬜ 🤖 In den Einstellungen: "Not affiliated with YouTube or Google"
 - ⬜ 🤖 Optional: Bedienbarkeit (Beschreibungen für Knöpfe, Kontrast) prüfen
+- ⬜ 🤖 Sicherheit Release (aus Video-Checkliste): Release-Schlüssel **nie** ins Git (nur GitHub-Secret),
+      `debuggable` aus, Superwall-Testmodus aus (schon nur in Debug), Logs aus, R8/Minify prüfen.
+      Geprüft 03.11.: im Git nur `app/debug.keystore` (Absicht, Test-Schlüssel) und der öffentliche
+      Superwall-Schlüssel `pk_…` (darf in die App), keine geheimen Schlüssel.
 
 ## 5. Store-Eintrag
 - ⬜ 🤖 Texte (Englisch + Deutsch) **ehrlich**: keine übertriebenen Versprechen ("100 %"), "Time saved" ist geschätzt,
