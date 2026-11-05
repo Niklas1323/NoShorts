@@ -726,3 +726,11 @@ Einzelheiten und Belege: `docs/nachttest.md`.
 - 03.11. Abend: Datenschutz Version 4 nach dritter Prüfung. Play-Store-Version (Release) schreibt KEINE Fehler-Dateien
   mehr (`TreeDumper.dump`, `BarStyle.saveDebugImage`, `tapLog` nur bei `BuildConfig.DEBUG`), Hinweis in der App nennt sie
   nur in Test-Versionen. Live-Datei mit echten Daten liegt nur im Scratchpad (nicht ins Git: Adresse des Vaters).
+
+### 05.11.2026 (Cloud): Release vorbereitet
+- `app/build.gradle.kts`: Signing "release" aus Umgebungsvariablen (`RELEASE_KEYSTORE_PATH`, `RELEASE_STORE_PASSWORD`,
+  `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`), sonst unsigniert. `build-apk.yml` baut zusätzlich `bundleRelease`;
+  mit Secret `RELEASE_KEYSTORE_BASE64` signiert und als privates Artefakt `FuckShorts-play-aab` (nie im öffentlichen
+  Release). Erster Lauf ohne Secrets grün (Release kompiliert inkl. Lint). "Ningeningetimer" nur bei `BuildConfig.DEBUG`.
+- Neue Unterlagen: `docs/play-store/store-eintrag.md` (Texte + Formulare), `release-schluessel.md`,
+  `anleitung-google-play-konto.md`. Datenschutzerklärung Version 4 ist live (mit echten Daten, Datei nicht im Git).

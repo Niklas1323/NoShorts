@@ -84,3 +84,14 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 - ✅ Version 4 mit echten Daten LIVE (03.11., von Claude Zeile für Zeile mit der Live-Seite verglichen; E-Mail-Adressen
       sind auf der Seite per Spam-Schutz verschlüsselt, im Browser normal sichtbar). EU-Vertreter: Variante C gewählt
       (überall verkaufen, ohne Vertreter; bei Brief einer Behörde sofort einen beauftragen).
+
+## 8. Stand 05.11.2026 (Cloud)
+- ✅ 🤖 Release-Version: GitHub baut bei jedem Push zusätzlich die Play-Store-Datei (AAB). Ohne Schlüssel unsigniert
+      (nur Kontrolle, Build-122+ grün), mit Secrets signiert als privates Artefakt. "Ningeningetimer" nur in Test-Versionen.
+- ⬜ 👤 Release-Schlüssel am PC erstellen + 4 GitHub-Secrets: `docs/play-store/release-schluessel.md`
+- ✅ 🤖 Store-Texte EN/DE + Antworten Datensicherheit/Zielgruppe/Werbung/Altersfreigabe/Prüfer-Zugang:
+      `docs/play-store/store-eintrag.md`
+- ✅ 🤖 Anleitung Google-Play-Konto: `docs/play-store/anleitung-google-play-konto.md`
+- ⬜ 👤 12–15 Tester (Android + Gmail) sammeln; Entwicklername prüfen (Arbeitstitel "Brightmind Apps")
+- ⬜ 🤖 Später: Logcat-Ausgaben mit YouTube-Texten in der Release-Version abschalten
+
