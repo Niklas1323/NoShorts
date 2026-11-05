@@ -39,9 +39,12 @@ object Access {
             Prefs.setPromoUnlocked(context, true)
             Redeem.Unlocked
         }
-        CODE_TIMER -> {
+        // Test-Code nur in Test-Versionen; in der Play-Store-Version gilt er als ungültig.
+        CODE_TIMER -> if (BuildConfig.DEBUG) {
             Prefs.setFastTimer(context, true)
             Redeem.FastTimer
+        } else {
+            Redeem.Invalid
         }
         else -> Redeem.Invalid
     }

@@ -27,6 +27,16 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Echter Schlüssel für Google Play: liegt NIE im Repo, nur als GitHub-Secret (siehe build-apk.yml).
+        val releaseStore = System.getenv("RELEASE_KEYSTORE_PATH")
+        if (releaseStore != null && file(releaseStore).exists()) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -35,6 +45,8 @@ android {
         }
         release {
             isMinifyEnabled = false
+            // Ohne Secret wird die Release-Datei unsigniert gebaut (nur zur Kontrolle, dass alles kompiliert).
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
