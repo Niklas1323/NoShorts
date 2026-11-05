@@ -1,6 +1,181 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Erzeugt von tools/i18n/gen_strings.py – nicht von Hand ändern. -->
 <resources>
-    <string name="app_name">F*ck Shorts</string>
-    <string name="a11y_description">F*ck Shorts removes Shorts from the YouTube app. It reads the layout of the YouTube app (buttons, text, positions), notices which app is in front, takes screenshots for colors and your profile picture, places its own bar without Shorts over YouTube\'s bar, presses Back when a Short opens and, if you want, hides Shorts shelves. Everything it reads from YouTube stays on your phone. Internet is only used for subscriptions (Google Play, Superwall). It doesn\'t read passwords, messages or other apps.</string>
-    <string name="shorts_hidden_toast">Shorts sind ausgeblendet</string>
+    <string name="app_name" translatable="false">F*ck Shorts</string>
+    <string name="a11y_description">F*ck Shorts removes Shorts from the YouTube app. It reads the layout of the YouTube app (buttons, text, positions), notices which app is in front, takes screenshots for colors and your profile picture, places its own bar without Shorts over YouTube\'s bar, presses Back when a Short opens and hides Shorts shelves. Everything it reads from YouTube stays on your phone. Internet is only used for subscriptions (Google Play, Superwall). It doesn\'t read passwords, messages or other apps.</string>
+    <string name="shorts_hidden_toast">Shorts are hidden</string>
+    <string name="language">Language</string>
+    <string name="section_language">LANGUAGE</string>
+    <string name="onb_lets_go">Let\'s go</string>
+    <string name="onb_tagline">YouTube without the Shorts.</string>
+    <string name="onb_next">Next</string>
+    <string name="onb_shorts_gone">Shorts gone.</string>
+    <string name="onb_long_stay">Long videos stay.</string>
+    <string name="onb_before">BEFORE</string>
+    <string name="onb_after">AFTER</string>
+    <string name="preview_home">Home</string>
+    <string name="preview_subs">Subs</string>
+    <string name="preview_you">You</string>
+    <string name="turnon_agree">Agree &amp; open settings</string>
+    <string name="turnon_continue">Continue</string>
+    <string name="turnon_open_settings">Open settings</string>
+    <string name="have_code">Have a code?</string>
+    <string name="turnon_declined">Without this permission F*ck Shorts can\'t do anything.</string>
+    <string name="not_now">Not now</string>
+    <string name="turnon_title">Turn it on</string>
+    <string name="turnon_sub">3 taps in Android settings.</string>
+    <string name="step_open">Open %1$s</string>
+    <string name="accessibility">Accessibility</string>
+    <string name="step_tap">Tap %1$s</string>
+    <string name="step_switch">Switch it on</string>
+    <string name="switch_greyed">Switch greyed out?</string>
+    <string name="locked_title">Switch locked?</string>
+    <string name="locked_sub">Happens when the app isn\'t from the Play Store.</string>
+    <string name="app_info">App info</string>
+    <string name="locked_step2">Tap ⋮ top right</string>
+    <string name="allow_restricted">Allow restricted settings</string>
+    <string name="close">Close</string>
+    <string name="disc_title">Before you agree</string>
+    <string name="disc_summary">F*ck Shorts needs Android\'s Accessibility permission. It is not an assistive tool for people with disabilities. It uses this permission only to remove Shorts from the YouTube app: it reads YouTube\'s screen, acts in YouTube for you, and keeps that data on your phone.</string>
+    <string name="show_details">Show details</string>
+    <string name="hide_details">Hide details</string>
+    <string name="disc_reads">What it reads</string>
+    <string name="disc_r1">The layout of the YouTube app: buttons, text (e.g. video titles) and where they are on screen.</string>
+    <string name="disc_r2">Which app is in front. For notifications and the keyboard only where they are, not what\'s in them.</string>
+    <string name="disc_r3">That you touch the screen, not where.</string>
+    <string name="disc_r4">Screenshots, to copy colors and your profile picture into its own bar. Only those are kept; the rest of the picture is thrown away right away.</string>
+    <string name="disc_does">What it does in YouTube</string>
+    <string name="disc_d1">Places its own bar without the Shorts button over YouTube\'s bar. Tapping it taps the matching YouTube button.</string>
+    <string name="disc_d2">Presses Back as soon as a Short opens. A Short opened from a link may play; swipe on and the app swipes back.</string>
+    <string name="disc_d3">Hides Shorts shelves automatically: taps ⋮ → \"Not interested\" or \"Hide\" on them. This changes your YouTube recommendations.</string>
+    <string name="disc_data">Your data</string>
+    <string name="disc_p1">Everything it reads from YouTube stays on your phone and is never sent anywhere.</string>
+    <string name="disc_p2">Stored on your phone only: a crop of your profile picture, the position of YouTube\'s bar, your settings and counters.</string>
+    <string name="disc_p2_debug">Test version only: up to 12 small troubleshooting files about YouTube\'s screen layout.</string>
+    <string name="disc_p3">Subscriptions are handled by Google Play and our payment provider Superwall. They receive purchase and device info (e.g. device model, language, app version, IP address, an app-specific device ID), never anything from YouTube.</string>
+    <string name="disc_p4">It doesn\'t read passwords or messages, and it doesn\'t look into other apps.</string>
+    <string name="disc_p5">You can stop it anytime: turn it off in Android Settings → Accessibility, or uninstall the app.</string>
+    <string name="disc_policy">Read the full privacy policy</string>
+    <string name="start_trial">Start 3 days free</string>
+    <string name="restore_purchases">Restore purchases</string>
+    <string name="trial_last_step">Last step:</string>
+    <string name="trial_start_free">start your free trial.</string>
+    <string name="trial_today">Today</string>
+    <string name="trial_today_text">Shorts are gone. Everything is unlocked.</string>
+    <string name="trial_day2">Day 2</string>
+    <string name="trial_day2_text">You get your time back.</string>
+    <string name="trial_day3">Day 3</string>
+    <string name="trial_day3_text">Your subscription starts. Cancel before in Google Play and you pay nothing.</string>
+    <string name="expired_1">Your subscription</string>
+    <string name="expired_2">has ended.</string>
+    <string name="expired_text">Shorts are back in YouTube. Resubscribe to block them again. Your settings and stats are still here.</string>
+    <string name="resubscribe">Resubscribe</string>
+    <string name="nav_status">Status</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_pro">Pro</string>
+    <string name="protection">Protection</string>
+    <string name="protection_on">on</string>
+    <string name="protection_off">off</string>
+    <string name="protection_paused">paused</string>
+    <string name="status_ready">You can turn protection off now. Tap the shield.</string>
+    <string name="status_enable">Turn on F*ck Shorts in Accessibility.</string>
+    <string name="status_paused">Shorts are allowed. Tap the shield to turn protection back on.</string>
+    <string name="status_wait">You can turn it off in %1$s.</string>
+    <string name="status_free">YouTube is Shorts-free.</string>
+    <string name="keep_on">Keep protection on</string>
+    <string name="shorts_closed">Shorts closed for you</string>
+    <string name="time_saved">Time saved (estimate)</string>
+    <string name="open_youtube">Open YouTube</string>
+    <string name="turn_on_protection">Turn on protection</string>
+    <string name="dur_seconds">%1$d sec</string>
+    <string name="dur_minutes">%1$d min</string>
+    <string name="dur_hours">%1$d h</string>
+    <string name="dur_hours_minutes">%1$d h %2$d min</string>
+    <string name="approx">≈ %1$s</string>
+    <string name="not_yet">Not yet</string>
+    <string name="waiting_text">You can turn protection off in %1$s. The timer keeps running even when the app is closed.</string>
+    <string name="ok">OK</string>
+    <string name="last_chance">Last chance.</string>
+    <string name="confirm_note">Shorts will play again. Your bar without the Shorts button stays.</string>
+    <string name="turn_off_protection">Turn off protection</string>
+    <string name="wait_kicker">Wait.</string>
+    <string name="quote_note">Still want to turn it off? Then you have to sit through %1$s first. The urge will be gone before the timer is.</string>
+    <string name="start_timer">Start %1$s timer</string>
+    <string name="day_1">Day 1. Don\'t quit on day one.</string>
+    <string name="day_2">Day 2. You made it through yesterday. Don\'t undo it today.</string>
+    <string name="day_3">Day 3. The first days are the hardest. You\'re almost through them.</string>
+    <string name="day_4">Day 4. Your brain is starting to adjust. Don\'t reset it now.</string>
+    <string name="day_5">Day 5. Five days without the endless scroll. Don\'t throw them away.</string>
+    <string name="day_6">Day 6. One more day and it\'s a full week. Don\'t quit now.</string>
+    <string name="day_week">Day %1$d. Don\'t quit in your first week Shorts-free.</string>
+    <string name="day_two_weeks">Day %1$d. Two weeks in, this is becoming a habit. Don\'t break it.</string>
+    <string name="day_month">Day %1$d. Don\'t quit in your first month.</string>
+    <string name="day_months">%1$d months Shorts-free. One tap and you\'re back at zero.</string>
+    <string name="day_half_year">Half a year Shorts-free. Don\'t trade it for a few clips.</string>
+    <string name="day_year">Over a year Shorts-free. Don\'t let one tap undo it.</string>
+    <string name="welcome_back">Welcome back.</string>
+    <string name="relock_title">Make quitting hard next time.</string>
+    <string name="relock_text">The last time you gave in, the timer was all that stood in your way. Pick how long you\'ll have to wait before you can turn it off again.</string>
+    <string name="relock_warn_short">%1$d minutes is a speed bump, not a wall. You\'ll be back here in no time.</string>
+    <string name="relock_warn_mid">Better. But be honest: will %1$d minutes really stop you next time?</string>
+    <string name="relock_warn_long">Now that\'s a wall. Future you will thank you.</string>
+    <string name="custom_minutes">Custom (minutes)</string>
+    <string name="at_least_minutes">At least %1$d minutes.</string>
+    <string name="turn_back_on">Turn protection back on</string>
+    <string name="keep_shorts_on">Keep Shorts on for now</string>
+    <string name="section_subscription">SUBSCRIPTION</string>
+    <string name="pro_unlocked_code">Unlocked with a code</string>
+    <string name="pro_active">Active</string>
+    <string name="manage_subscription">Manage subscription</string>
+    <string name="manage_subscription_sub">Switch to yearly or cancel</string>
+    <string name="redeem_code">Redeem code</string>
+    <string name="section_appearance">APPEARANCE</string>
+    <string name="theme_system">System</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="section_about">ABOUT</string>
+    <string name="rate_app">Rate the app</string>
+    <string name="privacy_permissions">Privacy &amp; permissions</string>
+    <string name="privacy_policy">Privacy policy</string>
+    <string name="support_id">Support ID</string>
+    <string name="support_id_hint">Include it if you email us about your data. Tap to copy.</string>
+    <string name="support_id_copied">Support ID copied</string>
+    <string name="version">Version %1$s</string>
+    <string name="not_affiliated">Not affiliated with YouTube or Google.</string>
+    <string name="run_setup_again">Run setup again</string>
+    <string name="code_hint">Code</string>
+    <string name="redeem">Redeem</string>
+    <string name="privacy">Privacy</string>
+    <string name="back">Back</string>
+    <string name="paywall_no_placement">Paywall not shown: placement \"%1$s\" isn\'t in a Superwall campaign.</string>
+    <string name="paywall_no_audience">Paywall not shown: no audience matches in the campaign.</string>
+    <string name="paywall_holdout">Paywall not shown: you\'re in the campaign\'s holdout group.</string>
+    <string name="already_pro">You already have Pro.</string>
+    <string name="paywall_skipped">Paywall not shown.</string>
+    <string name="paywall_error">Paywall error: %1$s</string>
+    <string name="restore_failed">Couldn\'t check purchases. Try again.</string>
+    <string name="restore_done">Purchases restored</string>
+    <string name="restore_none">No active subscription found</string>
+    <string name="code_unlocked">Unlocked. F*ck Shorts is free for you.</string>
+    <string name="code_fast_timer">Timer is now 5 seconds.</string>
+    <string name="code_invalid">This code isn\'t valid.</string>
+    <string name="pro_with_code">Pro is unlocked with a code</string>
+    <string name="youtube_missing">YouTube isn\'t installed</string>
+    <string name="link_failed">Couldn\'t open the link</string>
+    <plurals name="progress_blocked">
+        <item quantity="one">%1$d Short blocked, %2$s of your life back.</item>
+        <item quantity="other">%1$d Shorts blocked, %2$s of your life back.</item>
+    </plurals>
+    <string-array name="shorts_quotes">
+        <item>The feed never ends. Your day does.</item>
+        <item>One Short becomes ten. Ten become an hour you\'ll never get back.</item>
+        <item>You won\'t remember a single one of them tomorrow.</item>
+        <item>You\'re not bored. You\'re being farmed.</item>
+        <item>This is exactly the moment you installed this app for.</item>
+        <item>Future you is begging you not to do this.</item>
+        <item>\"Just five minutes\" is how they get you. Every single time.</item>
+        <item>Your attention is the product. Stop giving it away for free.</item>
+        <item>Close this. Go do the thing you\'re avoiding.</item>
+        <item>Nobody on their deathbed wished they\'d watched more Shorts.</item>
+    </string-array>
 </resources>

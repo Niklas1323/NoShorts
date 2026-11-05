@@ -99,13 +99,13 @@ No.
 **Deutsch**
 > Bedienungshilfen: F*ck Shorts nutzt die Android-Bedienungshilfen (AccessibilityService). Nur so kann die App in
 > der YouTube-App erkennen, wo Shorts sind, eine eigene Leiste ohne Shorts-Knopf darüberlegen, Shorts sofort
-> schliessen und auf Wunsch Shorts-Regale ausblenden. Die App liest dafür den Aufbau der YouTube-App. Alles bleibt
+> schliessen und Shorts-Regale ausblenden. Die App liest dafür den Aufbau der YouTube-App. Alles bleibt
 > auf deinem Handy: Was die App aus YouTube liest, verlässt nie dein Handy. Internet braucht sie nur für das Abo.
 
 **English**
 > Accessibility: F*ck Shorts uses Android's AccessibilityService API. This is the only way for the app to detect
 > Shorts in the YouTube app, place its own navigation bar without the Shorts button on top, close Shorts instantly
-> and, if you want, hide Shorts shelves. To do this the app reads the screen structure of the YouTube app.
+> and hide Shorts shelves. To do this the app reads the screen structure of the YouTube app.
 > Everything it reads from YouTube stays on your phone. Internet is only used for subscriptions.
 
 ## Drehbuch fürs Video (1–2 Minuten)

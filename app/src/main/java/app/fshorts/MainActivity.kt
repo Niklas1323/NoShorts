@@ -32,6 +32,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -51,9 +52,16 @@ import com.superwall.sdk.paywall.presentation.internal.state.PaywallSkippedReaso
 import com.superwall.sdk.paywall.presentation.register
 
 class MainActivity : ComponentActivity() {
+    // Vor Android 13: gewählte App-Sprache (ab 13 macht das Android selbst).
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Paywall in der App-Sprache (sobald die Paywall in Superwall übersetzt ist; sonst Englisch).
+        runCatching { Superwall.instance.localeIdentifier = AppLanguage.current(this).code }
         setContent { App() }
     }
 }
@@ -65,12 +73,13 @@ private fun App() {
     var enabled by remember { mutableStateOf(isServiceEnabled(context)) }
     var accepted by remember { mutableStateOf(Prefs.disclosureAccepted(context)) }
     var onboardingDone by remember { mutableStateOf(Prefs.onboardingDone(context)) }
-    var showSetup by remember { mutableStateOf(false) }
+    // Saveable: Ein Sprachwechsel baut die Activity neu auf, der Stand der Einrichtung bleibt.
+    var showSetup by rememberSaveable { mutableStateOf(false) }
     // "Run setup again": Einrichtung nochmals zeigen, aber ohne Paywall (war schon einmal fertig).
-    var rerunSetup by remember { mutableStateOf(false) }
+    var rerunSetup by rememberSaveable { mutableStateOf(false) }
     /** In die Android-Einstellungen geschickt: beim Zurückkommen und eingeschaltet geht es weiter. */
-    var awaitingEnable by remember { mutableStateOf(false) }
-    var onboardingKey by remember { mutableIntStateOf(0) }
+    var awaitingEnable by rememberSaveable { mutableStateOf(false) }
+    var onboardingKey by rememberSaveable { mutableIntStateOf(0) }
     var shortsClosed by remember { mutableIntStateOf(Prefs.shortsBlocked(context)) }
     var promo by remember { mutableStateOf(Access.promo) }
     val subscription by Superwall.instance.subscriptionStatus.collectAsState()
@@ -113,17 +122,17 @@ private fun App() {
         handler.onSkip { reason ->
             val text = when (reason) {
                 is PaywallSkippedReason.PlacementNotFound ->
-                    "Paywall not shown: placement \"${FShortsApp.PLACEMENT_START}\" isn't in a Superwall campaign."
-                is PaywallSkippedReason.NoAudienceMatch -> "Paywall not shown: no audience matches in the campaign."
-                is PaywallSkippedReason.Holdout -> "Paywall not shown: you're in the campaign's holdout group."
-                is PaywallSkippedReason.UserIsSubscribed -> "You already have Pro."
-                else -> "Paywall not shown."
+                    context.getString(R.string.paywall_no_placement, FShortsApp.PLACEMENT_START)
+                is PaywallSkippedReason.NoAudienceMatch -> context.getString(R.string.paywall_no_audience)
+                is PaywallSkippedReason.Holdout -> context.getString(R.string.paywall_holdout)
+                is PaywallSkippedReason.UserIsSubscribed -> context.getString(R.string.already_pro)
+                else -> context.getString(R.string.paywall_skipped)
             }
             ContextCompat.getMainExecutor(context).execute { Toast.makeText(context, text, Toast.LENGTH_LONG).show() }
         }
         handler.onError { error ->
             ContextCompat.getMainExecutor(context).execute {
-                Toast.makeText(context, "Paywall error: ${error.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.paywall_error, error.message ?: ""), Toast.LENGTH_LONG).show()
             }
         }
         Superwall.instance.register(FShortsApp.PLACEMENT_START, handler = handler)
@@ -135,11 +144,13 @@ private fun App() {
             // Kurz warten, bis Superwall ihn nach der Abfrage nachgeführt hat.
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 val active = Superwall.instance.subscriptionStatus.value is SubscriptionStatus.Active
-                val text = when {
-                    result.isFailure -> "Couldn't check purchases. Try again."
-                    active -> "Purchases restored"
-                    else -> "No active subscription found"
-                }
+                val text = context.getString(
+                    when {
+                        result.isFailure -> R.string.restore_failed
+                        active -> R.string.restore_done
+                        else -> R.string.restore_none
+                    },
+                )
                 Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
             }, 1_000)
         }
@@ -150,13 +161,13 @@ private fun App() {
         when (Access.redeem(context, code)) {
             Access.Redeem.Unlocked -> {
                 promo = true
-                "Unlocked. F*ck Shorts is free for you."
+                context.getString(R.string.code_unlocked)
             }
             Access.Redeem.FastTimer -> {
                 fastTimer = true
-                "Timer is now 5 seconds."
+                context.getString(R.string.code_fast_timer)
             }
-            Access.Redeem.Invalid -> "This code isn't valid."
+            Access.Redeem.Invalid -> context.getString(R.string.code_invalid)
         }
     }
 
@@ -258,7 +269,7 @@ private fun App() {
                     proTab = {
                         when {
                             subscribed -> openUrl(context, FShortsApp.PLAY_SUBSCRIPTIONS)
-                            promo -> Toast.makeText(context, "Pro is unlocked with a code", Toast.LENGTH_SHORT).show()
+                            promo -> Toast.makeText(context, R.string.pro_with_code, Toast.LENGTH_SHORT).show()
                             else -> showPaywall()
                         }
                     },
@@ -331,7 +342,7 @@ private fun openYouTube(context: Context) {
     if (intent != null) {
         context.startActivity(intent)
     } else {
-        Toast.makeText(context, "YouTube isn't installed", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, R.string.youtube_missing, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -339,6 +350,6 @@ private fun openUrl(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     } catch (e: ActivityNotFoundException) {
-        Toast.makeText(context, "Couldn't open the link", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, R.string.link_failed, Toast.LENGTH_SHORT).show()
     }
 }

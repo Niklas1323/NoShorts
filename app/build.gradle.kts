@@ -59,6 +59,14 @@ android {
         jvmTarget = "17"
     }
 
+    // Alle Sprachen in jeder Installation: Sonst liefert Google Play nur die Sprachen des Handys aus und die
+    // Sprachwahl in der App (AppLanguage) zeigt für andere Sprachen Englisch.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

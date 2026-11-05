@@ -95,3 +95,13 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 - ⬜ 👤 12–15 Tester (Android + Gmail) sammeln; Entwicklername prüfen (Arbeitstitel "Brightmind Apps")
 - ⬜ 🤖 Später: Logcat-Ausgaben mit YouTube-Texten in der Release-Version abschalten
 
+## 9. Stand 05.11.2026, Nachmittag (Cloud): Sprachen
+- ✅ 🤖 App in 6 Sprachen: Englisch, Deutsch (Schweiz mit "ss"), Französisch, Italienisch, Spanisch, Portugiesisch.
+      Sprachwahl mit Flaggen auf der 1. Onboarding-Seite (oben rechts) und in Settings → Language. Am Handy NICHT getestet.
+- ⬜ 👤 Am Handy testen: jede Sprache einmal wählen, Texte abgeschnitten? (Französisch/Deutsch sind länger)
+- ⬜ 👤 Optional: Übersetzungen von jemandem mit Muttersprache FR/IT/ES/PT kurz lesen lassen
+- ⬜ 🤖 **Leiste übersetzen** (Ersatztexte "Home/Subscriptions/You" in der YouTube-Leiste) – erst mit Claude im Terminal,
+      der direkt am Handy testet
+- ⬜ 🤖 **App kleiner machen** (R8/Minify, jetzt ca. 80 MB) – nach den Sprachen
+- ⬜ 🤖👤 Superwall-Paywall in den 6 Sprachen übersetzen (im Superwall-Dashboard; die App gibt die Sprache schon weiter)
+- ⬜ 🤖 Store-Texte zusätzlich auf Französisch, Italienisch, Spanisch, Portugiesisch (`store-eintrag.md`)

@@ -12,6 +12,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import app.fshorts.Protection
 import app.fshorts.FShortsApp
+import app.fshorts.AppLanguage
+import app.fshorts.R
+import android.content.res.Resources
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.stringResource
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
@@ -136,7 +143,8 @@ private enum class Screen { Home, Settings, Privacy }
 /** Leiste unten: Status, Settings, Pro. Pro ist keine Seite, sondern öffnet immer unsere Superwall-Paywall. */
 @Composable
 fun HomeApp(state: HomeState, actions: HomeActions) {
-    var screen by remember { mutableStateOf(Screen.Home) }
+    // Saveable: Sprachwechsel baut die Seite neu auf, man bleibt in den Einstellungen.
+    var screen by rememberSaveable { mutableStateOf(Screen.Home) }
     BackHandler(enabled = screen != Screen.Home) {
         screen = if (screen == Screen.Privacy) Screen.Settings else Screen.Home
     }
@@ -179,9 +187,9 @@ private fun BottomNav(selected: Int, onHome: () -> Unit, onSettings: () -> Unit,
             .padding(top = 8.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        NavItem(Icons.Outlined.Shield, "Status", selected == 0, onHome)
-        NavItem(Icons.Outlined.Tune, "Settings", selected == 1, onSettings)
-        NavItem(Icons.Outlined.WorkspacePremium, "Pro", false, onPro)
+        NavItem(Icons.Outlined.Shield, stringResource(R.string.nav_status), selected == 0, onHome)
+        NavItem(Icons.Outlined.Tune, stringResource(R.string.nav_settings), selected == 1, onSettings)
+        NavItem(Icons.Outlined.WorkspacePremium, stringResource(R.string.nav_pro), false, onPro)
     }
 }
 
@@ -223,6 +231,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
     val readyToTurnOff = waiting && remainingMs == 0L
     // Arbeitet die App gerade? Bedienungshilfe an, Abo/Testzeit/Code, nicht pausiert.
     val active = state.enabled && state.isPro && !state.paused
+    val res = LocalContext.current.resources
     Column(
         Modifier
             .fillMaxSize()
@@ -260,12 +269,12 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                 active -> Brand.Green
                 else -> Brand.Red
             }
-            Text("Protection", style = headline(40.sp), color = p.text)
+            Text(stringResource(R.string.protection), style = headline(40.sp), color = p.text)
             Text(
                 when {
-                    state.paused -> "paused"
-                    active -> "on"
-                    else -> "off"
+                    state.paused -> stringResource(R.string.protection_paused)
+                    active -> stringResource(R.string.protection_on)
+                    else -> stringResource(R.string.protection_off)
                 },
                 style = headline(40.sp),
                 color = accent,
@@ -274,7 +283,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             if (readyToTurnOff) {
                 // Wartezeit abgesessen: gross, ohne "Keep protection on" darunter.
                 Text(
-                    "You can turn protection off now. Tap the shield.",
+                    stringResource(R.string.status_ready),
                     style = headline(24.sp),
                     color = p.text,
                     textAlign = TextAlign.Center,
@@ -282,10 +291,10 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             } else {
                 Text(
                     when {
-                        !state.enabled -> "Turn on F*ck Shorts in Accessibility."
-                        state.paused -> "Shorts are allowed. Tap the shield to turn protection back on."
-                        waiting -> "You can turn it off in ${countdown(remainingMs)}."
-                        else -> "YouTube is Shorts-free."
+                        !state.enabled -> stringResource(R.string.status_enable)
+                        state.paused -> stringResource(R.string.status_paused)
+                        waiting -> stringResource(R.string.status_wait, countdown(remainingMs))
+                        else -> stringResource(R.string.status_free)
                     },
                     color = p.subtext,
                     fontSize = 17.sp,
@@ -294,7 +303,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             }
             if (waiting && !readyToTurnOff) {
                 Text(
-                    "Keep protection on",
+                    stringResource(R.string.keep_on),
                     color = p.text,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
@@ -311,7 +320,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("${state.shortsClosed}", style = headline(38.sp), color = p.text)
-                        Text("Shorts closed for you", color = p.subtext, fontSize = 15.sp)
+                        Text(stringResource(R.string.shorts_closed), color = p.subtext, fontSize = 15.sp)
                     }
                     Box(
                         Modifier.size(48.dp).clip(CircleShape).background(Brand.Red.copy(alpha = 0.2f)),
@@ -327,25 +336,29 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                     Icon(Icons.Outlined.Schedule, null, tint = p.text, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(timeSaved(state.shortsClosed), style = headline(20.sp), color = p.text)
-                        Text("Time saved (estimate)", color = p.subtext, fontSize = 13.sp)
+                        Text(timeSaved(res, state.shortsClosed), style = headline(20.sp), color = p.text)
+                        Text(stringResource(R.string.time_saved), color = p.subtext, fontSize = 13.sp)
                     }
                 }
             }
             Spacer(Modifier.weight(0.4f))
         }
         if (state.enabled) {
-            MainButton("Open YouTube", actions.openYouTube, Icons.AutoMirrored.Outlined.OpenInNew)
+            MainButton(stringResource(R.string.open_youtube), actions.openYouTube, Icons.AutoMirrored.Outlined.OpenInNew)
         } else {
-            MainButton("Turn on protection", actions.turnOn)
+            MainButton(stringResource(R.string.turn_on_protection), actions.turnOn)
         }
         Spacer(Modifier.height(16.dp))
     }
 
     when (dialog) {
         ProtectionDialog.Quote -> QuoteDialog(
-            stat = progressLine(state.shortsClosed, state.startedAt, state.now),
-            waitLabel = if (state.fastTimer) "5 sec" else "${state.nextWaitMinutes} min",
+            stat = progressLine(res, state.shortsClosed, state.startedAt, state.now),
+            waitLabel = if (state.fastTimer) {
+                stringResource(R.string.dur_seconds, 5)
+            } else {
+                stringResource(R.string.dur_minutes, state.nextWaitMinutes)
+            },
             onKeep = { dialog = null },
             onTurnOff = {
                 dialog = null
@@ -353,28 +366,27 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             },
         )
         ProtectionDialog.Waiting -> InfoDialog(
-            title = "Not yet",
-            text = "You can turn protection off in ${countdown(remainingMs)}. The timer keeps running even when " +
-                "the app is closed.",
-            confirm = "Keep protection on",
+            title = stringResource(R.string.not_yet),
+            text = stringResource(R.string.waiting_text, countdown(remainingMs)),
+            confirm = stringResource(R.string.keep_on),
             onConfirm = {
                 dialog = null
                 actions.cancelUnlockWait()
             },
-            dismiss = "OK",
+            dismiss = stringResource(R.string.ok),
             onDismiss = { dialog = null },
         )
         ProtectionDialog.ConfirmOff -> ProtectionSheet(
-            kicker = "Last chance.",
-            quote = remember { SHORTS_QUOTES.random() },
-            stat = progressLine(state.shortsClosed, state.startedAt, state.now),
-            note = "Shorts will play again. Your bar without the Shorts button stays.",
-            primary = "Keep protection on",
+            kicker = stringResource(R.string.last_chance),
+            quote = randomQuote(),
+            stat = progressLine(res, state.shortsClosed, state.startedAt, state.now),
+            note = stringResource(R.string.confirm_note),
+            primary = stringResource(R.string.keep_on),
             onPrimary = {
                 dialog = null
                 actions.cancelUnlockWait()
             },
-            secondary = "Turn off protection",
+            secondary = stringResource(R.string.turn_off_protection),
             onSecondary = {
                 dialog = null
                 actions.pauseProtection()
@@ -393,40 +405,35 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
     }
 }
 
-/** Sprüche, die vom Ausschalten abhalten sollen. */
-private val SHORTS_QUOTES = listOf(
-    "The feed never ends. Your day does.",
-    "One Short becomes ten. Ten become an hour you'll never get back.",
-    "You won't remember a single one of them tomorrow.",
-    "You're not bored. You're being farmed.",
-    "This is exactly the moment you installed this app for.",
-    "Future you is begging you not to do this.",
-    "\"Just five minutes\" is how they get you. Every single time.",
-    "Your attention is the product. Stop giving it away for free.",
-    "Close this. Go do the thing you're avoiding.",
-    "Nobody on their deathbed wished they'd watched more Shorts.",
-)
+/** Sprüche, die vom Ausschalten abhalten sollen (`shorts_quotes` in den Sprachdateien). */
+@Composable
+private fun randomQuote(): String {
+    val quotes = stringArrayResource(R.array.shorts_quotes)
+    val index = remember { quotes.indices.random() }
+    return quotes[index]
+}
 
 /** "Das wirfst du weg": Tag seit Beginn plus eigene Zahlen im Ausschalt-Fenster. */
-private fun progressLine(shortsClosed: Int, startedAt: Long, now: Long): String {
+private fun progressLine(res: Resources, shortsClosed: Int, startedAt: Long, now: Long): String {
     val ref = if (now > 0L) now else System.currentTimeMillis()
     val day = if (startedAt <= 0L) 1 else ((ref - startedAt).coerceAtLeast(0L) / 86_400_000L + 1).toInt()
     val dayLine = when {
-        day <= 1 -> "Day 1. Don't quit on day one."
-        day == 2 -> "Day 2. You made it through yesterday. Don't undo it today."
-        day == 3 -> "Day 3. The first days are the hardest. You're almost through them."
-        day == 4 -> "Day 4. Your brain is starting to adjust. Don't reset it now."
-        day == 5 -> "Day 5. Five days without the endless scroll. Don't throw them away."
-        day == 6 -> "Day 6. One more day and it's a full week. Don't quit now."
-        day < 14 -> "Day $day. Don't quit in your first week Shorts-free."
-        day < 30 -> "Day $day. Two weeks in, this is becoming a habit. Don't break it."
-        day < 60 -> "Day $day. Don't quit in your first month."
-        day < 180 -> "${day / 30} months Shorts-free. One tap and you're back at zero."
-        day < 365 -> "Half a year Shorts-free. Don't trade it for a few clips."
-        else -> "Over a year Shorts-free. Don't let one tap undo it."
+        day <= 1 -> res.getString(R.string.day_1)
+        day == 2 -> res.getString(R.string.day_2)
+        day == 3 -> res.getString(R.string.day_3)
+        day == 4 -> res.getString(R.string.day_4)
+        day == 5 -> res.getString(R.string.day_5)
+        day == 6 -> res.getString(R.string.day_6)
+        day < 14 -> res.getString(R.string.day_week, day)
+        day < 30 -> res.getString(R.string.day_two_weeks, day)
+        day < 60 -> res.getString(R.string.day_month, day)
+        day < 180 -> res.getString(R.string.day_months, day / 30)
+        day < 365 -> res.getString(R.string.day_half_year)
+        else -> res.getString(R.string.day_year)
     }
     if (shortsClosed <= 0) return dayLine
-    return "$dayLine $shortsClosed Shorts blocked, ${timeSaved(shortsClosed).removePrefix("≈ ")} of your life back."
+    val blocked = res.getQuantityString(R.plurals.progress_blocked, shortsClosed, shortsClosed, duration(res, shortsClosed))
+    return "$dayLine $blocked"
 }
 
 private fun countdown(ms: Long): String {
@@ -440,14 +447,13 @@ private fun countdown(ms: Long): String {
 @Composable
 private fun QuoteDialog(stat: String, waitLabel: String, onKeep: () -> Unit, onTurnOff: () -> Unit) {
     ProtectionSheet(
-        kicker = "Wait.",
-        quote = remember { SHORTS_QUOTES.random() },
+        kicker = stringResource(R.string.wait_kicker),
+        quote = randomQuote(),
         stat = stat,
-        note = "Still want to turn it off? Then you have to sit through $waitLabel first. The urge will be gone " +
-            "before the timer is.",
-        primary = "Keep protection on",
+        note = stringResource(R.string.quote_note, waitLabel),
+        primary = stringResource(R.string.keep_on),
         onPrimary = onKeep,
-        secondary = "Start $waitLabel timer",
+        secondary = stringResource(R.string.start_timer, waitLabel),
         onSecondary = onTurnOff,
         onDismiss = onKeep,
     )
@@ -577,9 +583,9 @@ private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> 
     val valid = minutes != null && minutes >= Protection.MIN_WAIT_MINUTES
     val warning = when {
         minutes == null || !valid -> null
-        minutes < 15 -> "$minutes minutes is a speed bump, not a wall. You'll be back here in no time."
-        minutes < 45 -> "Better. But be honest: will $minutes minutes really stop you next time?"
-        else -> "Now that's a wall. Future you will thank you."
+        minutes < 15 -> stringResource(R.string.relock_warn_short, minutes)
+        minutes < 45 -> stringResource(R.string.relock_warn_mid, minutes)
+        else -> stringResource(R.string.relock_warn_long)
     }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
@@ -591,13 +597,12 @@ private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> 
                 .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(32.dp))
                 .padding(horizontal = 24.dp, vertical = 28.dp),
         ) {
-            Text("Welcome back.", style = headline(22.sp), color = Color.White.copy(alpha = 0.55f))
+            Text(stringResource(R.string.welcome_back), style = headline(22.sp), color = Color.White.copy(alpha = 0.55f))
             Spacer(Modifier.height(6.dp))
-            Text("Make quitting hard next time.", style = headline(32.sp), color = Color.White, lineHeight = 36.sp)
+            Text(stringResource(R.string.relock_title), style = headline(32.sp), color = Color.White, lineHeight = 36.sp)
             Spacer(Modifier.height(12.dp))
             Text(
-                "The last time you gave in, the timer was all that stood in your way. Pick how long you'll have to " +
-                    "wait before you can turn it off again.",
+                stringResource(R.string.relock_text),
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 15.sp,
             )
@@ -616,7 +621,7 @@ private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> 
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                if (m >= 60) "${m / 60} h" else "$m min",
+                                if (m >= 60) stringResource(R.string.dur_hours, m / 60) else stringResource(R.string.dur_minutes, m),
                                 color = if (on) Brand.RedText else Color.White,
                                 fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 15.sp,
@@ -632,7 +637,7 @@ private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> 
                     selected = -1
                 },
                 singleLine = true,
-                placeholder = { Text("Custom (minutes)", color = Color.White.copy(alpha = 0.5f)) },
+                placeholder = { Text(stringResource(R.string.custom_minutes), color = Color.White.copy(alpha = 0.5f)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -645,7 +650,8 @@ private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> 
                 modifier = Modifier.fillMaxWidth(),
             )
             val hint = when {
-                selected < 0 && custom.isNotEmpty() && !valid -> "At least ${Protection.MIN_WAIT_MINUTES} minutes."
+                selected < 0 && custom.isNotEmpty() && !valid ->
+                    stringResource(R.string.at_least_minutes, Protection.MIN_WAIT_MINUTES)
                 else -> warning
             }
             if (hint != null) {
@@ -668,10 +674,10 @@ private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> 
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Turn protection back on", color = Brand.RedText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.turn_back_on), color = Brand.RedText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
             Text(
-                "Keep Shorts on for now",
+                stringResource(R.string.keep_shorts_on),
                 color = Color.White.copy(alpha = 0.45f),
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center,
@@ -724,7 +730,7 @@ private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit) {
         ) {
             Icon(
                 if (active) Icons.Outlined.GppGood else Icons.Outlined.GppBad,
-                "Protection",
+                stringResource(R.string.protection),
                 tint = Color.White,
                 modifier = Modifier.size(56.dp),
             )
@@ -733,10 +739,17 @@ private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit) {
 }
 
 /** Schätzung: Wer in einem Short landet, bleibt im Schnitt ein paar Minuten hängen. */
-private fun timeSaved(shortsClosed: Int): String {
+private fun duration(res: Resources, shortsClosed: Int): String {
     val minutes = shortsClosed * 3 / 2
-    return if (minutes >= 60) "≈ ${minutes / 60} h ${minutes % 60} min" else "≈ $minutes min"
+    return if (minutes >= 60) {
+        res.getString(R.string.dur_hours_minutes, minutes / 60, minutes % 60)
+    } else {
+        res.getString(R.string.dur_minutes, minutes)
+    }
 }
+
+private fun timeSaved(res: Resources, shortsClosed: Int): String =
+    res.getString(R.string.approx, duration(res, shortsClosed))
 
 @Composable
 private fun ProPill() {
@@ -797,7 +810,7 @@ private fun RoundIconButton(icon: ImageVector, description: String, onClick: () 
 private fun ScreenHeader(title: String, onBack: () -> Unit) {
     val p = LocalPalette.current
     Row(Modifier.padding(top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        RoundIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
+        RoundIconButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), onBack)
         Spacer(Modifier.width(14.dp))
         Text(title, style = headline(32.sp), color = p.text)
     }
@@ -820,15 +833,16 @@ private fun SectionLabel(text: String) {
 private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: () -> Unit) {
     val p = LocalPalette.current
     var redeemOpen by remember { mutableStateOf(false) }
+    var languageOpen by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp),
     ) {
-        Text("Settings", style = headline(36.sp), color = p.text, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+        Text(stringResource(R.string.nav_settings), style = headline(36.sp), color = p.text, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
 
-        SectionLabel("SUBSCRIPTION")
+        SectionLabel(stringResource(R.string.section_subscription))
         if (state.isPro) {
             GlassCard(padding = 0.dp) {
                 Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -837,7 +851,7 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
                     Column(Modifier.weight(1f)) {
                         Text("F*ck Shorts Pro", color = p.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                         Text(
-                            if (state.promo) "Unlocked with a code" else "Active",
+                            stringResource(if (state.promo) R.string.pro_unlocked_code else R.string.pro_active),
                             color = Brand.Green,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
@@ -846,45 +860,68 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
                 }
                 if (!state.promo) {
                     Divider()
-                    LinkRow(Icons.AutoMirrored.Outlined.OpenInNew, "Manage subscription", "Switch to yearly or cancel", actions.manageSubscription)
+                    LinkRow(
+                        Icons.AutoMirrored.Outlined.OpenInNew,
+                        stringResource(R.string.manage_subscription),
+                        stringResource(R.string.manage_subscription_sub),
+                        actions.manageSubscription,
+                    )
                 }
             }
         }
         Spacer(Modifier.height(10.dp))
         GlassCard(padding = 0.dp) {
-            LinkRow(Icons.Outlined.Redeem, "Redeem code", null) { redeemOpen = true }
+            LinkRow(Icons.Outlined.Redeem, stringResource(R.string.redeem_code), null) { redeemOpen = true }
             Divider()
-            LinkRow(Icons.Outlined.Refresh, "Restore purchases", null, actions.restore)
+            LinkRow(Icons.Outlined.Refresh, stringResource(R.string.restore_purchases), null, actions.restore)
         }
 
-        SectionLabel("APPEARANCE")
+        SectionLabel(stringResource(R.string.section_appearance))
         GlassCard(padding = 14.dp) {
-            Segmented(listOf("System", "Dark", "Light"), state.themeMode, actions.setThemeMode)
+            Segmented(
+                listOf(
+                    stringResource(R.string.theme_system),
+                    stringResource(R.string.theme_dark),
+                    stringResource(R.string.theme_light),
+                ),
+                state.themeMode,
+                actions.setThemeMode,
+            )
         }
 
-        SectionLabel("ABOUT")
+        SectionLabel(stringResource(R.string.section_language))
         GlassCard(padding = 0.dp) {
-            LinkRow(Icons.Outlined.StarOutline, "Rate the app", null, actions.rateApp)
+            val context = LocalContext.current
+            val lang = remember { AppLanguage.current(context) }
+            LinkRow(Icons.Outlined.Language, stringResource(R.string.language), "${lang.flag}  ${lang.name}") {
+                languageOpen = true
+            }
+        }
+
+        SectionLabel(stringResource(R.string.section_about))
+        GlassCard(padding = 0.dp) {
+            LinkRow(Icons.Outlined.StarOutline, stringResource(R.string.rate_app), null, actions.rateApp)
             Divider()
-            LinkRow(Icons.Outlined.Description, "Privacy & permissions", null, onPrivacy)
+            LinkRow(Icons.Outlined.Description, stringResource(R.string.privacy_permissions), null, onPrivacy)
             Divider()
             val uriHandler = LocalUriHandler.current
-            LinkRow(Icons.AutoMirrored.Outlined.OpenInNew, "Privacy policy", null) {
+            LinkRow(Icons.AutoMirrored.Outlined.OpenInNew, stringResource(R.string.privacy_policy), null) {
                 runCatching { uriHandler.openUri(FShortsApp.PRIVACY_POLICY_URL) }
             }
             Divider()
             // Für Auskunft/Löschung bei Superwall: Nutzer schicken diese Kennung per E-Mail mit.
             val context = LocalContext.current
+            val copied = stringResource(R.string.support_id_copied)
             LinkRow(
                 Icons.Outlined.ContentCopy,
-                "Support ID",
-                "${state.supportId.ifEmpty { "–" }}\nInclude it if you email us about your data. Tap to copy.",
+                stringResource(R.string.support_id),
+                "${state.supportId.ifEmpty { "–" }}\n${stringResource(R.string.support_id_hint)}",
             ) {
                 if (state.supportId.isNotEmpty()) {
                     runCatching {
                         context.getSystemService(ClipboardManager::class.java)
                             ?.setPrimaryClip(ClipData.newPlainText("Support ID", state.supportId))
-                        Toast.makeText(context, "Support ID copied", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, copied, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -894,7 +931,7 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
         Box(Modifier.align(Alignment.CenterHorizontally)) { BrandLogo(40.dp) }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Version ${state.version}\nNot affiliated with YouTube or Google.",
+            stringResource(R.string.version, state.version) + "\n" + stringResource(R.string.not_affiliated),
             color = p.subtext,
             fontSize = 13.sp,
             textAlign = TextAlign.Center,
@@ -914,11 +951,12 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
         ) {
             Icon(Icons.Outlined.RestartAlt, null, tint = p.text, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Run setup again", color = p.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.run_setup_again), color = p.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(20.dp))
     }
     if (redeemOpen) RedeemDialog(actions.redeem, onClose = { redeemOpen = false })
+    if (languageOpen) LanguageSheet(dark = p.dark, onClose = { languageOpen = false })
 }
 
 /** Gratis-Code eingeben (auch im Onboarding). */
@@ -929,7 +967,7 @@ fun RedeemDialog(redeem: (String) -> String, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
         containerColor = Color(0xFF1A1A1C),
-        title = { Text("Redeem code", color = Color.White, fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.redeem_code), color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
             Column {
                 OutlinedTextField(
@@ -939,7 +977,7 @@ fun RedeemDialog(redeem: (String) -> String, onClose: () -> Unit) {
                         message = null
                     },
                     singleLine = true,
-                    placeholder = { Text("Code") },
+                    placeholder = { Text(stringResource(R.string.code_hint)) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
@@ -952,11 +990,11 @@ fun RedeemDialog(redeem: (String) -> String, onClose: () -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = { message = redeem(code) }) {
-                Text("Redeem", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.redeem), color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = onClose) { Text("Close", color = Color.White.copy(alpha = 0.7f)) }
+            TextButton(onClick = onClose) { Text(stringResource(R.string.close), color = Color.White.copy(alpha = 0.7f)) }
         },
     )
 }
@@ -1034,7 +1072,7 @@ private fun PrivacyScreen(onBack: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp),
     ) {
-        ScreenHeader("Privacy", onBack)
+        ScreenHeader(stringResource(R.string.privacy), onBack)
         Spacer(Modifier.height(8.dp))
         Box(Modifier.clip(RoundedCornerShape(18.dp)).background(Color(0xFF1A1A1C))) {
             Disclosure()

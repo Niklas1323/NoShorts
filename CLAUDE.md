@@ -734,3 +734,19 @@ Einzelheiten und Belege: `docs/nachttest.md`.
   Release). Erster Lauf ohne Secrets grün (Release kompiliert inkl. Lint). "Ningeningetimer" nur bei `BuildConfig.DEBUG`.
 - Neue Unterlagen: `docs/play-store/store-eintrag.md` (Texte + Formulare), `release-schluessel.md`,
   `anleitung-google-play-konto.md`. Datenschutzerklärung Version 4 ist live (mit echten Daten, Datei nicht im Git).
+
+### 05.11.2026, Nachmittag (Cloud, NICHT am Handy getestet): App in 6 Sprachen
+- Alle App-Texte in `res/values*/strings.xml` (en Standard, de, de-CH mit "ss" und «», fr, it, es, pt = Brasilien).
+  **Nie von Hand ändern:** Texte stehen in `tools/i18n/gen_strings.py`, danach `python3 tools/i18n/gen_strings.py`
+  (prüft gleiche Platzhalter in allen Sprachen, setzt französische geschützte Leerzeichen, escapt Apostrophe).
+- Sprachwahl: `AppLanguage` (Liste mit Flaggen). Ab Android 13 über `LocaleManager` (auch in den System-Einstellungen,
+  `res/xml/locales_config.xml`), davor Prefs `app_language` + `MainActivity.attachBaseContext`. Wählt man die Sprache
+  des Handys, folgt die App wieder dem Handy (Schweizer Handy → "ss"). Wechsel baut die Activity neu auf; Seite und
+  Onboarding-Schritt bleiben (`rememberSaveable`). Auswahl: `ui/Language.kt` (`LanguagePill` auf der Willkommensseite
+  oben rechts, `LanguageSheet` auch in Settings → LANGUAGE).
+- `bundle { language { enableSplit = false } }`: sonst liefert Play nur die Handy-Sprachen aus.
+- Superwall bekommt die App-Sprache (`Superwall.instance.localeIdentifier`), Paywall selbst noch nur Englisch.
+- **Noch nicht übersetzt:** unsere YouTube-Leiste (Ersatztexte) und Logcat/Test-Meldungen. Leiste macht Claude im
+  Terminal mit Test am Handy. Datenschutzerklärung bleibt Englisch (Link sagt "(Englisch)").
+- Lokal bauen in der Cloud: SDK unter `/root/android-sdk` (`local.properties`), Maven Central antwortet oft 429 →
+  Befehl wiederholen.

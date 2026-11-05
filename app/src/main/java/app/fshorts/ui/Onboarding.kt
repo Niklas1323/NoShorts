@@ -15,6 +15,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextDecoration
 import app.fshorts.FShortsApp
+import app.fshorts.R
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,7 +101,8 @@ fun Onboarding(
     /** Onboarding fertig (nur mit Testzeit, Abo oder Code). */
     onDone: () -> Unit,
 ) {
-    var step by remember { mutableIntStateOf(startStep) }
+    // Saveable: Sprachwechsel baut die Seite neu auf, man bleibt auf derselben Seite.
+    var step by rememberSaveable { mutableIntStateOf(startStep) }
     var paywallShown by remember { mutableStateOf(false) }
     // Paywall nur nach Tipp auf "Continue" (vorher kam sie von selbst, sobald die Bedienungshilfe an war, und die
     // Seite "Turn it on" wurde übersprungen). Der Zwischenschritt [TrialPage] ist abgeschaltet (SHOW_TRIAL_STEP).
@@ -169,7 +177,16 @@ fun WhiteButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, color = Brand.RedText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(
+            text,
+            color = Brand.RedText,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            lineHeight = 21.sp,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
         if (icon != null) {
             Spacer(Modifier.width(8.dp))
             Icon(icon, null, tint = Brand.RedText)
@@ -198,7 +215,16 @@ private fun Dots(step: Int) {
 
 @Composable
 private fun WelcomePage(onNext: () -> Unit) {
-    Page(step = 0, button = "Let's go", onButton = onNext, buttonIcon = Icons.AutoMirrored.Filled.ArrowForward) {
+    Page(
+        step = 0,
+        button = stringResource(R.string.onb_lets_go),
+        onButton = onNext,
+        buttonIcon = Icons.AutoMirrored.Filled.ArrowForward,
+    ) {
+        // Sprache gleich auf der ersten Seite wählen (Standard: Sprache des Handys, sonst Englisch).
+        Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.End) {
+            LanguagePill()
+        }
         Spacer(Modifier.weight(1f))
         Box(
             Modifier
@@ -213,7 +239,7 @@ private fun WelcomePage(onNext: () -> Unit) {
         Box(Modifier.align(Alignment.CenterHorizontally)) { BrandName(46.sp) }
         Spacer(Modifier.height(10.dp))
         Text(
-            "YouTube without the Shorts.",
+            stringResource(R.string.onb_tagline),
             color = Color.White.copy(alpha = 0.7f),
             fontSize = 18.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -224,12 +250,12 @@ private fun WelcomePage(onNext: () -> Unit) {
 
 @Composable
 private fun BeforeAfterPage(onNext: () -> Unit) {
-    Page(step = 1, button = "Next", onButton = onNext) {
+    Page(step = 1, button = stringResource(R.string.onb_next), onButton = onNext) {
         Spacer(Modifier.height(40.dp))
-        Text("Shorts gone.", style = headline(40.sp), color = Color.White)
-        Text("Long videos stay.", style = headline(40.sp), color = Color.White.copy(alpha = 0.55f))
+        Text(stringResource(R.string.onb_shorts_gone), style = headline(40.sp), color = Color.White)
+        Text(stringResource(R.string.onb_long_stay), style = headline(40.sp), color = Color.White.copy(alpha = 0.55f))
         Spacer(Modifier.weight(1f))
-        Label("BEFORE")
+        Label(stringResource(R.string.onb_before))
         BarPreview(before = true)
         Icon(
             Icons.Filled.ArrowDownward,
@@ -237,7 +263,7 @@ private fun BeforeAfterPage(onNext: () -> Unit) {
             tint = Color.White.copy(alpha = 0.6f),
             modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 10.dp),
         )
-        Label("AFTER")
+        Label(stringResource(R.string.onb_after))
         BarPreview(before = false)
         Spacer(Modifier.weight(1f))
     }
@@ -270,15 +296,15 @@ private fun BarPreview(before: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (before) {
-            BarItem(Icons.Outlined.Home, "Home")
+            BarItem(Icons.Outlined.Home, stringResource(R.string.preview_home))
             ShortsCrossed()
             PlusCircle()
-            BarItem(Icons.Outlined.Subscriptions, "Subs")
-            BarItem(Icons.Outlined.Person, "You")
+            BarItem(Icons.Outlined.Subscriptions, stringResource(R.string.preview_subs))
+            BarItem(Icons.Outlined.Person, stringResource(R.string.preview_you))
         } else {
-            BarItem(Icons.Outlined.Home, "Home")
-            BarItem(Icons.Outlined.Subscriptions, "Subs")
-            BarItem(Icons.Outlined.Person, "You")
+            BarItem(Icons.Outlined.Home, stringResource(R.string.preview_home))
+            BarItem(Icons.Outlined.Subscriptions, stringResource(R.string.preview_subs))
+            BarItem(Icons.Outlined.Person, stringResource(R.string.preview_you))
             PlusCircle()
         }
     }
@@ -288,7 +314,7 @@ private fun BarPreview(before: Boolean) {
 private fun BarItem(icon: ImageVector, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
-        Text(label, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+        Text(label, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1, softWrap = false)
     }
 }
 
@@ -348,9 +374,9 @@ private fun TurnOnPage(
     Page(
         step = 2,
         button = when {
-            !accepted -> "Agree & open settings"
-            enabled -> "Continue"
-            else -> "Open settings"
+            !accepted -> stringResource(R.string.turnon_agree)
+            enabled -> stringResource(R.string.turnon_continue)
+            else -> stringResource(R.string.turnon_open_settings)
         },
         onButton = when {
             !accepted -> onAgree
@@ -364,7 +390,7 @@ private fun TurnOnPage(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     Text(
-                        "Have a code?",
+                        stringResource(R.string.have_code),
                         color = Color.White.copy(alpha = 0.8f),
                         fontSize = 14.sp,
                         modifier = Modifier.clickable { redeemOpen = true }.padding(6.dp),
@@ -374,9 +400,9 @@ private fun TurnOnPage(
             if (!accepted) {
                 Text(
                     if (declined) {
-                        "Without this permission F*ck Shorts can't do anything."
+                        stringResource(R.string.turnon_declined)
                     } else {
-                        "Not now"
+                        stringResource(R.string.not_now)
                     },
                     color = Color.White.copy(alpha = 0.75f),
                     fontSize = 14.sp,
@@ -391,12 +417,12 @@ private fun TurnOnPage(
     ) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(36.dp))
-            Text("Turn it on", style = headline(40.sp), color = Color.White)
-            Text("3 taps in Android settings.", color = Color.White.copy(alpha = 0.7f), fontSize = 17.sp)
+            Text(stringResource(R.string.turnon_title), style = headline(40.sp), color = Color.White)
+            Text(stringResource(R.string.turnon_sub), color = Color.White.copy(alpha = 0.7f), fontSize = 17.sp)
             Spacer(Modifier.height(20.dp))
-            StepRow(1, "Open ", "Accessibility")
-            StepRow(2, "Tap ", "F*ck Shorts", trailing = { BrandLogo(30.dp) })
-            StepRow(3, "Switch it on", "", trailing = { FakeSwitch() })
+            StepRow(1, boldArg(stringResource(R.string.step_open), stringResource(R.string.accessibility)))
+            StepRow(2, boldArg(stringResource(R.string.step_tap), "F*ck Shorts"), trailing = { BrandLogo(30.dp) })
+            StepRow(3, AnnotatedString(stringResource(R.string.step_switch)), trailing = { FakeSwitch() })
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 Row(
                     Modifier
@@ -407,7 +433,7 @@ private fun TurnOnPage(
                 ) {
                     Icon(Icons.Outlined.Lock, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Switch greyed out?", color = Color.White.copy(alpha = 0.85f), modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.switch_greyed), color = Color.White.copy(alpha = 0.85f), modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.6f))
                 }
             }
@@ -424,17 +450,17 @@ private fun TurnOnPage(
             containerColor = Color(0xFF17171A),
         ) {
             Column(Modifier.padding(horizontal = 22.dp).padding(bottom = 24.dp)) {
-                Text("Switch locked?", style = headline(28.sp), color = Color.White)
+                Text(stringResource(R.string.locked_title), style = headline(28.sp), color = Color.White)
                 Text(
-                    "Happens when the app isn't from the Play Store.",
+                    stringResource(R.string.locked_sub),
                     color = Color.White.copy(alpha = 0.65f),
                     modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
                 )
-                StepRow(1, "Open ", "App info", dark = true)
-                StepRow(2, "Tap ⋮ top right", "", dark = true, trailing = {
+                StepRow(1, boldArg(stringResource(R.string.step_open), stringResource(R.string.app_info)), dark = true)
+                StepRow(2, AnnotatedString(stringResource(R.string.locked_step2)), dark = true, trailing = {
                     Icon(Icons.Filled.MoreVert, null, tint = Color.White)
                 })
-                StepRow(3, "", "Allow restricted settings", dark = true)
+                StepRow(3, boldArg("%1\$s", stringResource(R.string.allow_restricted)), dark = true)
                 Spacer(Modifier.height(12.dp))
                 Row(
                     Modifier
@@ -449,10 +475,15 @@ private fun TurnOnPage(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Open App info", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.step_open, stringResource(R.string.app_info)),
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
                 Text(
-                    "Close",
+                    stringResource(R.string.close),
                     color = Color.White.copy(alpha = 0.6f),
                     textAlign = TextAlign.Center,
                     modifier = Modifier
@@ -468,8 +499,7 @@ private fun TurnOnPage(
 @Composable
 private fun StepRow(
     number: Int,
-    text: String,
-    bold: String,
+    text: AnnotatedString,
     dark: Boolean = false,
     trailing: @Composable () -> Unit = {},
 ) {
@@ -491,10 +521,7 @@ private fun StepRow(
             Text("$number", color = Color.Black, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.width(14.dp))
-        Row(Modifier.weight(1f)) {
-            if (text.isNotEmpty()) Text(text, color = Color.White, fontSize = 17.sp)
-            if (bold.isNotEmpty()) Text(bold, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-        }
+        Text(text, color = Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
         trailing()
     }
 }
@@ -533,11 +560,9 @@ fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("Before you agree", color = textColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text(stringResource(R.string.disc_title), color = textColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Text(
-            "F*ck Shorts needs Android's Accessibility permission. It is not an assistive tool for people with " +
-                "disabilities. It uses this permission only to remove Shorts from the YouTube app: it reads " +
-                "YouTube's screen, acts in YouTube for you, and keeps that data on your phone.",
+            stringResource(R.string.disc_summary),
             color = sub, fontSize = 14.sp,
         )
         if (collapsible) {
@@ -550,7 +575,7 @@ fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    if (expanded) "Hide details" else "Show details",
+                    stringResource(if (expanded) R.string.hide_details else R.string.show_details),
                     color = textColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
@@ -565,44 +590,29 @@ fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
         }
         AnimatedVisibility(visible = expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("What it reads", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Bullet("The layout of the YouTube app: buttons, text (e.g. video titles) and where they are on screen.", sub)
-                Bullet("Which app is in front. For notifications and the keyboard only where they are, not what's in them.", sub)
-                Bullet("That you touch the screen, not where.", sub)
+                Text(stringResource(R.string.disc_reads), color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Bullet(stringResource(R.string.disc_r1), sub)
+                Bullet(stringResource(R.string.disc_r2), sub)
+                Bullet(stringResource(R.string.disc_r3), sub)
+                Bullet(stringResource(R.string.disc_r4), sub)
+                Text(stringResource(R.string.disc_does), color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Bullet(stringResource(R.string.disc_d1), sub)
+                Bullet(stringResource(R.string.disc_d2), sub)
+                Bullet(stringResource(R.string.disc_d3), sub)
+                Text(stringResource(R.string.disc_data), color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Bullet(stringResource(R.string.disc_p1), sub)
                 Bullet(
-                    "Screenshots, to copy colors and your profile picture into its own bar. Only those are kept; " +
-                        "the rest of the picture is thrown away right away.",
-                    sub,
-                )
-                Text("What it does in YouTube", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Bullet("Places its own bar without the Shorts button over YouTube's bar. Tapping it taps the matching YouTube button.", sub)
-                Bullet("Presses Back as soon as a Short opens. A Short opened from a link may play; swipe on and the app swipes back.", sub)
-                Bullet(
-                    "Hides Shorts shelves automatically: taps ⋮ → \"Not interested\" or \"Hide\" on them. " +
-                        "This changes your YouTube recommendations.",
-                    sub,
-                )
-                Text("Your data", color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Bullet("Everything it reads from YouTube stays on your phone and is never sent anywhere.", sub)
-                Bullet(
-                    "Stored on your phone only: a crop of your profile picture, the position of YouTube's bar, " +
-                        "your settings and counters." +
+                    stringResource(R.string.disc_p2) +
                         // Test-Versionen schreiben zusätzlich Fehler-Dateien, die Play-Store-Version nicht.
-                        if (app.fshorts.BuildConfig.DEBUG) " Test version only: up to 12 small troubleshooting files " +
-                            "about YouTube's screen layout." else "",
+                        if (app.fshorts.BuildConfig.DEBUG) " " + stringResource(R.string.disc_p2_debug) else "",
                     sub,
                 )
-                Bullet(
-                    "Subscriptions are handled by Google Play and our payment provider Superwall. They receive purchase " +
-                        "and device info (e.g. device model, language, app version, IP address, an app-specific " +
-                        "device ID), never anything from YouTube.",
-                    sub,
-                )
-                Bullet("It doesn't read passwords or messages, and it doesn't look into other apps.", sub)
-                Bullet("You can stop it anytime: turn it off in Android Settings → Accessibility, or uninstall the app.", sub)
+                Bullet(stringResource(R.string.disc_p3), sub)
+                Bullet(stringResource(R.string.disc_p4), sub)
+                Bullet(stringResource(R.string.disc_p5), sub)
                 val uriHandler = LocalUriHandler.current
                 Text(
-                    "Read the full privacy policy",
+                    stringResource(R.string.disc_policy),
                     color = textColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
@@ -644,7 +654,7 @@ private fun TrialPage(
     LaunchedEffect(isPro) { if (isPro) onDone() }
     Page(
         step = 3,
-        button = "Start 3 days free",
+        button = stringResource(R.string.start_trial),
         onButton = onStartTrial,
         footer = {
             Row(
@@ -652,13 +662,13 @@ private fun TrialPage(
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 Text(
-                    "Restore purchases",
+                    stringResource(R.string.restore_purchases),
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 14.sp,
                     modifier = Modifier.clickable(onClick = onRestore).padding(6.dp),
                 )
                 Text(
-                    "Have a code?",
+                    stringResource(R.string.have_code),
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 14.sp,
                     modifier = Modifier.clickable { redeemOpen = true }.padding(6.dp),
@@ -669,12 +679,12 @@ private fun TrialPage(
         Spacer(Modifier.weight(1f))
         Box(Modifier.align(Alignment.CenterHorizontally)) { BrandLogo(96.dp) }
         Spacer(Modifier.height(26.dp))
-        Text("Last step:", style = headline(36.sp), color = Color.White.copy(alpha = 0.6f))
-        Text("start your free trial.", style = headline(36.sp), color = Color.White)
+        Text(stringResource(R.string.trial_last_step), style = headline(36.sp), color = Color.White.copy(alpha = 0.6f))
+        Text(stringResource(R.string.trial_start_free), style = headline(36.sp), color = Color.White)
         Spacer(Modifier.height(20.dp))
-        TrialPoint("Today", "Shorts are gone. Everything is unlocked.")
-        TrialPoint("Day 2", "You get your time back.")
-        TrialPoint("Day 3", "Your subscription starts. Cancel before in Google Play and you pay nothing.")
+        TrialPoint(stringResource(R.string.trial_today), stringResource(R.string.trial_today_text))
+        TrialPoint(stringResource(R.string.trial_day2), stringResource(R.string.trial_day2_text))
+        TrialPoint(stringResource(R.string.trial_day3), stringResource(R.string.trial_day3_text))
         Spacer(Modifier.weight(1.2f))
     }
     if (redeemOpen) RedeemDialog(onRedeem, onClose = { redeemOpen = false })
@@ -719,11 +729,11 @@ fun ExpiredScreen(onResubscribe: () -> Unit, onRestore: () -> Unit, onRedeem: (S
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.align(Alignment.CenterHorizontally)) { BrandLogo(96.dp) }
                 Spacer(Modifier.height(26.dp))
-                Text("Your subscription", style = headline(36.sp), color = Color.White.copy(alpha = 0.6f))
-                Text("has ended.", style = headline(36.sp), color = Color.White)
+                Text(stringResource(R.string.expired_1), style = headline(36.sp), color = Color.White.copy(alpha = 0.6f))
+                Text(stringResource(R.string.expired_2), style = headline(36.sp), color = Color.White)
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Shorts are back in YouTube. Resubscribe to block them again. Your settings and stats are still here.",
+                    stringResource(R.string.expired_text),
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 17.sp,
                 )
@@ -734,21 +744,33 @@ fun ExpiredScreen(onResubscribe: () -> Unit, onRestore: () -> Unit, onRedeem: (S
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 Text(
-                    "Restore purchases",
+                    stringResource(R.string.restore_purchases),
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 14.sp,
                     modifier = Modifier.clickable(onClick = onRestore).padding(6.dp),
                 )
                 Text(
-                    "Have a code?",
+                    stringResource(R.string.have_code),
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 14.sp,
                     modifier = Modifier.clickable { redeemOpen = true }.padding(6.dp),
                 )
             }
-            WhiteButton("Resubscribe", onResubscribe)
+            WhiteButton(stringResource(R.string.resubscribe), onResubscribe)
             Spacer(Modifier.height(20.dp))
         }
     }
     if (redeemOpen) RedeemDialog(onRedeem, onClose = { redeemOpen = false })
+}
+
+/** "Öffne %1$s" → Platzhalter fett. So stimmt die Wortstellung in jeder Sprache. */
+private fun boldArg(template: String, arg: String): AnnotatedString = buildAnnotatedString {
+    val i = template.indexOf("%1\$s")
+    if (i < 0) {
+        append(template)
+        return@buildAnnotatedString
+    }
+    append(template.substring(0, i))
+    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(arg) }
+    append(template.substring(i + 4))
 }
