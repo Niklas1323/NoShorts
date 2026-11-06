@@ -736,7 +736,7 @@ Einzelheiten und Belege: `docs/nachttest.md`.
   `anleitung-google-play-konto.md`. Datenschutzerklärung Version 4 ist live (mit echten Daten, Datei nicht im Git).
 
 ### 05.11.2026, Nachmittag (Cloud, NICHT am Handy getestet): App in 6 Sprachen
-- Alle App-Texte in `res/values*/strings.xml` (en Standard, de, de-CH mit "ss" und «», fr, it, es, pt = Brasilien).
+- Alle App-Texte in `res/values*/strings.xml` (en Standard, de, de-CH mit "ss" und «», fr, it, es, pt = Brasilien, tr seit 06.11. aus `tools/i18n/tr.py`).
   **Nie von Hand ändern:** Texte stehen in `tools/i18n/gen_strings.py`, danach `python3 tools/i18n/gen_strings.py`
   (prüft gleiche Platzhalter in allen Sprachen, setzt französische geschützte Leerzeichen, escapt Apostrophe).
 - Sprachwahl: `AppLanguage` (Liste mit Flaggen). Ab Android 13 über `LocaleManager` (auch in den System-Einstellungen,

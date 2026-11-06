@@ -26,6 +26,7 @@ object AppLanguage {
         Language("it", "Italiano", "🇮🇹"),
         Language("es", "Español", "🇪🇸"),
         Language("pt", "Português", "🇧🇷"),
+        Language("tr", "Türkçe", "🇹🇷"),
     )
 
     private const val PREFS = "fuckshorts"

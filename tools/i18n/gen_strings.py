@@ -2,12 +2,12 @@
 """Erzeugt app/src/main/res/values*/strings.xml aus den Übersetzungen unten.
 
 Texte hier ändern, dann: python3 tools/i18n/gen_strings.py
-Sprachen: en (Standard), de, fr, it, es, pt (Brasilien). de-CH wird aus de erzeugt (ss statt ß, «» statt „“).
+Sprachen: en (Standard), de, fr, it, es, pt (Brasilien), tr (Texte in tr.py). de-CH wird aus de erzeugt (ss statt ß, «» statt „“).
 """
 import os
 import re
 
-LANGS = ["en", "de", "fr", "it", "es", "pt"]
+LANGS = ["en", "de", "fr", "it", "es", "pt", "tr"]
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "app", "src", "main", "res")
 
 S = {}  # key -> {lang: text}
@@ -587,6 +587,17 @@ s("youtube_missing", "YouTube isn't installed", "YouTube ist nicht installiert",
 s("link_failed", "Couldn't open the link", "Link konnte nicht geöffnet werden", "Impossible d'ouvrir le lien",
   "Impossibile aprire il link", "No se pudo abrir el enlace", "Não foi possível abrir o link")
 
+
+# ---------------------------------------------------------------- Türkisch (eigene Datei tr.py)
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tr import TR, TR_PLURALS, TR_QUOTES  # noqa: E402
+
+for _k, _v in TR.items():
+    S[_k]["tr"] = _v
+for _k, _v in TR_PLURALS.items():
+    P[_k]["tr"] = _v
+A["shorts_quotes"]["tr"] = TR_QUOTES
 
 # ---------------------------------------------------------------- Ausgabe
 NBSP = "\u00a0"
