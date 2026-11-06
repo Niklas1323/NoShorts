@@ -17,6 +17,10 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
+        // Nur echte Handy-Prozessoren (ARM). x86/mips braucht nur der Emulator -> kleinere APK.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -40,11 +44,17 @@ android {
     }
 
     buildTypes {
+        // R8 auch in Test-Versionen: gleiche Grösse und gleiches Verhalten wie die Play-Store-Version.
         debug {
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Ohne Secret wird die Release-Datei unsigniert gebaut (nur zur Kontrolle, dass alles kompiliert).
             signingConfigs.findByName("release")?.let { signingConfig = it }
         }

@@ -750,3 +750,9 @@ Einzelheiten und Belege: `docs/nachttest.md`.
   Terminal mit Test am Handy. Datenschutzerklärung bleibt Englisch (Link sagt "(Englisch)").
 - Lokal bauen in der Cloud: SDK unter `/root/android-sdk` (`local.properties`), Maven Central antwortet oft 429 →
   Befehl wiederholen.
+
+### 06.11.2026 (Cloud, NICHT am Handy getestet): App kleiner, Türkisch, Paywall-Sprachen
+- R8 (`isMinifyEnabled`, `isShrinkResources`) in debug UND release, Regeln `app/proguard-rules.pro` (JNA für Superwalls
+  supercel behalten, `app.fshorts.**` behalten). `abiFilters` nur arm64-v8a/armeabi-v7a. Test-APK 84 → 20 MB.
+  Bei seltsamen Fehlern nach dem Update zuerst R8 verdächtigen (fehlende keep-Regel).
+- Paywall 287624: Texte nach `device.deviceLanguageCode` (de/fr/it/es/pt/tr), per `set_dynamic_value` im Editor.

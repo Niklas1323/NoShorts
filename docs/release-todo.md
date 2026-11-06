@@ -104,7 +104,8 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 - ⬜ 👤 Optional: Übersetzungen von jemandem mit Muttersprache FR/IT/ES/PT kurz lesen lassen
 - ⬜ 🤖 **Leiste übersetzen** (Ersatztexte "Home/Subscriptions/You" in der YouTube-Leiste) – erst mit Claude im Terminal,
       der direkt am Handy testet
-- ⬜ 🤖 **App kleiner machen** (R8/Minify, jetzt ca. 80 MB) – nach den Sprachen
+- ✅ 🤖 App kleiner (06.11.): R8 + Ressourcen-Shrink in Test UND Release, nur ARM-Prozessoren. Test-APK 84 → 20 MB,
+      Play-Datei (AAB) 9,6 MB. Am Handy NOCH NICHT getestet (R8 kann Reflexion brechen: Paywall, Leiste prüfen!)
 - ⬜ 🤖👤 Superwall-Paywall in den 6 Sprachen übersetzen (im Superwall-Dashboard; die App gibt die Sprache schon weiter)
 - ⬜ 🤖 Store-Texte zusätzlich auf Französisch, Italienisch, Spanisch, Portugiesisch (`store-eintrag.md`)
 
