@@ -53,6 +53,12 @@ class FuckShortsService : AccessibilityService() {
     private var lastDebugDumpAt = 0L
     private var lastVideoDumpAt = 0L
     private var lastPaneDumpAt = 0L
+    /** Letzte Berührung, die nicht auf einer Video-Seite war (z. B. Tipp auf ein Video in der Liste). */
+    private var feedTouchAt = 0L
+    /** Bis dann nach einer Berührung laufend nachsehen, ob eine Video-Seite aufgeht (YouTube meldet ~1 s nichts). */
+    private var tapProbeUntil = 0L
+    /** Zuletzt die graue Lade-Seite eines Videos gesehen (unsere ist dann weg). */
+    private var loadingPageAt = 0L
     private var debugDumpWanted = false
     private var nightMode = 0
     private var screen = Rect()
@@ -236,7 +242,10 @@ class FuckShortsService : AccessibilityService() {
             // Solange unsere Leiste weg ist, die echte aber noch existiert (z. B. Video offen), weiter nachsehen:
             // So sind wir sofort da, wenn die echte wieder reinfährt.
             val waitingForBar = !overlay.isShowing && (lastBar != null || watchPageOpen)
-            if (!connected || !Access.unlocked || !youTubeActive || (now > pollUntil && !waitingForBar && now > fastUntil)) {
+            val probing = now < tapProbeUntil && !watchPageOpen
+            if (!connected || !Access.unlocked || !youTubeActive ||
+                (now > pollUntil && !waitingForBar && now > fastUntil && !probing)
+            ) {
                 polling = false
                 return
             }
@@ -248,7 +257,7 @@ class FuckShortsService : AccessibilityService() {
             }
             try {
                 updateBar(now, null)
-                if (now < fastUntil) scheduleScan()
+                if (now < fastUntil || probing) scheduleScan()
             } catch (e: Exception) {
                 Log.w(TAG, "Nachführen fehlgeschlagen", e)
             }
@@ -269,6 +278,13 @@ class FuckShortsService : AccessibilityService() {
             lastTouchAt = SystemClock.uptimeMillis()
             if (shadeOverYouTube) onShadeTouched()
             if (app.fshorts.BuildConfig.DEBUG) dumpAfterTapSoon(lastTouchAt)
+            // Tipp auf ein Video in der Liste: YouTube zeigt die Video-Seite, meldet aber ~1 s gar nichts. Darum kurz
+            // selbst laufend nachsehen (sonst stand unsere 0,5–1 s über der grauen Lade-Seite).
+            if (youTubeActive && !watchPageOpen && lastTouchAt - watchClosedAt > TAP_AFTER_VIDEO_MS) {
+                feedTouchAt = lastTouchAt
+                tapProbeUntil = lastTouchAt + TAP_PROBE_MS
+                startPolling()
+            }
             // Tablet: Beim Runterwischen des Videos meldet YouTube nichts, bis der Mini-Player steht (~1 s echte
             // Leiste). Nach jeder Berührung darum Bild für Bild nachsehen, ob der Player wegrutscht.
             if (isTablet && watchPageOpen && youTubeActive) startPolling()
@@ -999,6 +1015,21 @@ class FuckShortsService : AccessibilityService() {
             DebugLog.add("Video erkannt, letzte Berührung vor ${now - lastTouchAt} ms")
         }
 
+        // Video aus der Liste angetippt, Player noch nicht da: Die graue Lade-Seite deckt die echte Leiste schon ab.
+        // Unsere fährt jetzt weg (vorher erst, wenn der Player erkannt war: 0,5–1 s über der Lade-Seite).
+        // Nur nach einem Tipp ausserhalb eines Videos und solange seither kein Video zuging (beim Verlassen fährt die
+        // Video-Seite über die Leiste nach unten weg: dort muss unsere sofort stehen).
+        if (!watchPageOpen && now - feedTouchAt < LOADING_RULE_MS && feedTouchAt > watchClosedAt) {
+            val barTop = restBounds?.top ?: (screen.bottom - (70 * resources.displayMetrics.density).toInt())
+            if (scanner.isWatchPageLoading(root, screen, barTop)) {
+                loadingPageAt = now
+                reason("Video-Seite lädt")
+                hideSmooth()
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+                return
+            }
+        }
+
         if (bar == null && !watchPageOpen && handlePanel(root, now)) return
         panelMinTop = Int.MAX_VALUE
 
@@ -1521,6 +1552,9 @@ class FuckShortsService : AccessibilityService() {
         if (popupFront(foregroundWindow()?.root) != null) return
         // Unser eigener Tipp aufs Karten-⋮: Das Menü ist gleich wieder zu, unsere bleibt stehen (sonst 0,13 s weg).
         if (shelfMenuOpenedAt != 0L || now - shelfMenuDoneAt < SHELF_MENU_HOLD_MS) return
+        // Graue Lade-Seite eines Videos eben gesehen: Das regelt der Scan (sonst zeigte das Nachführen unsere wieder,
+        // weil die echte Leiste dahinter unverändert steht).
+        if (!watchPageOpen && fresh == null && now - loadingPageAt < LOADING_HOLD_MS) return
         if (rest == null || state == null || menuOpen) {
             overlay.hide()
             return
@@ -2364,6 +2398,10 @@ class FuckShortsService : AccessibilityService() {
         private const val BOTTOM_SNAP_DP = 20
         private const val VIDEO_DUMP_INTERVAL_MS = 4_000L
         private const val PANE_DUMP_INTERVAL_MS = 2_000L
+        private const val TAP_PROBE_MS = 1_500L
+        private const val TAP_AFTER_VIDEO_MS = 800L
+        private const val LOADING_RULE_MS = 5_000L
+        private const val LOADING_HOLD_MS = 150L
         private const val SLIDE_AWAY_MS = 450L
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L

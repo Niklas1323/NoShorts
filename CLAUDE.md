@@ -828,3 +828,13 @@ Video des Nutzers Bild für Bild (60 fps) ausgewertet:
   `next_gen_watch_layout_no_player_fragment_container`, dazu `floaty_bar_controls_view`, `modern_miniplayer_*`.
   Jetzt: Aufbau sofort bei ch=32 ohne offenes Video ("seite-32", höchstens alle 2 s); Ningelog bis 4 Aufbauten à 200 Zeilen.
   Idee für den Fix: ch=32 ohne ch=16 kurz nach einem Tipp = Video geht auf → `hideSmooth` (vorher mit Aufbau prüfen).
+- Video 8 + Aufbau (Build 157): Tipp auf ein Video in der Liste → nach ~0,55 s ist die graue Lade-Seite zu sehen, ch=32
+  kommt erst ~0,6 s später (Player dann schon da: `watch_player` [0,173][1080,781], darunter `video_metadata_layout` /
+  `watch_panel` [0,781][1080,2424], `ghost_card_layout`). Dazwischen meldet YouTube nichts, und wir sahen nicht nach
+  (Abfragen nur bei Meldungen; TYPE_VIEW_CLICKED kommt bei Listen-Tipps nicht). **Fix (NICHT am Handy getestet):**
+  Berührung ausserhalb eines Videos → 1,5 s laufend scannen (`tapProbeUntil`); `isWatchPageLoading` (`watch_panel`
+  bzw. `video_metadata_layout` sichtbar, volle Breite, Oberkante in der oberen Hälfte, reicht über die Leiste) →
+  "Video-Seite lädt", unsere fährt weg (`loadingPageAt`, `updateBar` hält 150 ms still). Nur nach einem Tipp
+  (`feedTouchAt`, nicht auf einer Video-Seite, nicht 0,8 s nach Video zu) und solange seither kein Video zuging.
+  **Am Handy prüfen:** Video aus der Liste öffnen (mit/ohne Werbung), Mini-Player aufklappen, Zurück auf der
+  Lade-Seite, Video verlassen (Zurück/Wischen), Scrollen der Startseite (unsere darf nie wegfahren), Tabs.

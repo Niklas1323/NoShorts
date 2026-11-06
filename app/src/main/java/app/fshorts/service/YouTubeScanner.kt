@@ -32,6 +32,7 @@ class Shelf(
 // Shorts-Player von YouTube 21.41 (am Pixel nachgesehen): eine Seite pro Short in einer senkrechten Liste.
 private const val SHORTS_PAGE_ID = "reel_player_page_container"
 private const val EDIT_SUGGESTION_ID = "edit_suggestion"
+private val WATCH_PAGE_IDS = listOf("watch_panel", "video_metadata_layout")
 private val SHEET_IDS = listOf("design_bottom_sheet", "touch_outside")
 // Panel im YouTube-Fenster selbst (Werbe-Menü, auf der Video-Seite auch Kommentare), YouTube 21.42.
 private const val PANEL_ID = "app_engagement_panel"
@@ -150,6 +151,25 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
     }
 
     fun topOf(node: AccessibilityNodeInfo): Int = node.bounds().top
+
+    /**
+     * Video-Seite geht gerade auf, der Player ist aber noch nicht da (graue Lade-Seite, YouTube 21.44): Die Seite unter
+     * dem Player (`watch_panel` / `video_metadata_layout`) ist schon sichtbar und reicht über die Leiste. Beim
+     * Mini-Player sind diese Teile unsichtbar oder fehlen. Nur Handy (Tablet: zwei Spalten, nicht geprüft).
+     */
+    fun isWatchPageLoading(root: AccessibilityNodeInfo, screen: Rect, barTop: Int): Boolean {
+        if (tablet) return false
+        for (id in WATCH_PAGE_IDS) {
+            for (node in root.findAccessibilityNodeInfosByViewId(sel.fullId(id))) {
+                if (!node.isVisibleToUser) continue
+                val r = node.bounds()
+                if (r.width() >= screen.width() * 0.9 && r.top - screen.top < screen.height() / 2 && r.bottom > barTop + 8) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
 
     private fun isLargePlayer(node: AccessibilityNodeInfo, screen: Rect): Boolean {
         if (!node.isVisibleToUser) return false
