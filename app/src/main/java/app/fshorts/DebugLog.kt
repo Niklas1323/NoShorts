@@ -33,7 +33,11 @@ object DebugLog {
     /** Speichert das Protokoll in "Downloads" (zum Anhängen im Claude-Chat) und öffnet das Teilen-Menü. */
     fun share(context: Context): String? {
         val file = File(File(context.cacheDir, "."), "fshorts-protokoll.txt")
-        val body = synchronized(lines) { lines.joinToString("\n") } + recentDumps(context)
+        // Kurz halten: Beim Einfügen als Text bricht der Chat nach ~25 000 Zeichen ab. Aufbau zuerst (wichtig), dann
+        // nur die letzten 3 Minuten Protokoll.
+        val since = System.currentTimeMillis() - 3 * 60 * 1000L
+        val recent = synchronized(lines) { lines.filter { lineTime(it) >= since }.joinToString("\n") }
+        val body = recentDumps(context) + "\n\n===== Protokoll =====\n" + recent
         val text = "F*ck Shorts ${BuildConfig.VERSION_NAME} – ${android.os.Build.MODEL}, Android ${android.os.Build.VERSION.RELEASE}\n" +
             "Uhrzeit beim Teilen: ${time.format(Date())}\n\n" + body + "\n"
         file.writeText(text)
@@ -47,12 +51,35 @@ object DebugLog {
         return saved
     }
 
-    /** Die letzten gespeicherten Aufbau-Dateien (höchstens 4, aus den letzten 15 Minuten) hinten anhängen. */
+    /** Uhrzeit einer Zeile (heute) in ms, für "nur die letzten Minuten". */
+    private fun lineTime(line: String): Long = runCatching {
+        val t = time.parse(line.substring(0, 12)) ?: return@runCatching 0L
+        val cal = java.util.Calendar.getInstance()
+        val day = java.util.Calendar.getInstance().apply { this.time = t }
+        cal.set(java.util.Calendar.HOUR_OF_DAY, day.get(java.util.Calendar.HOUR_OF_DAY))
+        cal.set(java.util.Calendar.MINUTE, day.get(java.util.Calendar.MINUTE))
+        cal.set(java.util.Calendar.SECOND, day.get(java.util.Calendar.SECOND))
+        cal.set(java.util.Calendar.MILLISECOND, day.get(java.util.Calendar.MILLISECOND))
+        cal.timeInMillis
+    }.getOrDefault(0L)
+
+    /**
+     * Die letzten Aufbau-Dateien (höchstens 2, letzte 10 Minuten), gekürzt: nur sichtbare Elemente mit ID oder
+     * Beschreibung, höchstens 80 Zeilen je Datei.
+     */
     private fun recentDumps(context: Context): String {
-        val since = System.currentTimeMillis() - 15 * 60 * 1000L
-        val files = app.fshorts.service.TreeDumper.files(context).filter { it.lastModified() > since }.take(4)
+        val since = System.currentTimeMillis() - 10 * 60 * 1000L
+        val files = app.fshorts.service.TreeDumper.files(context).filter { it.lastModified() > since }.take(2)
         if (files.isEmpty()) return ""
-        return files.reversed().joinToString("") { "\n\n===== ${it.name} =====\n" + runCatching { it.readText() }.getOrDefault("") }
+        return files.reversed().joinToString("") { f ->
+            val all = runCatching { f.readLines() }.getOrDefault(emptyList())
+            val head = all.takeWhile { it != "Aufbau:" }.filter { it.startsWith("Zeit") || it.startsWith("  type=") }
+            val nodes = all.dropWhile { it != "Aufbau:" }.drop(1)
+                .filter { !it.endsWith("h]") && ("id=" in it || "desc=" in it) }
+                .map { it.trimEnd().replace(Regex("^( +)"), { m -> " ".repeat(m.value.length / 2) }) }
+                .take(80)
+            "\n===== ${f.name} =====\n" + (head + nodes).joinToString("\n")
+        }
     }
 
     private fun saveToDownloads(context: Context, text: String): String {

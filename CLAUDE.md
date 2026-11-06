@@ -814,3 +814,10 @@ Video des Nutzers Bild für Bild (60 fps) ausgewertet:
   ("video-erkannt"); "Ningelog" hängt die letzten 4 (15 min) an die Datei an. (b) Chrome Custom Tab: unsere ~0,2 s
   über dem schwarzen Tab (Chrome-Seite kommt 30 ms nach dem Tipp, versteckt erst bei "Leiste nicht mehr da").
   (c) Aufnahme stoppen (SystemUIDialog vom Bildschirmrekorder): 1 Bild echte Leiste – nur bei Aufnahmen.
+- Video 6 + Protokoll (Build 155, Video ≈ Protokoll − 22:59:12,5): **Video aus der Liste antippen** (mit und ohne
+  Werbung): YouTube zeigt zuerst eine graue Lade-Seite; unsere steht 0,3–0,6 s darüber, bis `watch_player` erkannt ist
+  (z. B. Tipp 22:59:45,6 → "Video erkannt" 46,317). Dabei griff einmal "echte weggescrollt …, unsere bleibt" (46,035).
+  Aufbau beim Erkennen: `next_gen_watch_container_layout` > `next_gen_watch_layout_no_player_fragment_container` >
+  `watch_player` [0,173][1080,781]. Aufbau der Lade-Seite fehlt noch (Text-Einfügen bricht nach ~25 000 Zeichen ab).
+  Darum "Ningelog" jetzt kurz: 2 Aufbau-Dateien zuerst (nur sichtbare Elemente mit ID/Beschreibung, je 80 Zeilen),
+  dann 3 Minuten Protokoll. Aufbau 0,3 s nach jedem Tipp (höchstens alle 4 s), nicht mehr beim Erkennen.
