@@ -414,7 +414,7 @@ const Words: React.FC<{ t: number; c: ReturnType<typeof useCues> }> = ({ t, c })
   const isKey = KEY.has(word);
   const rot = (random(`w${idx}`) - 0.5) * 7;
   const len = word.length;
-  const size = Math.min(isKey ? 240 : 190, 940 / Math.max(3, len * 0.66));
+  const size = Math.min(isKey ? 230 : 190, 860 / Math.max(3, len * 0.8));
   const inD = t >= c.fck && t < c.we;
   const inE = t >= c.we;
   const y = inD ? (t < c.videos ? 1580 : 520) : inE ? 1110 : 960;

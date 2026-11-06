@@ -1,3 +1,3 @@
-// Platzhalter, wird nach der Sprachaufnahme überschrieben.
-export const WORDS2: [string, number][] = [];
-export const VOICE2_S = 26;
+// Aus der Sprachaufnahme public/voice2_raw.mp3 (faster-whisper), Texte nach dem Drehbuch.
+export const WORDS2: [string, number][] = [["TONIGHT", 0.03], ["YOU'LL", 0.72], ["FORGET", 0.98], ["EVERY", 1.24], ["VIDEO", 1.74], ["YOU", 2.1], ["WATCHED", 2.34], ["TODAY", 2.6], ["INCLUDING", 3.8], ["THIS", 4.12], ["ONE", 4.48], ["ONE", 5.24], ["HOUR", 5.54], ["A", 5.82], ["DAY", 6.06], ["THAT'S", 6.76], ["FIFTEEN", 7.14], ["DAYS", 7.5], ["A", 7.74], ["YEAR", 7.92], ["GONE", 8.74], ["YOUR", 9.54], ["DREAMS", 9.66], ["WAITING", 10.46], ["YOUR", 11.3], ["FRIENDS", 11.4], ["WAITING", 12.34], ["AND", 13.48], ["YOU", 13.96], ["JUST", 14.14], ["KEEP", 14.4], ["SWIPING", 14.96], ["ENOUGH", 16.48], ["F*CK SHORTS", 17.27], ["KILLS", 18.1], ["SHORTS", 18.22], ["IN", 18.66], ["YOUTUBE", 18.78], ["THE", 19.6], ["VIDEOS", 19.74], ["YOU", 20.02], ["ACTUALLY", 20.2], ["WANT", 20.58], ["THEY", 21.42], ["STAY", 21.52], ["WE", 22.4], ["LAUNCH", 22.56], ["SOON", 22.78], ["AND", 23.3], ["WE", 23.44], ["NEED", 23.56], ["TESTERS", 23.82], ["ANDROID", 24.78], ["ONLY", 24.96], ["COMMENT", 25.82], ["TESTER", 26.0], ["NOW", 26.6]];
+export const VOICE2_S = 27.6;
