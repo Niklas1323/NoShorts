@@ -180,12 +180,13 @@ const BedScene: React.FC<{ t: number }> = ({ t }) => {
         <g transform={`rotate(-14 540 960) translate(0 ${breathe * 0.4})`}>
           {/* Ohr, Hals */}
           <ellipse cx={205} cy={980} rx={48} ry={80} fill="#5e4538" />
+          <ellipse cx={872} cy={985} rx={44} ry={78} fill="#6a4d3f" />
+          <path d="M880 945 Q 900 985 878 1025" stroke="#4e3628" strokeWidth={6} fill="none" opacity={0.7} />
           {/* Gesicht */}
           <ellipse cx={540} cy={960} rx={340} ry={430} fill="url(#skin1)" />
           <ellipse cx={540} cy={960} rx={340} ry={430} fill={`hsla(${h},70%,60%,${0.18 + 0.12 * flash})`} />
           {/* Haare, Strähnen über der Stirn */}
-          <path d="M180 900 C 150 560, 360 450, 560 480 C 760 500, 900 620, 880 820 C 840 700, 760 660, 690 690 C 650 640, 560 640, 520 690 C 470 650, 390 660, 350 720 C 300 700, 230 760, 220 900 Z" fill="#1e1614" />
-          <path d="M350 720 C 420 700, 470 720, 500 760 C 520 720, 580 700, 640 720 C 600 740, 560 770, 545 800 C 520 770, 470 750, 420 760 C 390 740, 370 730, 350 720 Z" fill="#1e1614" />
+          <path d="M180 900 C 150 560, 360 450, 560 480 C 760 500, 900 620, 880 820 C 850 745, 780 705, 700 712 C 620 720, 555 752, 490 785 C 425 815, 355 805, 305 770 C 270 800, 240 845, 220 900 Z" fill="#1e1614" />
           {/* Augenbrauen, müde */}
           <path d="M335 850 Q 410 822 480 850" stroke="#2a1d17" strokeWidth={22} strokeLinecap="round" fill="none" />
           <path d="M600 850 Q 670 824 745 852" stroke="#2a1d17" strokeWidth={22} strokeLinecap="round" fill="none" />
@@ -212,15 +213,26 @@ const BedScene: React.FC<{ t: number }> = ({ t }) => {
           <circle cx={829} cy={1404} r={18} fill="#22222c" />
           <circle cx={829} cy={1450} r={14} fill="#22222c" />
           <rect x={752} y={1332} width={266} height={486} rx={46} fill="none" stroke={light} strokeWidth={6} opacity={0.55} />
-          {/* Finger hinten auf dem Handy */}
-          {[0, 1, 2, 3].map((i) => (
-            <g key={i}>
-              <rect x={850 + i * 6} y={1500 + i * 68} width={210} height={58} rx={29} fill="url(#skin1)" />
-              <rect x={850 + i * 6} y={1500 + i * 68} width={210} height={58} rx={29} fill={`hsla(${h},70%,60%,${0.12 + 0.1 * flash})`} />
-              <path d={`M${872 + i * 6} ${1512 + i * 68} q 14 -6 26 0`} stroke="#5e4538" strokeWidth={4} fill="none" opacity={0.6} />
-            </g>
+          {/* Handfläche umfasst die rechte Kante, die Finger kommen daraus und liegen hinten auf dem Handy */}
+          <path d="M985 1470 C 1030 1450, 1090 1460, 1110 1500 L 1120 1840 C 1080 1860, 1020 1850, 990 1820 C 1000 1720, 1000 1580, 985 1470 Z" fill="url(#skin1)" />
+          {[0, 1, 2, 3].map((i) => {
+            const y = 1505 + i * 72;
+            const len = [150, 162, 156, 132][i];
+            return (
+              <g key={i}>
+                <path d={`M1030 ${y} L ${1030 - len + 28} ${y} A 28 28 0 0 0 ${1030 - len + 28} ${y + 56} L 1030 ${y + 56} Z`} fill="url(#skin1)" />
+                <path d={`M1030 ${y} L ${1030 - len + 28} ${y} A 28 28 0 0 0 ${1030 - len + 28} ${y + 56} L 1030 ${y + 56} Z`} fill={`hsla(${h},70%,60%,${0.1 + 0.1 * flash})`} />
+                {/* Fingernagel-Andeutung und Knöchelfalte */}
+                <path d={`M${1030 - len + 18} ${y + 14} q -8 14 0 28`} stroke="#5e4538" strokeWidth={4} fill="none" opacity={0.5} />
+                <path d={`M${1030 - len * 0.45} ${y + 10} q 6 18 0 36`} stroke="#5e4538" strokeWidth={4} fill="none" opacity={0.45} />
+              </g>
+            );
+          })}
+          {/* Fugen zwischen den Fingern */}
+          {[1, 2, 3].map((i) => (
+            <path key={i} d={`M${1030 - 90} ${1505 + i * 72 - 4} L 1030 ${1505 + i * 72 - 4}`} stroke="#4a352b" strokeWidth={5} opacity={0.6} />
           ))}
-          <path d="M1000 1700 C 1040 1660, 1070 1560, 1060 1480 L 1100 1500 L 1110 1720 Z" fill="url(#skin1)" />
+          <path d="M985 1470 C 1000 1580, 1000 1720, 990 1820" stroke="#4a352b" strokeWidth={6} fill="none" opacity={0.35} />
         </g>
       </svg>
       <Grain t={t} />
@@ -452,6 +464,11 @@ export const Ad3: React.FC<{ refSound: boolean }> = ({ refSound }) => {
             Comment “tester”
           </div>
           <Pill text="ANDROID ONLY" size={34} color={AMBER} style={{ top: 1370, opacity: cta }} />
+          <div style={{ position: 'absolute', top: 1500, width: '100%', textAlign: 'center', fontFamily: FONT, fontWeight: 800, fontSize: 44, color: '#fff', lineHeight: 1.35, opacity: ease(t, 16.0, 16.3) }}>
+            Releasing soon.
+            <br />
+            <span style={{ color: 'rgba(255,255,255,.7)' }}>More on our profile.</span>
+          </div>
         </AbsoluteFill>
       )}
       {/* Kurze Störung beim Wechsel der Szenen (wie Schnitte im Original) */}
