@@ -409,7 +409,8 @@ const Words: React.FC<{ t: number; c: ReturnType<typeof useCues> }> = ({ t, c })
   if (t > Math.min(next, start + 0.8)) return null;
   const d = t - start;
   // Reinknallen: gross -> normal mit kleinem Überschwingen
-  const s = d < 0.08 ? 1.7 - 0.8 * (d / 0.08) : 0.9 + 0.1 * Math.min(1, (d - 0.08) / 0.07);
+  const big = word.length > 8 ? 1.3 : 1.7;
+  const s = d < 0.08 ? big - (big - 0.9) * (d / 0.08) : 0.9 + 0.1 * Math.min(1, (d - 0.08) / 0.07);
   const isKey = KEY.has(word);
   const rot = (random(`w${idx}`) - 0.5) * 7;
   const len = word.length;
@@ -432,7 +433,6 @@ const Words: React.FC<{ t: number; c: ReturnType<typeof useCues> }> = ({ t, c })
         lineHeight: 1,
         letterSpacing: -size * 0.03,
         color: isKey ? (t >= c.your && t < c.and ? AMBER : RED) : '#fff',
-        WebkitTextStroke: isKey ? '0px' : '3px rgba(0,0,0,.6)',
         textShadow: '0 10px 50px rgba(0,0,0,1), 0 0 4px rgba(0,0,0,.9)',
       }}
     >
