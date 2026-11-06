@@ -25,7 +25,7 @@ Für Video 3 ist `draft` ideal: Der Sound muss sowieso in der App gewählt werde
    in der Claude-Cloud als Umgebungs-Geheimnis speichern (Claude fragt danach über das sichere Formular) oder am PC
    als Umgebungsvariablen setzen:
    ```
-   TIKTOK_CLIENT_KEY=...
+   TIKTOK_CLIENT_KEY=awgexmbwowrg83wk   (schon im Werkzeug eingetragen)
    TIKTOK_CLIENT_SECRET=...
    TIKTOK_REDIRECT_URI=<genau die Adresse aus Schritt 5>
    ```

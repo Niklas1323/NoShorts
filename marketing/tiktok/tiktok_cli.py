@@ -36,8 +36,12 @@ MIN_CHUNK = 5 * 1024 * 1024
 MAX_CHUNK = 64 * 1024 * 1024
 
 
+# Der Client Key ist öffentlich (steht in jedem Anmelde-Link). Das Client Secret NIE hier eintragen.
+DEFAULTS = {"TIKTOK_CLIENT_KEY": "awgexmbwowrg83wk"}
+
+
 def env(name):
-    value = os.environ.get(name)
+    value = os.environ.get(name) or DEFAULTS.get(name)
     if not value:
         sys.exit(f"Fehlt: Umgebungsvariable {name} (siehe README.md)")
     return value
