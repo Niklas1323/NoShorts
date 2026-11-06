@@ -110,7 +110,8 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 
 ## 10. Stand 06.11.2026 (Cloud)
 - ✅ 🤖 Türkisch in der App (7 Sprachen). Am Handy noch NICHT getestet.
-- ⬜ 👤 Superwall-Editor: Lokalisierung auf "einfach" (Simple) stellen, dann übersetzt Claude die Paywall (Sprachen de, fr,
-      it, es, pt, tr sind schon angelegt)
+- ✅ 🤖 Paywall in 6 Sprachen (de, fr, it, es, pt, tr): jeder Text hat Fälle nach `device.deviceLanguageCode`
+      (mit/ohne Testzeit), Englisch bleibt Standard. "AI localize" ging nicht (Paywall nicht im Simple-Modus).
+- ⬜ 👤 Im Superwall-Editor **Publish** drücken; am Handy mit Deutsch prüfen, ob die Paywall deutsch erscheint
 - ✅ 🤖 Rechtsfragen im Internet recherchiert (EU-Vertreter, Steuern/AHV, Google-Play-Regeln) – siehe Chat 06.11.
 - ⬜ 👤 Optional statt Anwalt: Gratis-Auskunft beim Steueramt/der AHV-Ausgleichskasse (wer versteuert die Abo-Einnahmen?)
