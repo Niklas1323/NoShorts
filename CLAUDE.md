@@ -785,3 +785,13 @@ Video des Nutzers Bild für Bild (60 fps) ausgewertet:
   nicht als `watch_player` erkannt → kein "Video verlassen", erst "echte wieder da". Mit `adb logcat -s FuckShorts`
   beim Verlassen eines Videos mit Werbung belegen. Andere Verlassen-Fälle im Video sauber (0–6 Bilder ohne Leiste).
 - Video 1 dieses Abends zeigte gar nicht unsere Leiste (Dienst aus/gesperrt), nicht auswertbar.
+
+### 06.11.2026, Nacht (Cloud): Test-Protokoll ohne Computer, Kamera-Blatt geprüft
+- Video 3 des Nutzers (Build 151): Blatt "Delete / Save and exit / Cancel" 2× **sauber** (keine Leiste darüber).
+- **Neu gefunden:** Plus → Kamera öffnen: unsere steht ~0,4 s (≈25 Bilder) über der schon sichtbaren Kamera, 2/2.
+  Vermutlich hält `waitingForNewWindow` zu lange (Kamera evtl. im selben Fenster: `front.id == barWindowId` → true
+  bis `NAV_HOLD_MS`/`CREATE_HOLD_MS`). Ohne Protokoll nicht geändert.
+- Nutzer hat gerade nur einen Schul-Laptop (kein USB-Debugging). Darum **Test-Protokoll in der App** (`DebugLog`, nur
+  Test-Versionen): `reason`, Tipps, Klick-/Seiten-Meldungen, vorderes Fenster, mit Uhrzeit auf ms. Code
+  **"Ningelog"** in Settings → Redeem code teilt es als Textdatei (Teilen-Menü). Vorgehen: Bildschirmaufnahme mit
+  Uhrzeit oben, gleich danach "Ningelog", beides hochladen.

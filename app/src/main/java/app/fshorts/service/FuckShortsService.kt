@@ -17,6 +17,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Toast
 import app.fshorts.Access
+import app.fshorts.DebugLog
 import app.fshorts.Prefs
 import app.fshorts.Protection
 import app.fshorts.R
@@ -103,6 +104,8 @@ class FuckShortsService : AccessibilityService() {
     private var keepFail = ""
     private var tapSeq = 0
     private var foregroundNullSince = 0L
+    /** Nur fürs Test-Protokoll: zuletzt gemeldetes vorderes Fenster. */
+    private var loggedForeground = -2
     private var miniPlayerOpen = false
     private var lastMiniCheckAt = 0L
     private var lastMiniWalkAt = 0L
@@ -293,6 +296,13 @@ class FuckShortsService : AccessibilityService() {
         }
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return
+        if (app.fshorts.BuildConfig.DEBUG && (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+                event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED)
+        ) {
+            val label = (event.contentDescription ?: event.text.firstOrNull())?.toString()?.take(40)
+            val kind = if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) "Klick" else "Seite"
+            DebugLog.add("$kind $pkg w=${event.windowId} ch=${event.contentChangeTypes} ${event.className} \"$label\"")
+        }
         // Tablet: Unsere Leiste wartet aufs Zeichnen. YouTube schickt beim Seitenwechsel viele Meldungen, jede
         // Abfrage dazu hielt das Zeichnen ~0,4 s auf. Nur später nachsehen lassen.
         if (drawPending()) {
@@ -636,6 +646,7 @@ class FuckShortsService : AccessibilityService() {
         if (text == lastReason) return
         lastReason = text
         Log.d(TAG, "Leiste: $text")
+        DebugLog.add("Leiste: $text")
     }
 
     private fun scanInternal() {
@@ -651,6 +662,13 @@ class FuckShortsService : AccessibilityService() {
         updateSplit()
         if (overlay.isShowing) ourShownAt = now
         val foreground = foregroundWindow()?.root
+        if (app.fshorts.BuildConfig.DEBUG) {
+            val fw = foreground?.windowId ?: -1
+            if (fw != loggedForeground) {
+                loggedForeground = fw
+                DebugLog.add("vorne: w=$fw ${foreground?.packageName} (Hauptfenster w=$barWindowId, ohne Leiste w=$barlessWindowId)")
+            }
+        }
         if (foreground == null && youTubeActive) {
             // Beim Fensterwechsel (z. B. Plus -> Kamera) meldet Android kurz gar kein Fenster. Nicht gleich alles
             // verstecken, sonst sieht man die echte Leiste, bis das neue Fenster da ist.
@@ -2115,6 +2133,7 @@ class FuckShortsService : AccessibilityService() {
 
     private fun tapLog(line: String) {
         Log.i(TAG, "Tipp: $line")
+        DebugLog.add("Tipp: $line")
         if (!app.fshorts.BuildConfig.DEBUG) return // Play-Store-Version: keine Fehler-Dateien
         runCatching {
             val file = java.io.File(TreeDumper.dumpDir(this).apply { mkdirs() }, "tipps.txt")

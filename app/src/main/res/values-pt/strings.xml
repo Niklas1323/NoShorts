@@ -166,6 +166,7 @@
     <string name="update_now">Atualizar agora</string>
     <string name="update_later">Depois</string>
     <string name="code_update_demo">Mensagem de atualização em 5 segundos…</string>
+    <string name="code_log_share">Compartilhando o registro de teste…</string>
     <string name="update_demo_done">Só prévia: nada foi atualizado.</string>
     <plurals name="progress_blocked">
         <item quantity="one">%1$d Short bloqueado. Você recuperou %2$s da sua vida.</item>

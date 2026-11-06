@@ -167,6 +167,7 @@
     <string name="update_now">Update now</string>
     <string name="update_later">Later</string>
     <string name="code_update_demo">Update message in 5 seconds…</string>
+    <string name="code_log_share">Sharing the test log…</string>
     <string name="update_demo_done">Preview only – nothing was updated.</string>
     <plurals name="progress_blocked">
         <item quantity="one">%1$d Short blocked, %2$s of your life back.</item>

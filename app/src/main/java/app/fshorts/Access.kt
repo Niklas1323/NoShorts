@@ -10,6 +10,7 @@ object Access {
     private const val CODE_ON = "ningeninge"
     private const val CODE_TIMER = "ningeningetimer"
     private const val CODE_UPDATE = "ningeupdate"
+    private const val CODE_LOG = "ningelog"
 
     @Volatile var subscribed = false
         private set
@@ -28,7 +29,7 @@ object Access {
         Prefs.setSubscribed(context, on)
     }
 
-    enum class Redeem { Unlocked, FastTimer, UpdateDemo, Invalid }
+    enum class Redeem { Unlocked, FastTimer, UpdateDemo, ShareLog, Invalid }
 
     /**
      * Codes (Gross-/Kleinschreibung egal): "Ningeninge" schaltet gratis frei,
@@ -49,6 +50,8 @@ object Access {
         }
         // Test-Code: zeigt nach 5 s den Update-Hinweis als Vorschau (nur Test-Versionen).
         CODE_UPDATE -> if (BuildConfig.DEBUG) Redeem.UpdateDemo else Redeem.Invalid
+        // Test-Code: teilt das Test-Protokoll der Leiste (nur Test-Versionen).
+        CODE_LOG -> if (BuildConfig.DEBUG) Redeem.ShareLog else Redeem.Invalid
         else -> Redeem.Invalid
     }
 }

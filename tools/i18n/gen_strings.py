@@ -604,6 +604,9 @@ s("update_later", "Later", "Später", "Plus tard", "Più tardi", "Más tarde", "
 s("code_update_demo", "Update message in 5 seconds…", "Update-Meldung in 5 Sekunden …",
   "Message de mise à jour dans 5 secondes…", "Messaggio di aggiornamento tra 5 secondi…",
   "Mensaje de actualización en 5 segundos…", "Mensagem de atualização em 5 segundos…")
+s("code_log_share", "Sharing the test log…", "Test-Protokoll wird geteilt …",
+  "Partage du journal de test…", "Condivisione del registro di test…",
+  "Compartiendo el registro de prueba…", "Compartilhando o registro de teste…")
 s("update_demo_done", "Preview only – nothing was updated.", "Nur Vorschau – nichts wurde aktualisiert.",
   "Aperçu uniquement : rien n'a été mis à jour.", "Solo anteprima: non è stato aggiornato nulla.",
   "Solo vista previa: no se actualizó nada.", "Só prévia: nada foi atualizado.")
