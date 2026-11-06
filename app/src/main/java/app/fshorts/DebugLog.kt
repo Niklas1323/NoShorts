@@ -33,7 +33,7 @@ object DebugLog {
     /** Speichert das Protokoll in "Downloads" (zum Anhängen im Claude-Chat) und öffnet das Teilen-Menü. */
     fun share(context: Context): String? {
         val file = File(File(context.cacheDir, "."), "fshorts-protokoll.txt")
-        val body = synchronized(lines) { lines.joinToString("\n") }
+        val body = synchronized(lines) { lines.joinToString("\n") } + recentDumps(context)
         val text = "F*ck Shorts ${BuildConfig.VERSION_NAME} – ${android.os.Build.MODEL}, Android ${android.os.Build.VERSION.RELEASE}\n" +
             "Uhrzeit beim Teilen: ${time.format(Date())}\n\n" + body + "\n"
         file.writeText(text)
@@ -45,6 +45,14 @@ object DebugLog {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         return saved
+    }
+
+    /** Die letzten gespeicherten Aufbau-Dateien (höchstens 4, aus den letzten 15 Minuten) hinten anhängen. */
+    private fun recentDumps(context: Context): String {
+        val since = System.currentTimeMillis() - 15 * 60 * 1000L
+        val files = app.fshorts.service.TreeDumper.files(context).filter { it.lastModified() > since }.take(4)
+        if (files.isEmpty()) return ""
+        return files.reversed().joinToString("") { "\n\n===== ${it.name} =====\n" + runCatching { it.readText() }.getOrDefault("") }
     }
 
     private fun saveToDownloads(context: Context, text: String): String {

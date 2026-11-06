@@ -51,6 +51,7 @@ class FuckShortsService : AccessibilityService() {
     private var barSeenOnce = false
     private var lastAutoDumpAt = 0L
     private var lastDebugDumpAt = 0L
+    private var lastVideoDumpAt = 0L
     private var debugDumpWanted = false
     private var nightMode = 0
     private var screen = Rect()
@@ -266,6 +267,7 @@ class FuckShortsService : AccessibilityService() {
             touchedSinceEnter = true
             lastTouchAt = SystemClock.uptimeMillis()
             if (shadeOverYouTube) onShadeTouched()
+            if (app.fshorts.BuildConfig.DEBUG) dumpAfterTapSoon(lastTouchAt)
             // Tablet: Beim Runterwischen des Videos meldet YouTube nichts, bis der Mini-Player steht (~1 s echte
             // Leiste). Nach jeder Berührung darum Bild für Bild nachsehen, ob der Player wegrutscht.
             if (isTablet && watchPageOpen && youTubeActive) startPolling()
@@ -578,6 +580,23 @@ class FuckShortsService : AccessibilityService() {
         hiddenByScroll = false
         overlay.show(rest.top, rest, state.copy(style = currentStyle()))
         continueScanSoon()
+    }
+
+    /**
+     * Nur Test-Versionen: ~0,45 s nach einem Tipp den Aufbau speichern, solange noch kein Video erkannt ist. So sieht
+     * man, wie eine Video-Seite mit Werbung vorneweg aussieht, bevor wir sie erkennen (fürs Test-Protokoll).
+     */
+    private fun dumpAfterTapSoon(touchAt: Long) {
+        handler.postDelayed({
+            val now = SystemClock.uptimeMillis()
+            if (lastTouchAt != touchAt || lastScrollAt > touchAt || watchPageOpen || !youTubeActive || !overlay.isShowing) {
+                return@postDelayed
+            }
+            if (now - lastVideoDumpAt < VIDEO_DUMP_INTERVAL_MS) return@postDelayed
+            lastVideoDumpAt = now
+            DebugLog.add("Aufbau nach Tipp gespeichert")
+            youTubeMainRoot()?.let { r -> dumper.dump(r, windows, "nach-tipp") }
+        }, 450)
     }
 
     private fun isSearchButton(event: AccessibilityEvent): Boolean {
@@ -958,7 +977,19 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         watchNode = player?.also { watchTop = scanner.topOf(it) }
+        val watchWasOpen = watchPageOpen
         watchPageOpen = watchNode != null
+        if (app.fshorts.BuildConfig.DEBUG && watchPageOpen && !watchWasOpen) {
+            // Test-Protokoll: Wie sah die Video-Seite aus, als wir sie erkannt haben? (Mit Werbung vorneweg kam die
+            // Erkennung ~0,7 s zu spät.) Kurz danach speichern, damit das Verstecken nicht wartet.
+            DebugLog.add("Video erkannt, letzte Berührung vor ${now - lastTouchAt} ms")
+            if (now - lastVideoDumpAt > VIDEO_DUMP_INTERVAL_MS) {
+                lastVideoDumpAt = now
+                handler.postDelayed({
+                    youTubeMainRoot()?.let { r -> dumper.dump(r, windows, "video-erkannt") }
+                }, 300)
+            }
+        }
 
         if (bar == null && !watchPageOpen && handlePanel(root, now)) return
         panelMinTop = Int.MAX_VALUE
@@ -2323,6 +2354,7 @@ class FuckShortsService : AccessibilityService() {
         private const val EDGE_SNAP_PX = 3
         /** Lücke unter der Leiste bis zu so viel dp gilt als "ganz unten" (3-Knopf-Navigation: 48 dp, bleibt). */
         private const val BOTTOM_SNAP_DP = 20
+        private const val VIDEO_DUMP_INTERVAL_MS = 8_000L
         private const val SLIDE_AWAY_MS = 450L
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L

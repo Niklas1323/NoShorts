@@ -807,3 +807,10 @@ Video des Nutzers Bild für Bild (60 fps) ausgewertet:
   sichtbaren (schwarzen/weissen) Tab; zu: unsere ~0,15 s zu früh über dem wegfahrenden Tab. Nur unsere, nie die echte.
   (b) Video mit laufender Werbung auf gescrollter Startseite runtergewischt (Mini-Player): ~0,36 s gar keine Leiste
   (echte auch nicht, da weggescrollt). (c) YouTube kalt gestartet: 1 Bild echte Leiste (bekannt, App-Zoom).
+- Video 5 + Protokoll (Build 154, Zeit im Video ≈ Protokoll − 22:48:10,6): (a) **Video mit Werbung vorneweg öffnen**
+  (aus der Liste oder Mini-Player aufklappen): YouTube meldet ~0,7–0,8 s gar nichts, "Video offen" kommt erst per Scan;
+  so lange steht unsere über der ladenden Video-Seite (Skelett). Ohne Aufbau der Seite nicht lösbar → Test-Versionen
+  speichern jetzt den Aufbau 0,45 s nach einem Tipp ("nach-tipp", höchstens alle 8 s) und beim Erkennen des Videos
+  ("video-erkannt"); "Ningelog" hängt die letzten 4 (15 min) an die Datei an. (b) Chrome Custom Tab: unsere ~0,2 s
+  über dem schwarzen Tab (Chrome-Seite kommt 30 ms nach dem Tipp, versteckt erst bei "Leiste nicht mehr da").
+  (c) Aufnahme stoppen (SystemUIDialog vom Bildschirmrekorder): 1 Bild echte Leiste – nur bei Aufnahmen.
