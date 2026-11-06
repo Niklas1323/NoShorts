@@ -117,3 +117,8 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 - ⬜ 👤 Im Superwall-Editor **Publish** drücken; am Handy mit Deutsch prüfen, ob die Paywall deutsch erscheint
 - ✅ 🤖 Rechtsfragen im Internet recherchiert (EU-Vertreter, Steuern/AHV, Google-Play-Regeln) – siehe Chat 06.11.
 - ⬜ 👤 Optional statt Anwalt: Gratis-Auskunft beim Steueramt/der AHV-Ausgleichskasse (wer versteuert die Abo-Einnahmen?)
+
+## 11. Später: iPhone (entschieden 06.11.: erst Android fertig)
+- Gleiche App ist auf iOS unmöglich (keine Bedienungshilfe für fremde Apps, veränderte/nachgebaute YouTube-App nicht
+  erlaubt). Möglich: Safari-Erweiterung (Shorts auf youtube.com ausblenden) + YouTube-App per Bildschirmzeit-API sperren
+  (Family-Controls-Erlaubnis bei Apple beantragen). Braucht Mac, Apple-Konto 99 $/Jahr (auf Lucien), iPhone zum Testen.
