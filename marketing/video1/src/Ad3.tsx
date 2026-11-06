@@ -169,17 +169,6 @@ const BedScene: React.FC<{ t: number }> = ({ t }) => {
             <stop offset="0" stopColor={light} />
             <stop offset="1" stopColor="rgba(0,0,0,0)" />
           </radialGradient>
-          <filter id="hairF" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.028" numOctaves={3} seed={3} result="n1" />
-            <feDisplacementMap in="SourceGraphic" in2="n1" scale={22} xChannelSelector="R" yChannelSelector="G" result="d" />
-            <feTurbulence type="fractalNoise" baseFrequency="0.035 0.006" numOctaves={3} seed={8} result="n2" />
-            <feColorMatrix in="n2" type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.21  0 0 0 0 0.17  0 0 0 0.7 -0.28" result="tex" />
-            <feComposite in="tex" in2="d" operator="in" result="texIn" />
-            <feMerge>
-              <feMergeNode in="d" />
-              <feMergeNode in="texIn" />
-            </feMerge>
-          </filter>
           <linearGradient id="blanket1" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#262c52" />
             <stop offset="1" stopColor="#0c0f22" />
@@ -194,12 +183,9 @@ const BedScene: React.FC<{ t: number }> = ({ t }) => {
           {/* Gesicht */}
           <ellipse cx={540} cy={960} rx={340} ry={430} fill="url(#skin1)" />
           <ellipse cx={540} cy={960} rx={340} ry={430} fill={`hsla(${h},70%,60%,${0.18 + 0.12 * flash})`} />
-          {/* Haare: Mittelscheitel, Vorhang-Pony, fluffig (Rand verwirbelt + feine Struktur) */}
-          <g filter="url(#hairF)">
-            <path d="M170 960 C 130 700, 270 470, 540 455 C 810 470, 950 700, 905 960 C 880 900, 860 860, 830 830 C 760 740, 640 690, 555 640 L 540 600 L 525 640 C 440 690, 320 740, 250 830 C 220 860, 195 905, 170 960 Z" fill="#241a17" />
-          </g>
-          {/* Licht vom Handy auf den Haarspitzen */}
-          <path d="M830 830 C 860 860, 880 900, 905 960" stroke={light} strokeWidth={6} fill="none" opacity={0.45} filter="url(#hairF)" />
+          {/* Haare, Strähnen über der Stirn */}
+          <path d="M180 900 C 150 560, 360 450, 560 480 C 760 500, 900 620, 880 820 C 840 700, 760 660, 690 690 C 650 640, 560 640, 520 690 C 470 650, 390 660, 350 720 C 300 700, 230 760, 220 900 Z" fill="#1e1614" />
+          <path d="M350 720 C 420 700, 470 720, 500 760 C 520 720, 580 700, 640 720 C 600 740, 560 770, 545 800 C 520 770, 470 750, 420 760 C 390 740, 370 730, 350 720 Z" fill="#1e1614" />
           {/* Augenbrauen, müde */}
           <path d="M335 850 Q 410 822 480 850" stroke="#2a1d17" strokeWidth={22} strokeLinecap="round" fill="none" />
           <path d="M600 850 Q 670 824 745 852" stroke="#2a1d17" strokeWidth={22} strokeLinecap="round" fill="none" />
@@ -305,11 +291,10 @@ const EyesScene: React.FC<{ t: number }> = ({ t }) => {
 
 const RoomScene: React.FC<{ t: number }> = ({ t }) => {
   const { h, flash } = screenColor(t);
-  const zoom = 1.08 - 0.08 * ease(t, 6.84, 9.2);
+  const zoom = 1.1 - 0.1 * ease(t, 6.84, 9.2);
   const breathe = Math.sin(t * 1.8) * 4;
   const light = `hsla(${h},75%,62%,${0.5 + 0.22 * flash})`;
-  const thumb = (t % 0.45) < 0.15 ? Math.sin(((t % 0.45) / 0.15) * Math.PI) : 0;
-  const pants = '#191d38';
+  const thumb = (t % 0.45) < 0.15 ? -10 * Math.sin(((t % 0.45) / 0.15) * Math.PI) : 0;
   return (
     <AbsoluteFill style={{ background: '#07080f', transform: `scale(${zoom})` }}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
@@ -318,11 +303,11 @@ const RoomScene: React.FC<{ t: number }> = ({ t }) => {
             <stop offset="0" stopColor={light} />
             <stop offset="1" stopColor="rgba(0,0,0,0)" />
           </radialGradient>
-          <linearGradient id="hoodie" x1="0" y1="0" x2="1" y2="0.2">
-            <stop offset="0" stopColor="#11152b" />
-            <stop offset="1" stopColor="#2c3366" />
+          <linearGradient id="hoodie" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#141831" />
+            <stop offset="1" stopColor="#2b3263" />
           </linearGradient>
-          <radialGradient id="skin3" cx="0.8" cy="0.85" r="0.9">
+          <radialGradient id="skin3" cx="0.75" cy="0.8" r="0.8">
             <stop offset="0" stopColor={SKIN_LIT} />
             <stop offset="1" stopColor="#3f2d24" />
           </radialGradient>
@@ -336,53 +321,50 @@ const RoomScene: React.FC<{ t: number }> = ({ t }) => {
         ))}
         <rect x={880} y={410} width={130} height={56} rx={8} fill="#0b0b0b" />
         <text x={945} y={452} textAnchor="middle" fontFamily={FONT} fontWeight={800} fontSize={36} fill="#ff3b3b">3:12</text>
-        {/* Boden und Bett (er sitzt auf der Bettkante) */}
-        <rect x={0} y={1780} width={W} height={140} fill="#0d0f1d" />
-        <rect x={0} y={1470} width={560} height={320} fill="#161a33" />
-        <rect x={0} y={1462} width={560} height={26} rx={10} fill="#262c55" />
+        {/* Bett */}
+        <path d="M0 1500 L 1080 1460 L 1080 1920 L 0 1920 Z" fill="#161a33" />
+        <path d="M0 1500 L 1080 1460" stroke="#2a3060" strokeWidth={10} />
         {/* Lichtschein vom Handy */}
-        <circle cx={760} cy={1120} r={480} fill="url(#g3)" opacity={0.85} />
+        <circle cx={700} cy={1240} r={520} fill="url(#g3)" opacity={0.9} />
+        {/* Person von der Seite, Blick nach rechts unten: Rücken rund, Kopf weit nach vorne */}
         <g transform={`translate(0 ${breathe})`}>
-          {/* Beine: Oberschenkel nach vorne, Unterschenkel runter, Füsse auf dem Boden */}
-          <path d="M400 1440 L 730 1430" stroke={pants} strokeWidth={130} strokeLinecap="round" />
-          <path d="M735 1440 L 760 1745" stroke={pants} strokeWidth={104} strokeLinecap="round" />
-          <path d="M700 1790 C 700 1755, 760 1745, 800 1752 C 860 1760, 905 1772, 905 1795 L 905 1800 L 700 1800 Z" fill="#0b0c14" />
-          {/* Oberkörper: runder Rücken, Schultern hängen nach vorne */}
-          <path d="M360 1470 C 250 1380, 240 1180, 330 1060 C 390 980, 490 950, 580 975 C 640 995, 660 1060, 650 1130 C 640 1230, 660 1330, 650 1420 L 460 1480 Z" fill="url(#hoodie)" />
-          <path d="M330 1060 C 390 980, 490 950, 580 975" stroke="#3a4280" strokeWidth={6} fill="none" opacity={0.5} />
-          {/* Hals weit nach vorne */}
-          <path d="M560 985 C 600 960, 650 965, 680 995 L 650 1050 C 625 1030, 595 1025, 565 1035 Z" fill="#3f2d24" />
-          {/* Kopf, nach unten geneigt, Gesicht schaut aufs Handy */}
-          <g transform="rotate(48 715 955)">
-            <ellipse cx={715} cy={955} rx={112} ry={128} fill="url(#skin3)" />
-            <ellipse cx={715} cy={955} rx={112} ry={128} fill={`hsla(${h},70%,60%,${0.12 + 0.12 * flash})`} />
-            {/* Haare hinten und oben */}
-            <path d="M603 960 C 590 850, 680 800, 770 830 C 815 845, 832 875, 826 905 C 790 880, 735 880, 700 905 C 670 925, 640 950, 603 960 Z" fill="#241a17" />
-            <ellipse cx={660} cy={965} rx={20} ry={30} fill="#33251e" />
-            {/* Gesicht im Profil: Auge halb zu, Nase, Mund */}
-            <path d="M780 950 Q 798 958 812 950" stroke="#2a1d17" strokeWidth={6} fill="none" strokeLinecap="round" />
-            <path d="M826 960 Q 856 990 828 1004" stroke="#5a4033" strokeWidth={7} fill={SKIN_LIT} />
-            <path d="M800 1040 Q 812 1046 822 1040" stroke="#4e3628" strokeWidth={5} fill="none" strokeLinecap="round" />
+          {/* Oberschenkel */}
+          <path d="M330 1470 C 420 1430, 640 1420, 760 1440 L 770 1520 C 640 1520, 430 1530, 330 1540 Z" fill="#1a1f3d" />
+          {/* Rücken (C-Kurve) und Bauch */}
+          <path d="M330 1500 C 230 1360, 250 1150, 380 1040 C 460 975, 560 975, 620 1010 C 660 1080, 650 1180, 640 1250 C 640 1330, 660 1400, 650 1460 L 360 1500 Z" fill="url(#hoodie)" />
+          {/* Kapuze im Nacken */}
+          <path d="M400 1030 C 450 980, 560 975, 600 1010 C 560 1020, 470 1030, 430 1060 Z" fill="#11152a" />
+          {/* Hals nach vorne */}
+          <path d="M575 1010 C 610 1000, 660 1010, 680 1050 L 640 1090 C 620 1060, 600 1050, 575 1050 Z" fill="#4a352b" />
+          {/* Kopf nach unten geneigt */}
+          <g transform="rotate(38 700 990)">
+            <ellipse cx={700} cy={990} rx={120} ry={140} fill="url(#skin3)" />
+            <ellipse cx={700} cy={990} rx={120} ry={140} fill={`hsla(${h},70%,60%,${0.15 + 0.12 * flash})`} />
+            {/* Haare: liegen auf dem Hinterkopf und oben auf dem Schädel */}
+            <path d="M586 1035 C 560 920, 620 845, 712 846 C 778 848, 816 880, 822 925 C 800 912, 768 908, 740 916 C 700 928, 664 958, 645 1000 C 632 1030, 610 1050, 586 1035 Z" fill="#1e1614" />
+            <ellipse cx={622} cy={1005} rx={20} ry={30} fill="#3f2d24" />
+            {/* Gesicht im Profil, alles innerhalb des Kopfes: Auge halb zu, Nase als kleine Wölbung, Mund */}
+            <path d="M752 962 Q 772 972 790 963" stroke="#2a1d17" strokeWidth={7} fill="none" strokeLinecap="round" />
+            <path d="M754 969 Q 772 977 788 970" stroke={light} strokeWidth={3} fill="none" opacity={0.8} />
+            <path d="M812 978 Q 836 1002 814 1018" stroke="#4e3628" strokeWidth={7} fill={SKIN} />
+            <path d="M770 1060 Q 782 1066 794 1058" stroke="#4e3628" strokeWidth={6} fill="none" strokeLinecap="round" />
           </g>
-          {/* Licht vom Bildschirm im Gesicht */}
-          <ellipse cx={790} cy={1035} rx={70} ry={40} fill={light} opacity={0.35} />
-          {/* Arm: Schulter -> Ellbogen auf dem Oberschenkel -> Hände vor der Brust */}
-          <path d="M520 1050 C 540 1170, 580 1290, 640 1330" stroke="#232a58" strokeWidth={78} strokeLinecap="round" fill="none" />
-          <path d="M640 1330 C 700 1320, 760 1260, 790 1205" stroke="#232a58" strokeWidth={66} strokeLinecap="round" fill="none" />
+          {/* Arme: Ellbogen auf den Knien, Hände mit Handy vor dem Bauch */}
+          <path d="M520 1110 C 520 1220, 560 1320, 640 1340 C 690 1350, 740 1330, 760 1300" stroke="#232955" strokeWidth={74} strokeLinecap="round" fill="none" />
           {/* Handy: Bildschirm zeigt nach oben zum Gesicht, wir sehen die Kante */}
-          <g transform="rotate(-38 820 1150)">
-            <rect x={740} y={1138} width={170} height={24} rx={10} fill="#0b0b0f" stroke="#2c2c36" strokeWidth={3} />
-            <rect x={746} y={1134} width={158} height={6} rx={3} fill={light} />
+          <g transform="rotate(-42 790 1262)">
+            <rect x={705} y={1250} width={170} height={24} rx={10} fill="#0b0b0f" stroke="#2c2c36" strokeWidth={3} />
+            <rect x={711} y={1246} width={158} height={6} rx={3} fill={light} />
           </g>
-          {/* Lichtkegel vom Bildschirm zum Gesicht */}
-          <path d="M770 1150 L 760 1040 L 860 1020 L 880 1100 Z" fill={light} opacity={0.12} />
-          {/* Hände: halten das Handy unten, Daumen oben auf dem Bildschirm */}
-          <ellipse cx={790} cy={1205} rx={42} ry={36} fill="url(#skin3)" />
-          <ellipse cx={850} cy={1140} rx={16} ry={26} fill="url(#skin3)" transform={`rotate(${-40 + 18 * thumb} 840 1160)`} />
+          {/* Schein vom Bildschirm hoch ins Gesicht */}
+          <path d="M760 1250 L 735 1060 L 850 1040 L 850 1200 Z" fill={light} opacity={0.12} />
+          {/* Hand umfasst das Handy unten, Daumen scrollt oben auf dem Bildschirm */}
+          <ellipse cx={765} cy={1300} rx={40} ry={34} fill="url(#skin3)" />
+          <ellipse cx={812} cy={1238} rx={15} ry={25} fill="url(#skin3)" transform={`rotate(${-42 + 16 * Math.max(0, -thumb) / 10} 805 1258)`} />
         </g>
       </svg>
       <Grain t={t} />
-      <AbsoluteFill style={{ background: 'radial-gradient(circle at 62% 55%, transparent 35%, rgba(0,0,0,.78) 100%)' }} />
+      <AbsoluteFill style={{ background: 'radial-gradient(circle at 60% 60%, transparent 35%, rgba(0,0,0,.78) 100%)' }} />
     </AbsoluteFill>
   );
 };
