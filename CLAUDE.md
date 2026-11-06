@@ -795,3 +795,8 @@ Video des Nutzers Bild für Bild (60 fps) ausgewertet:
   Test-Versionen): `reason`, Tipps, Klick-/Seiten-Meldungen, vorderes Fenster, mit Uhrzeit auf ms. Code
   **"Ningelog"** in Settings → Redeem code teilt es als Textdatei (Teilen-Menü). Vorgehen: Bildschirmaufnahme mit
   Uhrzeit oben, gleich danach "Ningelog", beides hochladen.
+- Erstes "Ningelog"-Protokoll + Video (Build 152) ausgewertet: Kamera öffnen ist ein eigenes Fenster
+  (`CreationModesActivity`, Seiten-Meldung ~20 ms nach dem Klick). Danach meldet Android ~0,25 s gar kein App-Fenster
+  ("vorne: w=-1"), darum hält `waitingForNewWindow`. Unsere stand in diesem Video nur 0–6 Bilder (46 fps) über der
+  fertig aufgezoomten Kamera – früher verstecken würde die echte Leiste hinter der wachsenden Kamera zeigen. Bleibt so.
+  Aussehen unserer Leiste mit älteren Videos verglichen: pixelgleich (Nutzer meinte, sie sei grösser).
