@@ -52,6 +52,7 @@ class FuckShortsService : AccessibilityService() {
     private var lastAutoDumpAt = 0L
     private var lastDebugDumpAt = 0L
     private var lastVideoDumpAt = 0L
+    private var lastPaneDumpAt = 0L
     private var debugDumpWanted = false
     private var nightMode = 0
     private var screen = Rect()
@@ -304,6 +305,19 @@ class FuckShortsService : AccessibilityService() {
             val label = (event.contentDescription ?: event.text.firstOrNull())?.toString()?.take(40)
             val kind = if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) "Klick" else "Seite"
             DebugLog.add("$kind $pkg w=${event.windowId} ch=${event.contentChangeTypes} ${event.className} \"$label\"")
+            // Video aus der Liste geöffnet: YouTube meldet ch=32, während die graue Lade-Seite zu sehen ist, ~0,3 s
+            // bevor wir den Player erkennen. Genau dann den Aufbau speichern (Test-Protokoll).
+            val now = SystemClock.uptimeMillis()
+            if (pkg == selectors.youtubePackage && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+                event.contentChangeTypes and AccessibilityEvent.CONTENT_CHANGE_TYPE_PANE_DISAPPEARED != 0 &&
+                !watchPageOpen && now - lastPaneDumpAt > PANE_DUMP_INTERVAL_MS
+            ) {
+                lastPaneDumpAt = now
+                handler.post {
+                    DebugLog.add("Aufbau bei Seiten-Wechsel gespeichert")
+                    youTubeMainRoot()?.let { r -> dumper.dump(r, windows, "seite-32") }
+                }
+            }
         }
         // Tablet: Unsere Leiste wartet aufs Zeichnen. YouTube schickt beim Seitenwechsel viele Meldungen, jede
         // Abfrage dazu hielt das Zeichnen ~0,4 s auf. Nur später nachsehen lassen.
@@ -2349,6 +2363,7 @@ class FuckShortsService : AccessibilityService() {
         /** Lücke unter der Leiste bis zu so viel dp gilt als "ganz unten" (3-Knopf-Navigation: 48 dp, bleibt). */
         private const val BOTTOM_SNAP_DP = 20
         private const val VIDEO_DUMP_INTERVAL_MS = 4_000L
+        private const val PANE_DUMP_INTERVAL_MS = 2_000L
         private const val SLIDE_AWAY_MS = 450L
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L

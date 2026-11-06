@@ -821,3 +821,10 @@ Video des Nutzers Bild für Bild (60 fps) ausgewertet:
   `watch_player` [0,173][1080,781]. Aufbau der Lade-Seite fehlt noch (Text-Einfügen bricht nach ~25 000 Zeichen ab).
   Darum "Ningelog" jetzt kurz: 2 Aufbau-Dateien zuerst (nur sichtbare Elemente mit ID/Beschreibung, je 80 Zeilen),
   dann 3 Minuten Protokoll. Aufbau 0,3 s nach jedem Tipp (höchstens alle 4 s), nicht mehr beim Erkennen.
+- Video 7 + Protokoll-Datei (Build 156, Anhängen klappt!, Video ≈ Protokoll − 23:28:51,1): Lade-Seite nach Tipp auf
+  ein Video, unsere 0,5–0,7 s darüber; YouTube meldet `TYPE_WINDOW_STATE_CHANGED` ch=32 (ViewGroup "YouTube", ohne ch=16
+  daneben) ~0,3 s vor "Video erkannt" (07,735→08,038; 18,487→18,821). Die "nach-tipp"-Aufbauten trafen den Mini-Player
+  (Sperre 4 s nach dem vorigen). Mini-Player-Aufbau: `watch_player` [540,1920][1059,2211] in
+  `next_gen_watch_layout_no_player_fragment_container`, dazu `floaty_bar_controls_view`, `modern_miniplayer_*`.
+  Jetzt: Aufbau sofort bei ch=32 ohne offenes Video ("seite-32", höchstens alle 2 s); Ningelog bis 4 Aufbauten à 200 Zeilen.
+  Idee für den Fix: ch=32 ohne ch=16 kurz nach einem Tipp = Video geht auf → `hideSmooth` (vorher mit Aufbau prüfen).
