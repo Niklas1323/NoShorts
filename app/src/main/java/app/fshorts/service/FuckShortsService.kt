@@ -442,7 +442,13 @@ class FuckShortsService : AccessibilityService() {
         val out = Rect(r)
         if (kotlin.math.abs(out.left - s.left) <= EDGE_SNAP_PX) out.left = s.left
         if (kotlin.math.abs(out.right - s.right) <= EDGE_SNAP_PX) out.right = s.right
-        if (kotlin.math.abs(out.bottom - s.bottom) <= EDGE_SNAP_PX) out.offset(0, s.bottom - out.bottom)
+        // Unten grosszügiger: YouTube meldet seine Leiste beim Zurückfahren (Scrollen nach oben) manchmal ein paar
+        // Pixel zu hoch. So gemerkt, stand unsere bis zu ~12 px über dem Rand, darunter scrollte der Inhalt durch.
+        // Die echte Leiste reicht bei Gesten-Navigation immer bis ganz unten; mit 3 Knöpfen liegt sie 48 dp höher
+        // (über der Knopfleiste) und bleibt darum unberührt.
+        val bottomSnap = (BOTTOM_SNAP_DP * resources.displayMetrics.density).toInt()
+        val gap = s.bottom - out.bottom
+        if (gap in -EDGE_SNAP_PX..bottomSnap) out.offset(0, gap)
         return out
     }
 
@@ -2279,6 +2285,8 @@ class FuckShortsService : AccessibilityService() {
         private const val MINI_WALK_MS = 5_000L
         private const val DRAW_FIRST_MS = 50L
         private const val EDGE_SNAP_PX = 3
+        /** Lücke unter der Leiste bis zu so viel dp gilt als "ganz unten" (3-Knopf-Navigation: 48 dp, bleibt). */
+        private const val BOTTOM_SNAP_DP = 20
         private const val SLIDE_AWAY_MS = 450L
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L

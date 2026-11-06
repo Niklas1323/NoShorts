@@ -758,3 +758,10 @@ Einzelheiten und Belege: `docs/nachttest.md`.
 - Release zusätzlich `app/proguard-release.pro`: R8 entfernt alle `android.util.Log`-Aufrufe (keine YouTube-Texte im
   Systemprotokoll der Play-Store-Version). Test-Versionen (debug) loggen weiter, `adb logcat -s FuckShorts` geht dort.
 - Paywall 287624: Texte nach `device.deviceLanguageCode` (de/fr/it/es/pt/tr), per `set_dynamic_value` im Editor.
+
+### 06.11.2026, Abend (Cloud, NICHT am Handy getestet): Lücke unter der Leiste
+Nutzer-Foto: nach dem Hochscrollen auf der Startseite ~12 px Lücke unter unserer Leiste (Inhalt scrollt durch).
+Ursache vermutlich: YouTube meldet seine Leiste beim Zurückfahren kurz etwas zu hoch, `rememberRestPosition` lernt
+"gleich hoch, aber weiter oben" als neue Ruhelage, `snapToEdges` rückte nur bis 3 px an den Rand. Jetzt: Lücke unten bis
+`BOTTOM_SNAP_DP` (20 dp) = ganz unten (auch für die gespeicherte Lage). 3-Knopf-Navigation (48 dp) bleibt unberührt.
+**Am Pixel prüfen:** Startseite runter- und hochscrollen, Unterkante unserer Leiste = Bildschirmrand (Foto unten).
