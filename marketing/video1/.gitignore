@@ -1,3 +1,5 @@
 node_modules/
 out/
 public/voice.wav
+public/voice2.wav
+public/sfx2.wav

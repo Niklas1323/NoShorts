@@ -21,14 +21,14 @@ export const DURATION_S = 41;
 
 const W = 1080;
 const H = 1920;
-const RED = '#E5172B';
-const AMBER = '#FFB547';
+export const RED = '#E5172B';
+export const AMBER = '#FFB547';
 const BG = '#0A0506';
-const FONT = 'Montserrat';
+export const FONT = 'Montserrat';
 
-const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
-const lin = (t: number, a: number, b: number, from = 0, to = 1) => interpolate(t, [a, b], [from, to], clamp);
-const ease = (t: number, a: number, b: number, from = 0, to = 1) =>
+export const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
+export const lin = (t: number, a: number, b: number, from = 0, to = 1) => interpolate(t, [a, b], [from, to], clamp);
+export const ease = (t: number, a: number, b: number, from = 0, to = 1) =>
   interpolate(t, [a, b], [from, to], { ...clamp, easing: Easing.bezier(0.22, 1, 0.36, 1) });
 
 const SCENES = {
@@ -50,7 +50,7 @@ const drift = (t: number, [a, b]: readonly [number, number], amount = 0.05) => 1
 
 // ------------------------------------------------------------------------------------------------ Fonts
 
-const useFonts = () => {
+export const useFonts = () => {
   const [handle] = useState(() => delayRender('fonts'));
   useEffect(() => {
     Promise.all(
@@ -65,10 +65,10 @@ const useFonts = () => {
 
 // ------------------------------------------------------------------------------------------------ Bausteine
 
-const HUES = [352, 8, 330, 280, 220, 200, 18, 300];
+export const HUES = [352, 8, 330, 280, 220, 200, 18, 300];
 
 /** Ein "Short": Hochkant-Kärtchen mit abstraktem Inhalt (keine echten Videos, keine Logos). */
-const Card: React.FC<{
+export const Card: React.FC<{
   seed: number;
   w: number;
   h: number;
@@ -132,7 +132,7 @@ const Card: React.FC<{
 };
 
 /** Unser Logo: rotes Quadrat, Hochkant-Video mit Schnitt (wie BrandLogo in der App). */
-const Logo: React.FC<{ size: number }> = ({ size: s }) => (
+export const Logo: React.FC<{ size: number }> = ({ size: s }) => (
   <svg width={s} height={s} viewBox="0 0 100 100">
     <rect width="100" height="100" rx="27" fill={RED} />
     <rect x="29" y="20" width="42" height="60" rx="9" fill="#fff" />
@@ -141,13 +141,13 @@ const Logo: React.FC<{ size: number }> = ({ size: s }) => (
   </svg>
 );
 
-const BrandName: React.FC<{ size: number }> = ({ size }) => (
+export const BrandName: React.FC<{ size: number }> = ({ size }) => (
   <div style={{ fontFamily: FONT, fontWeight: 900, fontSize: size, color: '#fff', letterSpacing: -size * 0.03 }}>
     F<span style={{ color: RED }}>*</span>ck Shorts
   </div>
 );
 
-const Pill: React.FC<{ text: string; color?: string; size?: number; style?: React.CSSProperties }> = ({ text, color = '#fff', size = 34, style }) => (
+export const Pill: React.FC<{ text: string; color?: string; size?: number; style?: React.CSSProperties }> = ({ text, color = '#fff', size = 34, style }) => (
   <div
     style={{
       position: 'absolute',
@@ -452,7 +452,7 @@ const S5: React.FC<{ t: number }> = ({ t }) => {
 
 // ------------------------------------------------------------------------------------------------ S6 Die App
 
-const BarIcon: React.FC<{ kind: 'home' | 'shorts' | 'plus' | 'subs' | 'you'; color: string }> = ({ kind, color }) => {
+export const BarIcon: React.FC<{ kind: 'home' | 'shorts' | 'plus' | 'subs' | 'you'; color: string }> = ({ kind, color }) => {
   const p = { fill: 'none', stroke: color, strokeWidth: 3.2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
     <svg width={64} height={64} viewBox="0 0 40 40">
