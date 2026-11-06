@@ -77,7 +77,9 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 - ⬜ 👤 Rechtsauskunft: Einwilligung für Superwall-Statistik in der EU (ePrivacy) bzw. Hinweis nach Schweizer FMG
 - ⬜ 👤 Optional: Support-E-Mail über Google Workspace (mit Auftragsverarbeitungsvertrag) statt Gratis-Gmail
 - ⬜ 👤 Play Console: Entwicklername = "Lucien Rahm" (muss zur Datenschutzerklärung passen), Zielgruppe nur 13+
-- ⬜ 🤖 Prüfen, ob Superwall inaktive Nutzer automatisch löschen kann (dann feste Löschfrist in die Erklärung)
+- ✅ 🤖 Superwall löscht inaktive Nutzer NICHT automatisch (DPA Annex: Daten bis Vertragsende). Löschen auf Anfrage:
+      Superwall-API "App User Erasure" (läuft 25 Tage nach Anfrage) oder compliance@superwall.com. Optional in die
+      Erklärung: "gelöscht spätestens 30 Tage nach deiner Anfrage".
 - ✅ 🤖 Version 4: Einwilligung vs. Vertrag erklärt, Widerspruchsrecht eigener Absatz, Kinder-Abschnitt ohne
       Widerspruch, Gmail-Rolle, keine Übertreibungen, Schweizer Pflichten, Install-Info. Play-Store-Version schreibt
       KEINE Fehler-Dateien mehr (nur Test-Versionen) → Erklärung ohne Fehler-Dateien.
@@ -98,10 +100,17 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 ## 9. Stand 05.11.2026, Nachmittag (Cloud): Sprachen
 - ✅ 🤖 App in 6 Sprachen: Englisch, Deutsch (Schweiz mit "ss"), Französisch, Italienisch, Spanisch, Portugiesisch.
       Sprachwahl mit Flaggen auf der 1. Onboarding-Seite (oben rechts) und in Settings → Language. Am Handy NICHT getestet.
-- ⬜ 👤 Am Handy testen: jede Sprache einmal wählen, Texte abgeschnitten? (Französisch/Deutsch sind länger)
+- ✅ 👤 Am Handy getestet: kein Text abgeschnitten (06.11.)
 - ⬜ 👤 Optional: Übersetzungen von jemandem mit Muttersprache FR/IT/ES/PT kurz lesen lassen
 - ⬜ 🤖 **Leiste übersetzen** (Ersatztexte "Home/Subscriptions/You" in der YouTube-Leiste) – erst mit Claude im Terminal,
       der direkt am Handy testet
 - ⬜ 🤖 **App kleiner machen** (R8/Minify, jetzt ca. 80 MB) – nach den Sprachen
 - ⬜ 🤖👤 Superwall-Paywall in den 6 Sprachen übersetzen (im Superwall-Dashboard; die App gibt die Sprache schon weiter)
 - ⬜ 🤖 Store-Texte zusätzlich auf Französisch, Italienisch, Spanisch, Portugiesisch (`store-eintrag.md`)
+
+## 10. Stand 06.11.2026 (Cloud)
+- ✅ 🤖 Türkisch in der App (7 Sprachen). Am Handy noch NICHT getestet.
+- ⬜ 👤 Superwall-Editor: Lokalisierung auf "einfach" (Simple) stellen, dann übersetzt Claude die Paywall (Sprachen de, fr,
+      it, es, pt, tr sind schon angelegt)
+- ✅ 🤖 Rechtsfragen im Internet recherchiert (EU-Vertreter, Steuern/AHV, Google-Play-Regeln) – siehe Chat 06.11.
+- ⬜ 👤 Optional statt Anwalt: Gratis-Auskunft beim Steueramt/der AHV-Ausgleichskasse (wer versteuert die Abo-Einnahmen?)
