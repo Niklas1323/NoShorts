@@ -32,6 +32,11 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.activity.result.contract.ActivityResultContracts
+import app.fshorts.ui.UpdateDialog
+import com.google.android.play.core.appupdate.AppUpdateInfo
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +57,14 @@ import com.superwall.sdk.paywall.presentation.internal.state.PaywallSkippedReaso
 import com.superwall.sdk.paywall.presentation.register
 
 class MainActivity : ComponentActivity() {
+    /** Googles Update-Bildschirm (In-App-Updates). Muss vor onStart registriert sein. */
+    val updateLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { }
+
+    override fun onResume() {
+        super.onResume()
+        AppUpdates.resumeIfRunning(this, updateLauncher)
+    }
+
     // Vor Android 13: gewählte App-Sprache (ab 13 macht das Android selbst).
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguage.wrap(newBase))
@@ -96,6 +109,11 @@ private fun App() {
     var nextWait by remember { mutableIntStateOf(Prefs.nextWaitMinutes(context)) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var fastTimer by remember { mutableStateOf(Prefs.fastTimer(context)) }
+    // Update-Hinweis: echtes Update aus Google Play oder Vorschau per Test-Code "Ningeupdate".
+    var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    var updateDemo by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { AppUpdates.check(context) { updateInfo = it } }
     LaunchedEffect(unlockAt, paused) {
         while (unlockAt > 0L && !paused) {
             now = System.currentTimeMillis()
@@ -166,6 +184,13 @@ private fun App() {
             Access.Redeem.FastTimer -> {
                 fastTimer = true
                 context.getString(R.string.code_fast_timer)
+            }
+            Access.Redeem.UpdateDemo -> {
+                scope.launch {
+                    delay(5_000)
+                    updateDemo = true
+                }
+                context.getString(R.string.code_update_demo)
             }
             Access.Redeem.Invalid -> context.getString(R.string.code_invalid)
         }
@@ -305,6 +330,25 @@ private fun App() {
                 ),
             )
         }
+      }
+      val info = updateInfo
+      if (info != null || updateDemo) {
+          UpdateDialog(
+              onUpdate = {
+                  if (updateDemo) {
+                      Toast.makeText(context, R.string.update_demo_done, Toast.LENGTH_SHORT).show()
+                  } else if (info != null) {
+                      (context as? MainActivity)?.let { AppUpdates.start(it, info, it.updateLauncher) }
+                  }
+                  updateDemo = false
+                  updateInfo = null
+              },
+              onLater = {
+                  if (!updateDemo) AppUpdates.snooze(context)
+                  updateDemo = false
+                  updateInfo = null
+              },
+          )
       }
     }
 }

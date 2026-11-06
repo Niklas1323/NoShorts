@@ -9,6 +9,7 @@ import android.content.Context
 object Access {
     private const val CODE_ON = "ningeninge"
     private const val CODE_TIMER = "ningeningetimer"
+    private const val CODE_UPDATE = "ningeupdate"
 
     @Volatile var subscribed = false
         private set
@@ -27,11 +28,11 @@ object Access {
         Prefs.setSubscribed(context, on)
     }
 
-    enum class Redeem { Unlocked, FastTimer, Invalid }
+    enum class Redeem { Unlocked, FastTimer, UpdateDemo, Invalid }
 
     /**
      * Codes (Gross-/Kleinschreibung egal): "Ningeninge" schaltet gratis frei,
-     * "Ningeningetimer" macht die Wartezeit fürs Ausschalten 5 Sekunden.
+     * "Ningeningetimer" macht die Wartezeit fürs Ausschalten 5 Sekunden, "Ningeupdate" zeigt den Update-Hinweis.
      */
     fun redeem(context: Context, code: String): Redeem = when (code.trim().lowercase()) {
         CODE_ON -> {
@@ -46,6 +47,8 @@ object Access {
         } else {
             Redeem.Invalid
         }
+        // Test-Code: zeigt nach 5 s den Update-Hinweis als Vorschau (nur Test-Versionen).
+        CODE_UPDATE -> if (BuildConfig.DEBUG) Redeem.UpdateDemo else Redeem.Invalid
         else -> Redeem.Invalid
     }
 }

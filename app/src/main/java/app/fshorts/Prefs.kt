@@ -20,6 +20,7 @@ object Prefs {
     private const val SHELVES_HIDDEN = "shelves_hidden"
     private const val MENU_DIM = "menu_dim"
     private const val BAR_STATE = "bar_state"
+    private const val UPDATE_SNOOZED = "update_snoozed_at"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -89,4 +90,8 @@ object Prefs {
     /** Lage und Inhalt der echten Leiste, damit unsere nach einem Neustart (App-Update) sofort steht. */
     fun barState(context: Context): String? = prefs(context).getString(BAR_STATE, null)
     fun setBarState(context: Context, value: String) = prefs(context).edit().putString(BAR_STATE, value).apply()
+
+    /** "Später" beim Update-Hinweis (Uhrzeit ms). */
+    fun updateSnoozedAt(context: Context) = prefs(context).getLong(UPDATE_SNOOZED, 0L)
+    fun setUpdateSnoozedAt(context: Context, at: Long) = prefs(context).edit().putLong(UPDATE_SNOOZED, at).apply()
 }

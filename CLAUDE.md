@@ -765,3 +765,10 @@ Ursache vermutlich: YouTube meldet seine Leiste beim Zurückfahren kurz etwas zu
 "gleich hoch, aber weiter oben" als neue Ruhelage, `snapToEdges` rückte nur bis 3 px an den Rand. Jetzt: Lücke unten bis
 `BOTTOM_SNAP_DP` (20 dp) = ganz unten (auch für die gespeicherte Lage). 3-Knopf-Navigation (48 dp) bleibt unberührt.
 **Am Pixel prüfen:** Startseite runter- und hochscrollen, Unterkante unserer Leiste = Bildschirmrand (Foto unten).
+
+### 06.11.2026, Nacht (Cloud, NICHT am Handy getestet): Update-Hinweis in der App
+- Google Play In-App-Updates (`com.google.android.play:app-update-ktx`), `AppUpdates.kt`: beim Start prüfen, eigene
+  Meldung `ui/UpdateDialog.kt` (schräger Verlauf schwarz → rot), "Jetzt aktualisieren" = Googles IMMEDIATE-Update,
+  "Später" = 24 h Ruhe (Prefs `update_snoozed_at`), `onResume` setzt ein laufendes Update fort.
+  Geht nur bei Installation aus dem Play Store.
+- Test-Code **"Ningeupdate"** (nur Test-Versionen): Meldung nach 5 s als Vorschau, "Jetzt aktualisieren" tut dann nichts.

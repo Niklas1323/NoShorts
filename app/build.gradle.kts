@@ -102,4 +102,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     // Paywall und Abo (Google Play Billing läuft über Superwall).
     implementation("com.superwall.sdk:superwall-android:2.9.0")
+    // Update-Hinweis direkt in der App (Google Play In-App-Updates).
+    implementation("com.google.android.play:app-update-ktx:2.1.0")
 }

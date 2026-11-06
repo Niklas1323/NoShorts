@@ -122,3 +122,9 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
 - Gleiche App ist auf iOS unmöglich (keine Bedienungshilfe für fremde Apps, veränderte/nachgebaute YouTube-App nicht
   erlaubt). Möglich: Safari-Erweiterung (Shorts auf youtube.com ausblenden) + YouTube-App per Bildschirmzeit-API sperren
   (Family-Controls-Erlaubnis bei Apple beantragen). Braucht Mac, Apple-Konto 99 $/Jahr (auf Lucien), iPhone zum Testen.
+
+## 12. Updates (06.11.)
+- ✅ 🤖 Update-Hinweis in der App (Google In-App-Updates, eigene Meldung im Verlauf-Stil). Vorschau mit Code "Ningeupdate".
+      Echt prüfen erst, wenn die App im Play Store (interner Test) ist.
+- ⬜ 🤖 Später: Liste der YouTube-Knöpfe (`selectors.json`) online laden → kleine YouTube-Änderungen ohne App-Update
+      (dann Hinweis in der App + Datenschutzerklärung anpassen)

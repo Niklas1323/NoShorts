@@ -588,6 +588,26 @@ s("link_failed", "Couldn't open the link", "Link konnte nicht geöffnet werden",
   "Impossibile aprire il link", "No se pudo abrir el enlace", "Não foi possível abrir o link")
 
 
+
+# ---------------------------------------------------------------- Update-Hinweis (In-App-Updates)
+s("update_title", "Update available", "Update verfügbar", "Mise à jour disponible", "Aggiornamento disponibile",
+  "Actualización disponible", "Atualização disponível")
+s("update_text",
+  "A new version of F*ck Shorts is ready. YouTube changes its app often – updates keep Shorts blocked.",
+  "Eine neue Version von F*ck Shorts ist da. YouTube ändert seine App oft – Updates halten die Shorts blockiert.",
+  "Une nouvelle version de F*ck Shorts est prête. YouTube modifie souvent son appli : les mises à jour gardent les Shorts bloqués.",
+  "È pronta una nuova versione di F*ck Shorts. YouTube cambia spesso la sua app: gli aggiornamenti tengono bloccati gli Shorts.",
+  "Hay una nueva versión de F*ck Shorts. YouTube cambia su app a menudo: las actualizaciones mantienen los Shorts bloqueados.",
+  "Uma nova versão do F*ck Shorts está pronta. O YouTube muda o app com frequência: as atualizações mantêm os Shorts bloqueados.")
+s("update_now", "Update now", "Jetzt aktualisieren", "Mettre à jour", "Aggiorna ora", "Actualizar ahora", "Atualizar agora")
+s("update_later", "Later", "Später", "Plus tard", "Più tardi", "Más tarde", "Depois")
+s("code_update_demo", "Update message in 5 seconds…", "Update-Meldung in 5 Sekunden …",
+  "Message de mise à jour dans 5 secondes…", "Messaggio di aggiornamento tra 5 secondi…",
+  "Mensaje de actualización en 5 segundos…", "Mensagem de atualização em 5 segundos…")
+s("update_demo_done", "Preview only – nothing was updated.", "Nur Vorschau – nichts wurde aktualisiert.",
+  "Aperçu uniquement : rien n'a été mis à jour.", "Solo anteprima: non è stato aggiornato nulla.",
+  "Solo vista previa: no se actualizó nada.", "Só prévia: nada foi atualizado.")
+
 # ---------------------------------------------------------------- Türkisch (eigene Datei tr.py)
 import sys as _sys
 _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

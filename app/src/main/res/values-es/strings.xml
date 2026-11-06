@@ -161,6 +161,12 @@
     <string name="pro_with_code">Pro está desbloqueado con un código</string>
     <string name="youtube_missing">YouTube no está instalado</string>
     <string name="link_failed">No se pudo abrir el enlace</string>
+    <string name="update_title">Actualización disponible</string>
+    <string name="update_text">Hay una nueva versión de F*ck Shorts. YouTube cambia su app a menudo: las actualizaciones mantienen los Shorts bloqueados.</string>
+    <string name="update_now">Actualizar ahora</string>
+    <string name="update_later">Más tarde</string>
+    <string name="code_update_demo">Mensaje de actualización en 5 segundos…</string>
+    <string name="update_demo_done">Solo vista previa: no se actualizó nada.</string>
     <plurals name="progress_blocked">
         <item quantity="one">%1$d Short bloqueado. Recuperaste %2$s de tu vida.</item>
         <item quantity="many">%1$d Shorts bloqueados. Recuperaste %2$s de tu vida.</item>

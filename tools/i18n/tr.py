@@ -161,6 +161,12 @@ TR = {
     "pro_with_code": "Pro bir kodla açıldı",
     "youtube_missing": "YouTube yüklü değil",
     "link_failed": "Bağlantı açılamadı",
+    "update_title": "Güncelleme var",
+    "update_text": "F*ck Shorts'un yeni sürümü hazır. YouTube uygulamasını sık sık değiştirir; güncellemeler Shorts'u engelli tutar.",
+    "update_now": "Şimdi güncelle",
+    "update_later": "Sonra",
+    "code_update_demo": "Güncelleme mesajı 5 saniye içinde…",
+    "update_demo_done": "Sadece önizleme; hiçbir şey güncellenmedi.",
 }
 
 # Türkisch: Nach Zahlen bleibt das Wort im Singular, darum one = other.

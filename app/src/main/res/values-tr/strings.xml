@@ -161,6 +161,12 @@
     <string name="pro_with_code">Pro bir kodla açıldı</string>
     <string name="youtube_missing">YouTube yüklü değil</string>
     <string name="link_failed">Bağlantı açılamadı</string>
+    <string name="update_title">Güncelleme var</string>
+    <string name="update_text">F*ck Shorts\'un yeni sürümü hazır. YouTube uygulamasını sık sık değiştirir; güncellemeler Shorts\'u engelli tutar.</string>
+    <string name="update_now">Şimdi güncelle</string>
+    <string name="update_later">Sonra</string>
+    <string name="code_update_demo">Güncelleme mesajı 5 saniye içinde…</string>
+    <string name="update_demo_done">Sadece önizleme; hiçbir şey güncellenmedi.</string>
     <plurals name="progress_blocked">
         <item quantity="one">%1$d Short engellendi. Hayatının %2$s kadarını geri kazandın.</item>
         <item quantity="other">%1$d Short engellendi. Hayatının %2$s kadarını geri kazandın.</item>
