@@ -2,6 +2,7 @@ import React from 'react';
 import { Composition } from 'remotion';
 import { Ad, DURATION_S, FPS } from './Ad';
 import { Ad2, DURATION2_S, FPS2 } from './Ad2';
+import { Ad3, DURATION3_S, FPS3 } from './Ad3';
 
 export const Root: React.FC = () => (
   <>
@@ -11,5 +12,7 @@ export const Root: React.FC = () => (
     <Composition id="AdSilent" component={Ad} durationInFrames={Math.round(DURATION_S * FPS)} fps={FPS} width={1080} height={1920} defaultProps={{ withVoice: false }} />
     {/* Video 2: schnell, Stimme + Effekte (Silent = ohne Ton, Ton wird separat gemischt) */}
     <Composition id="Ad2Silent" component={Ad2} durationInFrames={Math.round(DURATION2_S * FPS2)} fps={FPS2} width={1080} height={1920} defaultProps={{ voice: false, sfx: false }} />
+    {/* Video 3: ohne Ton (Sound kommt auf TikTok dazu); Ad3Preview nur zum Anschauen, NIE hochladen */}
+    <Composition id="Ad3" component={Ad3} durationInFrames={Math.round(DURATION3_S * FPS3)} fps={FPS3} width={1080} height={1920} defaultProps={{ refSound: false }} />
   </>
 );
