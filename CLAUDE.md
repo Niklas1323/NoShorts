@@ -772,3 +772,16 @@ Ursache vermutlich: YouTube meldet seine Leiste beim Zurückfahren kurz etwas zu
   "Später" = 24 h Ruhe (Prefs `update_snoozed_at`), `onResume` setzt ein laufendes Update fort.
   Geht nur bei Installation aus dem Play Store.
 - Test-Code **"Ningeupdate"** (nur Test-Versionen): Meldung nach 5 s als Vorschau, "Jetzt aktualisieren" tut dann nichts.
+
+### 06.11.2026, spät (Cloud, NICHT am Handy getestet): Kamera-Menü nach Aufnahme, Video mit Werbung
+Video des Nutzers Bild für Bild (60 fps) ausgewertet:
+- **Kamera nach einer Aufnahme, X/Zurück:** YouTube zeigt das Blatt "Delete / Save and exit / Cancel" (Menü-Fenster,
+  `design_bottom_sheet`). Unsere galt es als ⋮-Menü und zeigte sich beim Hochfahren ~0,25 s über dem Blatt (2×). Jetzt
+  `menuOverBarless`: geht ein Menü über einer Seite ohne Leiste auf (`barlessWindowId`, unsere weg oder nur vorab
+  gezeigt), bleibt unsere weg. Normales Schliessen der Kamera unverändert. **Am Pixel prüfen:** Plus → aufnehmen →
+  X bzw. Zurück → Cancel / Save and exit / Delete; und Plus ohne Aufnahme → X (unsere sofort da wie vorher).
+- **Noch offen:** Video aus der Liste geöffnet, Werbung lief davor (Allianz): beim Öffnen stand unsere ~0,6 s über der
+  ladenden Video-Seite, beim Verlassen ~0,47 s (28 Bilder) echte Leiste mit Shorts. Vermutung: Player während Werbung
+  nicht als `watch_player` erkannt → kein "Video verlassen", erst "echte wieder da". Mit `adb logcat -s FuckShorts`
+  beim Verlassen eines Videos mit Werbung belegen. Andere Verlassen-Fälle im Video sauber (0–6 Bilder ohne Leiste).
+- Video 1 dieses Abends zeigte gar nicht unsere Leiste (Dienst aus/gesperrt), nicht auswertbar.

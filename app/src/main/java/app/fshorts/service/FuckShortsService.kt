@@ -164,6 +164,8 @@ class FuckShortsService : AccessibilityService() {
     private var menuOpen = false
     private var menuFront = false
     private var menuWindowId = -1
+    /** Das Menü ging über einer Seite ohne Leiste auf (z. B. Kamera: "Delete / Save and exit / Cancel"). */
+    private var menuOverBarless = false
     private var menuMinTop = Int.MAX_VALUE
     /** Wie stark YouTube hinter einem Menü abdunkelt (0..1), einmal gemessen. null = noch unbekannt. */
     private var menuDim: Float? = null
@@ -750,6 +752,16 @@ class FuckShortsService : AccessibilityService() {
             if (foreground.windowId != menuWindowId) {
                 menuWindowId = foreground.windowId
                 menuMinTop = Int.MAX_VALUE
+                // Auch nach "Kamera schliessen" (unsere vorab gezeigt): Mit Aufnahme geht stattdessen dieses Menü auf.
+                menuOverBarless = barlessWindowId != -1 && (!overlay.isShowing || now - preShownAt < PRE_SHOW_HOLD_MS)
+            }
+            if (menuOverBarless) {
+                // Darunter liegt keine echte Leiste (Kamera nach einer Aufnahme): unsere nie zeigen, auch nicht,
+                // während das Menü rein- oder rausfährt (vorher ~0,25 s unsere über dem Menü).
+                reason("Menü über Seite ohne Leiste")
+                hideAll()
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+                return
             }
             if (sheetTop != null) menuMinTop = minOf(menuMinTop, sheetTop)
             // Fährt es schon ein Stück runter, geht es zu: unsere schon jetzt zeigen, sonst sieht man die echte kurz.
@@ -776,6 +788,11 @@ class FuckShortsService : AccessibilityService() {
             return
         }
         menuOpen = false
+        if (menuOverBarless) {
+            // Nächstes Menü (vielleicht auf einer Seite mit Leiste) neu beurteilen.
+            menuOverBarless = false
+            menuWindowId = -1
+        }
         // Nur wenn YouTube schon vorne war: Beim Zurückkommen ist kurz ein kleines Startfenster vorne.
         if (youTubeActive && youTubeSince != 0L && now - youTubeSince > POPUP_AFTER_MS) popupFront(foreground)?.let { popup ->
             youTubeActive = true
