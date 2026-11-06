@@ -755,4 +755,6 @@ Einzelheiten und Belege: `docs/nachttest.md`.
 - R8 (`isMinifyEnabled`, `isShrinkResources`) in debug UND release, Regeln `app/proguard-rules.pro` (JNA für Superwalls
   supercel behalten, `app.fshorts.**` behalten). `abiFilters` nur arm64-v8a/armeabi-v7a. Test-APK 84 → 20 MB.
   Bei seltsamen Fehlern nach dem Update zuerst R8 verdächtigen (fehlende keep-Regel).
+- Release zusätzlich `app/proguard-release.pro`: R8 entfernt alle `android.util.Log`-Aufrufe (keine YouTube-Texte im
+  Systemprotokoll der Play-Store-Version). Test-Versionen (debug) loggen weiter, `adb logcat -s FuckShorts` geht dort.
 - Paywall 287624: Texte nach `device.deviceLanguageCode` (de/fr/it/es/pt/tr), per `set_dynamic_value` im Editor.

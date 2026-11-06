@@ -50,7 +50,7 @@ Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · �
 
 ## 4. App (Release-Version)
 - ⬜ 🤖 Signierte AAB-Datei (eigener Schlüssel, erstellt der Nutzer selbst, als GitHub-Secret)
-- ⬜ 🤖 "Ningeningetimer" und Protokolle mit YouTube-Texten im Release aus
+- ✅ 🤖 "Ningeningetimer" und Protokolle mit YouTube-Texten im Release aus
 - ⬜ 🤖 In den Einstellungen: "Not affiliated with YouTube or Google"
 - ⬜ 🤖 Optional: Bedienbarkeit (Beschreibungen für Knöpfe, Kontrast) prüfen
 - ⬜ 🤖 Sicherheit Release (aus Video-Checkliste): Release-Schlüssel **nie** ins Git (nur GitHub-Secret),
@@ -95,7 +95,8 @@ Kinder-Einwilligung (App sammelt keine Kinderdaten).
       `docs/play-store/store-eintrag.md`
 - ✅ 🤖 Anleitung Google-Play-Konto: `docs/play-store/anleitung-google-play-konto.md`
 - ⬜ 👤 12–15 Tester (Android + Gmail) sammeln; Entwicklername prüfen (Arbeitstitel "Brightmind Apps")
-- ⬜ 🤖 Später: Logcat-Ausgaben mit YouTube-Texten in der Release-Version abschalten
+- ✅ 🤖 Logcat-Ausgaben in der Play-Store-Version entfernt (`app/proguard-release.pro`, R8 entfernt alle `Log.*`-Aufrufe;
+      Test-Versionen behalten sie). Geprüft im fertigen Release-Code: kein Log-Aufruf aus `app.fshorts`.
 
 ## 9. Stand 05.11.2026, Nachmittag (Cloud): Sprachen
 - ✅ 🤖 App in 6 Sprachen: Englisch, Deutsch (Schweiz mit "ss"), Französisch, Italienisch, Spanisch, Portugiesisch.

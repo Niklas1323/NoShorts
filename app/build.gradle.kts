@@ -54,7 +54,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+                "proguard-release.pro", // ohne Logcat-Ausgaben
+            )
             // Ohne Secret wird die Release-Datei unsigniert gebaut (nur zur Kontrolle, dass alles kompiliert).
             signingConfigs.findByName("release")?.let { signingConfig = it }
         }
