@@ -800,3 +800,10 @@ Video des Nutzers Bild für Bild (60 fps) ausgewertet:
   ("vorne: w=-1"), darum hält `waitingForNewWindow`. Unsere stand in diesem Video nur 0–6 Bilder (46 fps) über der
   fertig aufgezoomten Kamera – früher verstecken würde die echte Leiste hinter der wachsenden Kamera zeigen. Bleibt so.
   Aussehen unserer Leiste mit älteren Videos verglichen: pixelgleich (Nutzer meinte, sie sei grösser).
+- 06.11. ~22:40: Protokoll kam zweimal identisch und abgeschnitten (endet 22:26:08 mitten in der Zeile) – Einfügen als
+  Text bricht ab. Jetzt: Steuerzeichen/Emoji im Protokoll entfernt, "Ningelog" speichert zusätzlich
+  `Downloads/fshorts-protokoll-HHMM.txt` (MediaStore, keine Berechtigung) → im Claude-Chat als Datei anhängen.
+- Video 4 (Build 152, ohne passendes Protokoll): (a) Werbung → Chrome Custom Tab öffnen: unsere ~0,4 s über dem schon
+  sichtbaren (schwarzen/weissen) Tab; zu: unsere ~0,15 s zu früh über dem wegfahrenden Tab. Nur unsere, nie die echte.
+  (b) Video mit laufender Werbung auf gescrollter Startseite runtergewischt (Mini-Player): ~0,36 s gar keine Leiste
+  (echte auch nicht, da weggescrollt). (c) YouTube kalt gestartet: 1 Bild echte Leiste (bekannt, App-Zoom).

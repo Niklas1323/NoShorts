@@ -607,6 +607,9 @@ s("code_update_demo", "Update message in 5 seconds…", "Update-Meldung in 5 Sek
 s("code_log_share", "Sharing the test log…", "Test-Protokoll wird geteilt …",
   "Partage du journal de test…", "Condivisione del registro di test…",
   "Compartiendo el registro de prueba…", "Compartilhando o registro de teste…")
+s("code_log_saved", "Test log saved in Downloads: %1$s", "Test-Protokoll in Downloads gespeichert: %1$s",
+  "Journal de test enregistré dans Téléchargements : %1$s", "Registro di test salvato in Download: %1$s",
+  "Registro de prueba guardado en Descargas: %1$s", "Registro de teste salvo em Downloads: %1$s")
 s("update_demo_done", "Preview only – nothing was updated.", "Nur Vorschau – nichts wurde aktualisiert.",
   "Aperçu uniquement : rien n'a été mis à jour.", "Solo anteprima: non è stato aggiornato nulla.",
   "Solo vista previa: no se actualizó nada.", "Só prévia: nada foi atualizado.")

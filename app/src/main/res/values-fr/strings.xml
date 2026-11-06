@@ -167,6 +167,7 @@
     <string name="update_later">Plus tard</string>
     <string name="code_update_demo">Message de mise à jour dans 5 secondes…</string>
     <string name="code_log_share">Partage du journal de test…</string>
+    <string name="code_log_saved">Journal de test enregistré dans Téléchargements : %1$s</string>
     <string name="update_demo_done">Aperçu uniquement : rien n\'a été mis à jour.</string>
     <plurals name="progress_blocked">
         <item quantity="one">%1$d Short bloqué. Tu as regagné %2$s de ta vie.</item>

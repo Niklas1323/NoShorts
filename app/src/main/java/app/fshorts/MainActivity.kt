@@ -193,8 +193,8 @@ private fun App() {
                 context.getString(R.string.code_update_demo)
             }
             Access.Redeem.ShareLog -> {
-                DebugLog.share(context)
-                context.getString(R.string.code_log_share)
+                val saved = DebugLog.share(context)
+                if (saved != null) context.getString(R.string.code_log_saved, saved) else context.getString(R.string.code_log_share)
             }
             Access.Redeem.Invalid -> context.getString(R.string.code_invalid)
         }

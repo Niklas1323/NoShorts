@@ -165,6 +165,7 @@ TR = {
     "update_text": "F*ck Shorts'un yeni sürümü hazır. YouTube uygulamasını sık sık değiştirir; güncellemeler Shorts'u engelli tutar.",
     "update_now": "Şimdi güncelle",
     "update_later": "Sonra",
+    "code_log_saved": "Test kaydı İndirilenler klasörüne kaydedildi: %1$s",
     "code_log_share": "Test kaydı paylaşılıyor…",
     "code_update_demo": "Güncelleme mesajı 5 saniye içinde…",
     "update_demo_done": "Sadece önizleme; hiçbir şey güncellenmedi.",

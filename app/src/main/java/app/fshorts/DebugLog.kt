@@ -21,25 +21,42 @@ object DebugLog {
 
     fun add(text: String) {
         if (!BuildConfig.DEBUG) return
-        val line = "${time.format(Date())} $text"
+        // Keine Zeilenumbrüche/Steuerzeichen: Beim Einfügen als Text brach das Protokoll sonst mittendrin ab.
+        val clean = text.map { if (it.isISOControl() || it.isSurrogate()) ' ' else it }.joinToString("")
+        val line = "${time.format(Date())} $clean"
         synchronized(lines) {
             lines.addLast(line)
             while (lines.size > MAX_LINES) lines.removeFirst()
         }
     }
 
-    fun share(context: Context) {
+    /** Speichert das Protokoll in "Downloads" (zum Anhängen im Claude-Chat) und öffnet das Teilen-Menü. */
+    fun share(context: Context): String? {
         val file = File(File(context.cacheDir, "."), "fshorts-protokoll.txt")
         val body = synchronized(lines) { lines.joinToString("\n") }
-        file.writeText(
-            "F*ck Shorts ${BuildConfig.VERSION_NAME} – ${android.os.Build.MODEL}, Android ${android.os.Build.VERSION.RELEASE}\n" +
-                "Uhrzeit beim Teilen: ${time.format(Date())}\n\n" + body + "\n",
-        )
+        val text = "F*ck Shorts ${BuildConfig.VERSION_NAME} – ${android.os.Build.MODEL}, Android ${android.os.Build.VERSION.RELEASE}\n" +
+            "Uhrzeit beim Teilen: ${time.format(Date())}\n\n" + body + "\n"
+        file.writeText(text)
+        val saved = runCatching { saveToDownloads(context, text) }.getOrNull()
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
         val send = Intent(Intent.ACTION_SEND)
             .setType("text/plain")
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        return saved
+    }
+
+    private fun saveToDownloads(context: Context, text: String): String {
+        val name = "fshorts-protokoll-${SimpleDateFormat("HHmm", Locale.ROOT).format(Date())}.txt"
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error("kein Platz in Downloads")
+        resolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) } ?: error("nicht schreibbar")
+        return name
     }
 }
