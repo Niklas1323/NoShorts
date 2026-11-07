@@ -218,7 +218,7 @@ class BottomBarOverlay(
      * Sanft nach unten wegfahren und danach verstecken (Tastatur geht auf, Video wird geöffnet) – statt einfach
      * zu verschwinden. Berührungen gehen dabei schon durch.
      */
-    fun slideAway(durationMs: Long, holdMs: Long = 0L) {
+    fun slideAway(durationMs: Long, holdMs: Long = 0L, fast: Boolean = false) {
         val v = view ?: return
         if (!isShowing || slide != null) return
         holdHiddenUntil = SystemClock.uptimeMillis() + durationMs + holdMs
@@ -227,7 +227,10 @@ class BottomBarOverlay(
         applyFlags()
         slide = android.animation.ObjectAnimator.ofFloat(v, View.TRANSLATION_Y, v.translationY, target.height().toFloat()).apply {
             duration = durationMs
-            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.6f, 1f)
+            // fast: Video geht auf, die Lade-Seite fährt in ~0,3 s über die Leiste. Der sanfte Start (0.4/0/0.6/1) liess
+            // sie noch darüber stehen; hier fährt sie sofort los und bremst erst am Ende.
+            interpolator = if (fast) android.view.animation.PathInterpolator(0f, 0f, 0.2f, 1f)
+            else android.view.animation.PathInterpolator(0.4f, 0f, 0.6f, 1f)
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     if (slide !== animation) return

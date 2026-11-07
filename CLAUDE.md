@@ -844,3 +844,25 @@ Terminal-Prompt `docs/test-prompt-07-11.md`. Regeln für beide Sitzungen: vor je
 `claude/intelligent-volta-4lochv`, kein Force-Push, kleine Commits sofort pushen (Terminal-Commits beginnen mit
 "Terminal:"), neuster getesteter Stand steht ganz oben in `docs/release-todo.md`. Tägliche Posteingangs-Prüfung
 (9:42, nur lesen, nie antworten) läuft in der Cloud-Sitzung; Testerliste lokal in `docs/tester-liste.md` (in .gitignore).
+
+### 07.11.2026 (Terminal, am Pixel getestet)
+Pixel 9, Android 17, YouTube 21.44.534, dunkel. Aufnahmen + Protokoll, lokal gebaut (versionCode 1, `adb install -r -d`).
+Test-Hilfen (Terminal-Sitzung, nicht im Repo): `onfeed`/`tofeed` prüfen vor jedem Tipp, ob die Startliste vorne ist (rotes
+Logo links oben), `miniclose` schliesst den Mini-Player (roter Fortschrittsstrich), `gap3` misst "Seite deckt ab" gegen
+"unsere Leiste bewegt sich". Nie blind tippen: ein Tipp bei offener Video-Seite zog die Benachrichtigungen auf.
+
+**Video aus der Liste öffnen (Lade-Seite):**
+- Gefunden: Unsere Leiste stand 0,4–0,5 s über der grauen Lade-Seite (echte nie sichtbar). "Video-Seite lädt" griff in 6 von 7
+  Läufen gar nicht (die Seite wird erst mit dem Player sichtbar), die Erkennung kam über den Player.
+- Ursache 1: Debug-Builds machten 0,3 s nach jedem Tipp einen Struktur-Dump ("nach-tipp") und beim Seitenwechsel "seite-32":
+  genau dann blockierten sie die Abfragen (`DIAGNOSTIC_DUMPS = false`, Aufbauten sind bekannt).
+- Ursache 2: Der Scan läuft auf dem Haupt-Thread (bis 0,45 s, solange YouTube die Seite aufbaut). Wir erkannten den Player
+  mittendrin (~80–120 ms nach dem Tipp), fuhren aber erst am Scan-Ende weg, und der Scan hielt die Animation an.
+  Jetzt: (a) nach einem Tipp in die Liste zuerst NUR `findWatchPlayer` (Protokoll "Video erkannt (nach Tipp, N ms)"),
+  (b) sobald der Player neu erkannt ist, sofort `hideSmooth()` und den Rest des Scans weglassen ("Video erkannt (früh)"),
+  (c) Wegfahren für Videos `VIDEO_SLIDE_MS` 280 ms mit schnellem Start (`PathInterpolator(0,0,0.2,1)`, `slideAway(fast = true)`),
+  vorher 450 ms mit sanftem Start (stand fast still, während die Seite hochfuhr). Suche/Tastatur/anderes unverändert (450 ms).
+- Gemessen (Bild für Bild): Abstand "Seite deckt ab" → "Leiste bewegt sich" vorher 0,37–0,53 s, jetzt 0,13–0,23 s. Echte
+  Leiste nie sichtbar. Rest = Tipp → Erkennung (~80 ms) + Rendern; schneller geht es nur mit Raten (nicht gemacht).
+- Fund am Rand: Beim Schliessen des Mini-Players (X) meldete der Sampler einmal "YouTube-Design gewechselt: hell", unsere
+  Leiste war ~30 s weiss auf dunklem YouTube (`Profilbild`-Sampler, Messung während der Mini-Player-Animation). Noch offen.

@@ -277,7 +277,7 @@ class FuckShortsService : AccessibilityService() {
             touchedSinceEnter = true
             lastTouchAt = SystemClock.uptimeMillis()
             if (shadeOverYouTube) onShadeTouched()
-            if (app.fshorts.BuildConfig.DEBUG) dumpAfterTapSoon(lastTouchAt)
+            if (DIAGNOSTIC_DUMPS && app.fshorts.BuildConfig.DEBUG) dumpAfterTapSoon(lastTouchAt)
             // Tipp auf ein Video in der Liste: YouTube zeigt die Video-Seite, meldet aber ~1 s gar nichts. Darum kurz
             // selbst laufend nachsehen (sonst stand unsere 0,5–1 s über der grauen Lade-Seite).
             if (youTubeActive && !watchPageOpen && lastTouchAt - watchClosedAt > TAP_AFTER_VIDEO_MS) {
@@ -324,7 +324,7 @@ class FuckShortsService : AccessibilityService() {
             // Video aus der Liste geöffnet: YouTube meldet ch=32, während die graue Lade-Seite zu sehen ist, ~0,3 s
             // bevor wir den Player erkennen. Genau dann den Aufbau speichern (Test-Protokoll).
             val now = SystemClock.uptimeMillis()
-            if (pkg == selectors.youtubePackage && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            if (DIAGNOSTIC_DUMPS && pkg == selectors.youtubePackage && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
                 event.contentChangeTypes and AccessibilityEvent.CONTENT_CHANGE_TYPE_PANE_DISAPPEARED != 0 &&
                 !watchPageOpen && now - lastPaneDumpAt > PANE_DUMP_INTERVAL_MS
             ) {
@@ -685,7 +685,7 @@ class FuckShortsService : AccessibilityService() {
 
     /** Sanft wegfahren statt verschwinden (Tastatur geht auf, Video wird geöffnet). Sonst wie [hideAll]. */
     private fun hideSmooth() {
-        if (overlay.isShowing && !overlay.isSliding) overlay.slideAway(SLIDE_AWAY_MS) else hideAll()
+        if (overlay.isShowing && !overlay.isSliding) overlay.slideAway(VIDEO_SLIDE_MS, fast = true) else hideAll()
     }
 
     private var lastReason = ""
@@ -965,6 +965,24 @@ class FuckShortsService : AccessibilityService() {
             return
         }
 
+        // Eben in die Liste getippt und unsere Leiste steht: zuerst NUR den Player suchen (eine Abfrage), nicht erst die
+        // echte Leiste. Während YouTube die Video-Seite aufbaut, kostet jede Abfrage 0,1–0,2 s; die Lade-Seite stand so
+        // bis 0,5 s über unserer Leiste.
+        if (!isTablet && !watchPageOpen && overlay.isShowing && !overlay.isSliding &&
+            now - feedTouchAt < TAP_PROBE_MS && feedTouchAt > watchClosedAt
+        ) {
+            val quick = scanner.findWatchPlayer(root, screen)
+            if (quick != null) {
+                watchNode = quick
+                watchTop = scanner.topOf(quick)
+                watchPageOpen = true
+                reason("Video erkannt (nach Tipp, ${now - feedTouchAt} ms)")
+                hideSmooth()
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+                return
+            }
+        }
+
         // Video offen: nur den Player nachsehen (eine Abfrage). Eine volle Suche dauert, während YouTube die
         // Video-Seite wegschiebt, bis zu 500 ms und hält so die Bild-für-Bild-Prüfung auf.
         onScreenSizeChanged(screenBounds())
@@ -1013,6 +1031,17 @@ class FuckShortsService : AccessibilityService() {
             // Test-Protokoll: Wie sah die Video-Seite aus, als wir sie erkannt haben? (Mit Werbung vorneweg kam die
             // Erkennung ~0,7 s zu spät.) Kurz danach speichern, damit das Verstecken nicht wartet.
             DebugLog.add("Video erkannt, letzte Berührung vor ${now - lastTouchAt} ms")
+        }
+
+        // Player eben erkannt: sofort wegfahren, nicht erst am Ende dieses Scans. Während YouTube die Seite aufbaut,
+        // dauert ein Scan bis 0,45 s; die Lade-Seite stand so ~0,2 s länger über unserer Leiste (gemessen 07.11.).
+        if (watchPageOpen && !watchWasOpen && overlay.isShowing && !overlay.isSliding) {
+            reason("Video erkannt (früh)")
+            hideSmooth()
+            // Den Rest des Scans nicht mehr machen: Er läuft auf dem Haupt-Thread (bis 0,3 s) und hielte die
+            // Wegfahr-Animation an. Der nächste Scan (nach dem Wegfahren) holt alles nach.
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return
         }
 
         // Video aus der Liste angetippt, Player noch nicht da: Die graue Lade-Seite deckt die echte Leiste schon ab.
@@ -2403,6 +2432,11 @@ class FuckShortsService : AccessibilityService() {
         private const val LOADING_RULE_MS = 5_000L
         private const val LOADING_HOLD_MS = 150L
         private const val SLIDE_AWAY_MS = 450L
+        private const val VIDEO_SLIDE_MS = 280L
+
+        // Struktur-Dumps nach Tipps (nur Test-Versionen) kosten 0,2–0,4 s Abfragezeit genau dann, wenn die Video-
+        // Lade-Seite aufgeht: unsere Leiste fuhr dadurch ~0,4 s zu spät weg. Die Aufbauten sind bekannt → aus.
+        private const val DIAGNOSTIC_DUMPS = false
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L
         private const val FEED_GRACE_MS = 600L
