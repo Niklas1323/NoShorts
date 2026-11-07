@@ -10,3 +10,4 @@ apk/
 
 .claude/settings.local.json
 docs/tester-liste.md
+__pycache__/
