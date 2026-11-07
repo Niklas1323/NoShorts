@@ -2,15 +2,13 @@
 
 Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · 🤖 macht Claude
 
-## 0. Tester und Automatisierung (Ideen, NOCH NICHT umsetzen – erst wenn Niklas es sagt)
-- ⬜ 👤🤖 **Auto-Antwort auf Tally-Anmeldungen:** jede Person bekommt nach dem Ausfüllen automatisch eine Mail
-      (z. B. "You're on the list, link comes in a few days"). Möglich über Tally (Bestätigungs-Mail, evtl. Tally Pro)
-      oder über Claude mit Gmail. Erst einrichten, wenn Niklas ausdrücklich Ja sagt.
-- ⬜ 👤 **Claude mit TikTok verbinden** (Kommentare "TEST" lesen). Braucht einen offiziellen Connector bzw. die
-      TikTok-API (Prüfung durch TikTok). Noch nicht machen.
-- ⬜ 👤 **Claude mit YouTube verbinden** (Kommentare lesen/beantworten). Noch nicht machen.
-- ⬜ 👤 **Claude mit der Google Play Console verbinden**, falls es dafür einen Weg gibt (z. B. Tester eintragen,
-      Prüfstatus lesen). Erst prüfen, ob es geht. Noch nicht machen.
+## 0. Tester und Automatisierung
+- ❌ Auto-Antwort auf Tally-Anmeldungen: nicht nötig (alle bekommen später den Test-Link), entschieden 07.11.
+- ⬜ 👤 **TikTok-Kommentare lesen über "Windsor.ai for Social Media"** (Gratis-Plan: 1 Quelle, 1 Konto, letzte 30 Tage;
+      TikTok liefert laut Windsor Kommentare; braucht Creator-/Business-Konto). Schritte: TikTok auf Creator umstellen,
+      Connector auf claude.ai verbinden, dann testet Claude und baut es in den Tagesbericht ein.
+- ⬜ YouTube-Kommentare: bei Windsor unklar, ob Kommentartexte dabei sind; 2. Quelle kostet ~19 $/Monat. Vorerst selbst schauen.
+- ❌ Play Console verbinden: nicht nötig. Beim Teststart macht Claude eine Komma-Liste der Tester-Adressen zum Einfügen.
 
 ## 1. Datenschutzerklärung (jetzt)
 - ✅ Gratis-Version bei FreePrivacyPolicy erstellt, E-Mail bestätigt
