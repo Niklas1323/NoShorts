@@ -838,3 +838,9 @@ Video des Nutzers Bild für Bild (60 fps) ausgewertet:
   (`feedTouchAt`, nicht auf einer Video-Seite, nicht 0,8 s nach Video zu) und solange seither kein Video zuging.
   **Am Handy prüfen:** Video aus der Liste öffnen (mit/ohne Werbung), Mini-Player aufklappen, Zurück auf der
   Lade-Seite, Video verlassen (Zurück/Wischen), Scrollen der Startseite (unsere darf nie wegfahren), Tabs.
+
+### 07.11.2026 (Cloud): Zusammenarbeit Cloud + Terminal
+Terminal-Prompt `docs/test-prompt-07-11.md`. Regeln für beide Sitzungen: vor jeder Änderung `git pull`, nur auf
+`claude/intelligent-volta-4lochv`, kein Force-Push, kleine Commits sofort pushen (Terminal-Commits beginnen mit
+"Terminal:"), neuster getesteter Stand steht ganz oben in `docs/release-todo.md`. Tägliche Posteingangs-Prüfung
+(9:42, nur lesen, nie antworten) läuft in der Cloud-Sitzung; Testerliste lokal in `docs/tester-liste.md` (in .gitignore).
