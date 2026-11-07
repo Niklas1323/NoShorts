@@ -2,6 +2,16 @@
 
 Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · 🤖 macht Claude
 
+## 0. Tester und Automatisierung (Ideen, NOCH NICHT umsetzen – erst wenn Niklas es sagt)
+- ⬜ 👤🤖 **Auto-Antwort auf Tally-Anmeldungen:** jede Person bekommt nach dem Ausfüllen automatisch eine Mail
+      (z. B. "You're on the list, link comes in a few days"). Möglich über Tally (Bestätigungs-Mail, evtl. Tally Pro)
+      oder über Claude mit Gmail. Erst einrichten, wenn Niklas ausdrücklich Ja sagt.
+- ⬜ 👤 **Claude mit TikTok verbinden** (Kommentare "TEST" lesen). Braucht einen offiziellen Connector bzw. die
+      TikTok-API (Prüfung durch TikTok). Noch nicht machen.
+- ⬜ 👤 **Claude mit YouTube verbinden** (Kommentare lesen/beantworten). Noch nicht machen.
+- ⬜ 👤 **Claude mit der Google Play Console verbinden**, falls es dafür einen Weg gibt (z. B. Tester eintragen,
+      Prüfstatus lesen). Erst prüfen, ob es geht. Noch nicht machen.
+
 ## 1. Datenschutzerklärung (jetzt)
 - ✅ Gratis-Version bei FreePrivacyPolicy erstellt, E-Mail bestätigt
 - ✅ Paywall: "Terms of Service" (Apple) entfernt, "Privacy Policy" zeigt auf unsere Erklärung, gespeichert
