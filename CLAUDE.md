@@ -890,3 +890,17 @@ systemui, nicht Splitscreen) bis 1,5 s nach einer Berührung versteckt unsere SO
 Gemessen: nur noch 1 Bild unsere über dem Tab, echte nie sichtbar. Schliessen (Zurück): unsere kommt ~0,25 s, während der Tab noch
 wegfährt (nur unsere über dem Tab, echte nie; der Tab deckt die Leiste bis zuletzt) – bleibt, früher sicher ist besser als zu spät.
 Video minimieren auf gescrollter Startseite: ~0,3 s keine Leiste (es gibt dort keine echte; YouTube meldet erst nach Beginn des Wischens).
+
+**Zusammenfassung Terminal-Test 07./08.11.2026 (Pixel 9, YouTube 21.44.534, Stand 6a7f79c = Build 181):**
+| Test | Ergebnis | behoben? |
+|---|---|---|
+| Video aus Liste öffnen (Lade-Seite) | vorher unsere 0,4–0,5 s über der Lade-Seite, jetzt 0,1–0,3 s; echte nie | ja (Build 181) |
+| Scrollen Startseite 110 s (3458 Bilder) | unsere nie weg, echte nie, kein "Video-Seite lädt" ohne Video | ok |
+| Lücke unter Leiste nach Hochscrollen | Unterkante = Bildschirmrand | ok |
+| Video verlassen: Zurück / Geste / Wischen | Zurück + Geste sauber; Wischen vorher ~12 Bilder echte, jetzt 0–2 schwache | ja |
+| Werbung → Chrome Custom Tab | öffnen: 1 Bild unsere über Tab (vorher ~0,3 s); schliessen: unsere ~0,25 s über dem wegfahrenden Tab (nur unsere) | grösstenteils |
+| Plus → Kamera ohne Aufnahme, X | sauber | ok |
+| Kamera mit Aufnahme, X → Blatt | vorher unsere ~4 Bilder über dem Blatt, jetzt sauber (Delete/Save/Cancel-Blatt nur "Neu beginnen" geprüft, nichts gespeichert) | ja |
+| Mini-Player runterwischen / aufklappen / schliessen | aufklappen sauber; runterwischen auf gescrollter Startseite ~0,3 s keine Leiste (dort gibt es keine echte) | offen (kosmetisch) |
+| Tabs 15/15, Suche, ⋮, Short antippen, Benachrichtigungen, hell/dunkel | alles sauber | ok |
+Offen: Mini-Player-Schliessen kann den Design-Sampler kurz auf "hell" kippen (Leiste ~30 s weiss, einmal gesehen, nicht nachgestellt).

@@ -1,3 +1,5 @@
+Neuster getesteter Stand: 6a7f79c, Build 181 (Terminal-Test am Pixel 9, 08.11.2026; danach nur Doku-Commits)
+
 # F*ck Shorts – To-do bis zum Release
 
 Stand: 03.11.2026. ⬜ offen · ✅ erledigt · 👤 machst du/deine Eltern · 🤖 macht Claude
