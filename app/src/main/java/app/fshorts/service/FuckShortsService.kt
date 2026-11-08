@@ -229,7 +229,18 @@ class FuckShortsService : AccessibilityService() {
                 return@Runnable
             }
         }
-        lastScanAt = SystemClock.uptimeMillis()
+        val nowQuiet = SystemClock.uptimeMillis()
+        // Video offen, unsere Leiste weg: Das Nachführen jedes Bildes (Poll, eine Abfrage) erkennt das Verlassen
+        // ohnehin. Eine volle Suche kostet 150–340 ms und hielt, wenn sie gerade beim Wegwischen lief, alles auf
+        // (3–4 Bilder echte Leiste mehr). Darum dann nur alle 3 s eine volle Suche.
+        if (watchPageOpen && watchNode != null && !overlay.isShowing && polling && youTubeActive &&
+            nowQuiet >= fastUntil && nowQuiet >= tapProbeUntil && nowQuiet >= watchRelearnUntil &&
+            nowQuiet - lastScanAt < QUIET_FULL_SCAN_MS && screenBounds() == screen
+        ) {
+            handler.postDelayed({ scheduleScan() }, QUIET_FULL_SCAN_MS - (nowQuiet - lastScanAt))
+            return@Runnable
+        }
+        lastScanAt = nowQuiet
         scan()
     }
 
@@ -2467,6 +2478,7 @@ class FuckShortsService : AccessibilityService() {
         private const val DIALOG_SHOWN_MS = 1_000L
         private const val POPUP_AFTER_MS = 1_000L
         private const val POLL_DURATION_MS = 500L
+        private const val QUIET_FULL_SCAN_MS = 3_000L
         private const val NAV_LINK_MS = 1_500L
         private const val VERIFY_MS = 400L
         private const val FAST_WINDOW_MS = 1_500L
