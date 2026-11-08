@@ -4,6 +4,7 @@ import { BarIcon, Logo, RED, ease, lin, useFonts } from './Ad';
 import { MAP6 } from './map6';
 import { MAP6M } from './map6M';
 import { MAP6V, MAP6V_SIGN } from './map6v';
+import { MAP6V3, MAP6V3_SIGN } from './map6v3';
 
 /**
  * Werbevideo 6 "Stop giving a sh*t" (quer 16:9). Anfang = dieselben Sätze und derselbe Bildaufbau wie das Original
@@ -442,29 +443,30 @@ const JUMPS_M = jumps(MAP6M);
 /** Fassung 2 (mehr Schimpfwörter, Schluss "Comment TEST + Link in Bio"): wird beim Rendern gesetzt. */
 const V2 = { on: false, signAt: 49.2 };
 
-export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean; v2?: boolean }> = ({ voice, fast, mid, v2 }) => {
-  V2.on = !!v2;
-  V2.signAt = v2 ? MAP6V_SIGN : 49.2;
+export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean; v2?: boolean; v3?: boolean }> = ({ voice, fast, mid, v2, v3 }) => {
+  V2.on = !!(v2 || v3);
+  V2.signAt = v3 ? MAP6V3_SIGN : v2 ? MAP6V_SIGN : 49.2;
+  const hard = v3 ? 1.7 : 1;
   useFonts();
   const frame = useCurrentFrame();
-  const t = v2 ? toOrig(MAP6V, 1.0, frame / FPS6) : fast ? toOrig(MAP6, 1.5, frame / FPS6) : mid ? toOrig(MAP6M, 1.3, frame / FPS6) : frame / FPS6;
+  const t = v3 ? toOrig(MAP6V3, 1.0, frame / FPS6) : v2 ? toOrig(MAP6V, 1.0, frame / FPS6) : fast ? toOrig(MAP6, 1.5, frame / FPS6) : mid ? toOrig(MAP6M, 1.3, frame / FPS6) : frame / FPS6;
   const PUNCH = fast ? [...PUNCH0, ...JUMPS] : mid ? [...PUNCH0, ...JUMPS_M] : PUNCH0;
   const FLASH = fast ? [...FLASH0, ...JUMPS.filter((_, i) => i % 2 === 0)] : FLASH0;
   const pk = Math.max(0, ...PUNCH.map((p) => (t >= p ? Math.exp(-(t - p) / 0.11) : 0)));
   const sk = Math.max(0, ...SHAKE.map((p) => (t >= p && t < p + 0.3 ? 1 - (t - p) / 0.3 : 0)));
   const fl = Math.max(0, ...FLASH.map((p) => (t >= p && t < p + 0.12 ? 1 - (t - p) / 0.12 : 0)));
-  const dx = sk * 14 * Math.sin(t * 97);
-  const dy = sk * 10 * Math.cos(t * 83);
+  const dx = hard * sk * 14 * Math.sin(t * 97);
+  const dy = hard * sk * 10 * Math.cos(t * 83);
   return (
     <AbsoluteFill style={{ background: 'radial-gradient(60% 70% at 50% 50%, #141010 0%, #000 75%)', fontFamily: F, overflow: 'hidden' }}>
-      {voice && <Audio src={staticFile(v2 ? 'voice6v2.wav' : fast ? 'voice6fast.wav' : mid ? 'voice6fastM.wav' : 'voice6.wav')} />}
-      {voice && <Audio src={staticFile(v2 ? 'sfx6v2.wav' : fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={fast || mid || v2 ? 0.35 : 0.5} />}
-      <AbsoluteFill style={{ transform: `translate(${dx}px, ${dy}px) scale(${1 + 0.06 * pk})` }}>
+      {voice && <Audio src={staticFile(v3 ? 'voice6v3.wav' : v2 ? 'voice6v2.wav' : fast ? 'voice6fast.wav' : mid ? 'voice6fastM.wav' : 'voice6.wav')} />}
+      {voice && <Audio src={staticFile(v3 ? 'sfx6v3.wav' : v2 ? 'sfx6v2.wav' : fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={fast || mid || v2 || v3 ? 0.35 : 0.5} />}
+      <AbsoluteFill style={{ transform: `translate(${dx}px, ${dy}px) scale(${1 + 0.06 * hard * pk})` }}>
         <S1 t={t} /><S2 t={t} /><S3 t={t} /><S4 t={t} /><S5 t={t} /><S6 t={t} /><S7 t={t} />
         <S8 t={t} /><S9 t={t} /><S10 t={t} /><S11 t={t} /><S12 t={t} /><S13 t={t} />
       </AbsoluteFill>
       <AbsoluteFill style={{ background: '#fff', opacity: fl * 0.3, pointerEvents: 'none' }} />
-      <AbsoluteFill style={{ background: `radial-gradient(70% 60% at 50% 50%, transparent 55%, rgba(229,23,43,${0.18 * sk}) 100%)`, pointerEvents: 'none' }} />
+      <AbsoluteFill style={{ background: `radial-gradient(70% 60% at 50% 50%, transparent 55%, rgba(229,23,43,${(v3 ? 0.08 : 0) + 0.18 * hard * sk}) 100%)`, pointerEvents: 'none' }} />
     </AbsoluteFill>
   );
 };
