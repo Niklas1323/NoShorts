@@ -2,6 +2,7 @@ import React from 'react';
 import { AbsoluteFill, Audio, random, staticFile, useCurrentFrame } from 'remotion';
 import { BarIcon, Logo, RED, ease, lin, useFonts } from './Ad';
 import { MAP6 } from './map6';
+import { MAP6M } from './map6M';
 
 /**
  * Werbevideo 6 "Stop giving a sh*t" (quer 16:9). Anfang = dieselben Sätze und derselbe Bildaufbau wie das Original
@@ -420,21 +421,23 @@ const SHAKE = [1.18, 5.46, 13.5, 19.94, 23.74, 25.18, 32.32, 35.78, 37.86, 46.64
 const FLASH0 = [1.18, 13.5, 19.94, 20.98, 21.98, 22.72, 23.74, 25.18, 35.78, 37.86];
 
 /** Schnelle Fassung: echte Zeit -> Zeit der Original-Aufnahme (Pausen sind Sprünge = harte Schnitte). */
-const toOrig = (x: number) => {
-  for (let i = MAP6.length - 1; i > 0; i--) {
-    const [n1, o1] = MAP6[i - 1];
-    const [n2, o2] = MAP6[i];
+const toOrig = (M: [number, number][], tempo: number, x: number) => {
+  for (let i = M.length - 1; i > 0; i--) {
+    const [n1, o1] = M[i - 1];
+    const [n2, o2] = M[i];
     if (x >= n1 && n2 > n1 && x <= n2) return o1 + ((x - n1) / (n2 - n1)) * (o2 - o1);
   }
-  return MAP6[MAP6.length - 1][1] + (x - MAP6[MAP6.length - 1][0]) * 1.5;
+  return M[M.length - 1][1] + (x - M[M.length - 1][0]) * tempo;
 };
-const JUMPS = MAP6.filter((p, i) => i > 0 && MAP6[i - 1][0] === p[0]).map((p) => p[1]);
+const jumps = (M: [number, number][]) => M.filter((p, i) => i > 0 && M[i - 1][0] === p[0]).map((p) => p[1]);
+const JUMPS = jumps(MAP6);
+const JUMPS_M = jumps(MAP6M);
 
-export const Ad6: React.FC<{ voice: boolean; fast?: boolean }> = ({ voice, fast }) => {
+export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean }> = ({ voice, fast, mid }) => {
   useFonts();
   const frame = useCurrentFrame();
-  const t = fast ? toOrig(frame / FPS6) : frame / FPS6;
-  const PUNCH = fast ? [...PUNCH0, ...JUMPS] : PUNCH0;
+  const t = fast ? toOrig(MAP6, 1.5, frame / FPS6) : mid ? toOrig(MAP6M, 1.3, frame / FPS6) : frame / FPS6;
+  const PUNCH = fast ? [...PUNCH0, ...JUMPS] : mid ? [...PUNCH0, ...JUMPS_M] : PUNCH0;
   const FLASH = fast ? [...FLASH0, ...JUMPS.filter((_, i) => i % 2 === 0)] : FLASH0;
   const pk = Math.max(0, ...PUNCH.map((p) => (t >= p ? Math.exp(-(t - p) / 0.11) : 0)));
   const sk = Math.max(0, ...SHAKE.map((p) => (t >= p && t < p + 0.3 ? 1 - (t - p) / 0.3 : 0)));
@@ -443,8 +446,8 @@ export const Ad6: React.FC<{ voice: boolean; fast?: boolean }> = ({ voice, fast 
   const dy = sk * 10 * Math.cos(t * 83);
   return (
     <AbsoluteFill style={{ background: 'radial-gradient(60% 70% at 50% 50%, #141010 0%, #000 75%)', fontFamily: F, overflow: 'hidden' }}>
-      {voice && <Audio src={staticFile(fast ? 'voice6fast.wav' : 'voice6.wav')} />}
-      {voice && <Audio src={staticFile(fast ? 'sfx6fast.wav' : 'sfx6.wav')} volume={0.5} />}
+      {voice && <Audio src={staticFile(fast ? 'voice6fast.wav' : mid ? 'voice6fastM.wav' : 'voice6.wav')} />}
+      {voice && <Audio src={staticFile(fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={0.5} />}
       <AbsoluteFill style={{ transform: `translate(${dx}px, ${dy}px) scale(${1 + 0.06 * pk})` }}>
         <S1 t={t} /><S2 t={t} /><S3 t={t} /><S4 t={t} /><S5 t={t} /><S6 t={t} /><S7 t={t} />
         <S8 t={t} /><S9 t={t} /><S10 t={t} /><S11 t={t} /><S12 t={t} /><S13 t={t} />

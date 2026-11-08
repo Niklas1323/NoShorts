@@ -4,8 +4,10 @@ Schreibt public/voice6fast.wav und src/map6.ts (Zeitkarte schnell -> original)."
 import json, os, subprocess, wave
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
-TEMPO = 1.5
-KEEP = 0.10
+import sys
+TEMPO = float(sys.argv[1]) if len(sys.argv) > 1 else 1.5
+KEEP = float(sys.argv[2]) if len(sys.argv) > 2 else 0.10
+SUF = sys.argv[3] if len(sys.argv) > 3 else ""
 w = wave.open(os.path.join(HERE, "public/voice6.wav")); sr = w.getframerate(); ch = w.getnchannels()
 a = np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, ch).astype(np.float32)
 mono = np.abs(a).mean(1)
@@ -32,13 +34,13 @@ cut = np.concatenate(out).astype(np.int16)
 tmp = os.path.join(HERE, "public/_cut6.wav")
 with wave.open(tmp, "wb") as o:
     o.setnchannels(ch); o.setsampwidth(2); o.setframerate(sr); o.writeframes(cut.tobytes())
-subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", tmp, "-af", f"atempo={TEMPO}", os.path.join(HERE, "public/voice6fast.wav")], check=True)
+subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", tmp, "-af", f"atempo={TEMPO}", os.path.join(HERE, f"public/voice6fast{SUF}.wav")], check=True)
 os.remove(tmp)
 pts = [(o, n / TEMPO) for o, n in pts]
-with open(os.path.join(HERE, "src/map6.ts"), "w") as f:
+with open(os.path.join(HERE, f"src/map6{SUF}.ts"), "w") as f:
     f.write("// Zeitkarte Video 6 schnell: [neu, original] (erzeugt von fast6.py)\n")
-    f.write("export const MAP6: [number, number][] = " + json.dumps([[round(n, 3), round(o, 3)] for o, n in pts]) + ";\n")
-    f.write(f"export const DURATION6F_S = {round(pts[-1][1] + 1.6, 2)};\n")
-with open(os.path.join(HERE, "map6.json"), "w") as f:
+    f.write(f"export const MAP6{SUF}: [number, number][] = " + json.dumps([[round(n, 3), round(o, 3)] for o, n in pts]) + ";\n")
+    f.write(f"export const DURATION6F{SUF}_S = {round(pts[-1][1] + 1.6, 2)};\n")
+with open(os.path.join(HERE, f"map6{SUF}.json"), "w") as f:
     json.dump(pts, f)
 print("Pausen gekürzt:", len(segs), "neu", round(pts[-1][1], 2), "s (vorher", round(len(a) / sr, 2), ")")

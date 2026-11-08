@@ -126,7 +126,8 @@ def riser(length=0.8):
 FAST = os.environ.get("FAST") == "1"
 if FAST:
     import json as _json
-    _pts = _json.load(open(os.path.join(HERE, "map6.json")))  # [original, neu]
+    _SUF = os.environ.get("SUF", "")
+    _pts = _json.load(open(os.path.join(HERE, f"map6{_SUF}.json")))  # [original, neu]
     def _to_new(x):
         for (o1, n1), (o2, n2) in zip(_pts, _pts[1:]):
             if o1 <= x <= o2:
@@ -135,7 +136,7 @@ if FAST:
     _add = add
     def add(sig, at, gain=1.0, pan=0.0):
         _add(sig, None if at is None else _to_new(at), gain, pan)
-    out = np.zeros((int(26.7 * SR), 2))
+    out = np.zeros((int((_pts[-1][1] + 1.7) * SR), 2))
 
 # Anfang wie das Original (ruhig, Stösse auf den Schlüsselwörtern)
 add(hit(0.7, 50), 0.0, 0.7); add(hit(0.9, 45), 1.18, 0.8)
@@ -176,7 +177,7 @@ if FAST:
             _add(whoosh(0.18, True), max(0, n1 - 0.08), 0.5); _add(hit(0.25, 90), n1, 0.35)
     peak = np.max(np.abs(out)) or 1
     out = out / peak * 0.85
-with wave.open(os.path.join(HERE, "public/sfx6fast.wav" if FAST else "public/sfx6.wav"), "wb") as w:
+with wave.open(os.path.join(HERE, f"public/sfx6fast{_SUF}.wav" if FAST else "public/sfx6.wav"), "wb") as w:
     w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
     w.writeframes((out * 32767).astype(np.int16).tobytes())
 print("ok")
