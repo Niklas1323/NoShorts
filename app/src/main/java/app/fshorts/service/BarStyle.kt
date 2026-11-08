@@ -28,11 +28,18 @@ data class BarStyle(
     companion object {
         // Feste, deckende Farben wie im Vorlagenbild. Unsere Leiste muss deckend sein, sonst scheint der
         // Shorts-Knopf der echten (durchsichtigen) Leiste durch.
-        fun default(dark: Boolean, avatar: ImageBitmap? = null, icons: Map<String, ImageBitmap> = emptyMap()) =
+        // Tablet, dunkel: Die echte Leiste ist dort #0F0F0F (wie die Seite), der Plus-Kreis #262626 (am Galaxy Tab A8
+        // gemessen). Auf dem Handy ist sie #1C1C1C / #2B2B2B.
+        fun default(
+            dark: Boolean,
+            avatar: ImageBitmap? = null,
+            icons: Map<String, ImageBitmap> = emptyMap(),
+            tablet: Boolean = false,
+        ) =
             BarStyle(
-                background = if (dark) Color(0xFF1C1C1C) else Color.White,
+                background = if (dark) Color(if (tablet) 0xFF0F0F0F else 0xFF1C1C1C) else Color.White,
                 content = if (dark) Color(0xFFF1F1F1) else Color(0xFF0F0F0F),
-                plusBackground = if (dark) Color(0xFF2B2B2B) else Color(0xFFF2F2F2),
+                plusBackground = if (dark) Color(if (tablet) 0xFF262626 else 0xFF2B2B2B) else Color(0xFFF2F2F2),
                 handle = if (dark) Color(0xFFEBEBEB) else Color(0xFF1F1F1F),
                 avatar = avatar,
                 icons = icons,
@@ -74,7 +81,9 @@ class BarStyleSampler(private val service: AccessibilityService) {
         dir.listFiles()?.filter { it.name.startsWith("icon_") }?.forEach { it.delete() }
     }
 
-    fun style(nightMode: Boolean): BarStyle = BarStyle.default(dark ?: nightMode, avatar, icons.toMap())
+    private val tablet = service.resources.configuration.smallestScreenWidthDp >= 600
+
+    fun style(nightMode: Boolean): BarStyle = BarStyle.default(dark ?: nightMode, avatar, icons.toMap(), tablet)
 
     fun reset() {
         dark = null
