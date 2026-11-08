@@ -177,6 +177,7 @@ class FuckShortsService : AccessibilityService() {
     private var menuWindowId = -1
     /** Das Menü ging über einer Seite ohne Leiste auf (z. B. Kamera: "Delete / Save and exit / Cancel"). */
     private var menuOverBarless = false
+    private var saveExitAt = 0L
     private var menuMinTop = Int.MAX_VALUE
     /** Wie stark YouTube hinter einem Menü abdunkelt (0..1), einmal gemessen. null = noch unbekannt. */
     private var menuDim: Float? = null
@@ -387,6 +388,7 @@ class FuckShortsService : AccessibilityService() {
                     }
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                         if (closesBarlessPage(event)) showBeforeBarlessCloses(event)
+                        else if (savesAndExitsCamera(event)) showAfterSaveExit()
                         // Lupe oben: Die Tastatur kommt gleich, gemeldet wird sie erst, wenn sie ganz da ist. Unsere
                         // fährt schon jetzt sanft weg (die Seite mit den Vorschlägen hat keine Leiste).
                         if (isSearchButton(event) && overlay.isShowing && !watchPageOpen) {
@@ -679,6 +681,26 @@ class FuckShortsService : AccessibilityService() {
         continueScanSoon()
     }
 
+    /** Tipp auf "Entwurf speichern und beenden" im Blatt über der Kamera mit Aufnahme? Dann geht die Kamera gleich zu. */
+    private fun savesAndExitsCamera(event: AccessibilityEvent): Boolean {
+        if (!menuOverBarless || event.windowId != menuWindowId) return false
+        val label = (event.contentDescription ?: event.text.firstOrNull())?.toString()?.trim()?.lowercase() ?: return false
+        return SAVE_EXIT_WORDS.any { label.contains(it) }
+    }
+
+    /** Kamera geht nach "Speichern und beenden" zu: Android meldet die Seite erst, wenn die echte Leiste schon da ist. */
+    private fun showAfterSaveExit() {
+        val rest = restBounds ?: return
+        val state = lastUiState ?: return
+        if (watchPageOpen || overlay.isShowing) return
+        reason("Entwurf speichern und beenden, unsere vorab zeigen")
+        preShownAt = SystemClock.uptimeMillis()
+        saveExitAt = preShownAt
+        hiddenByScroll = false
+        overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        continueScanSoon()
+    }
+
     private fun scan() {
         handler.removeCallbacks(watchdog)
         val started = SystemClock.uptimeMillis()
@@ -840,6 +862,11 @@ class FuckShortsService : AccessibilityService() {
                 menuMinTop = Int.MAX_VALUE
                 // Auch nach "Kamera schliessen" (unsere vorab gezeigt): Mit Aufnahme geht stattdessen dieses Menü auf.
                 menuOverBarless = barlessWindowId != -1 && (!overlay.isShowing || now - preShownAt < PRE_SHOW_HOLD_MS)
+            }
+            if (menuOverBarless && now - saveExitAt < PRE_SHOW_HOLD_MS) {
+                // "Speichern und beenden" getippt: Kamera und Blatt gehen zu, unsere steht schon bereit.
+                handler.postDelayed({ scheduleScan() }, POLL_MS)
+                return
             }
             if (menuOverBarless) {
                 // Darunter liegt keine echte Leiste (Kamera nach einer Aufnahme): unsere nie zeigen, auch nicht,
@@ -2497,6 +2524,7 @@ class FuckShortsService : AccessibilityService() {
         private const val SHELF_MENU_HOLD_MS = 500L
         private const val SHELF_MENU_TIMEOUT_MS = 3_000L
         private const val PRE_SHOW_HOLD_MS = 700L
+        private val SAVE_EXIT_WORDS = listOf("speichern", "save", "enregistrer", "guardar", "salva", "sauvegarder")
         private const val CREATE_HOLD_MS = 1_500L
         private const val NAV_HOLD_MS = 800L
         private const val THEME_HOLD_MS = 1_500L
