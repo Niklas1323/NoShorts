@@ -6,6 +6,7 @@ import { Ad3, DURATION3_S, FPS3 } from './Ad3';
 import { Ad4, DURATION4_S, FPS4 } from './Ad4';
 import { Ad5, DURATION5_S, FPS5 } from './Ad5';
 import { Ad6, DURATION6_S, FPS6 } from './Ad6';
+import { DURATION6F_S } from './map6';
 
 export const Root: React.FC = () => (
   <>
@@ -23,5 +24,7 @@ export const Root: React.FC = () => (
     <Composition id="Ad5" component={Ad5} durationInFrames={Math.round(DURATION5_S * FPS5)} fps={FPS5} width={1920} height={1080} defaultProps={{ voice: true }} />
     {/* Video 6: "Stop giving a sh*t" – Anfang wie das Original, dann F*ck Shorts */}
     <Composition id="Ad6" component={Ad6} durationInFrames={Math.round(DURATION6_S * FPS6)} fps={FPS6} width={1920} height={1080} defaultProps={{ voice: true }} />
+    {/* Video 6 schnell: Pausen raus, Tempo x1.5, harte Schnitte = halbe Länge */}
+    <Composition id="Ad6Fast" component={Ad6} durationInFrames={Math.round(DURATION6F_S * FPS6)} fps={FPS6} width={1920} height={1080} defaultProps={{ voice: true, fast: true }} />
   </>
 );

@@ -121,6 +121,22 @@ def riser(length=0.8):
     f = 200 + 1800 * (t / length) ** 2
     return np.sin(2 * np.pi * np.cumsum(f) / SR) * (t / length) ** 2 * 0.35 + whoosh(length, True) * 0.4
 
+
+# Schnelle Fassung (FAST=1): Zeiten über die Zeitkarte von fast6.py umrechnen, plus Schnitt-Stösse.
+FAST = os.environ.get("FAST") == "1"
+if FAST:
+    import json as _json
+    _pts = _json.load(open(os.path.join(HERE, "map6.json")))  # [original, neu]
+    def _to_new(x):
+        for (o1, n1), (o2, n2) in zip(_pts, _pts[1:]):
+            if o1 <= x <= o2:
+                return n1 if o2 == o1 else n1 + (x - o1) / (o2 - o1) * (n2 - n1)
+        return _pts[-1][1]
+    _add = add
+    def add(sig, at, gain=1.0, pan=0.0):
+        _add(sig, None if at is None else _to_new(at), gain, pan)
+    out = np.zeros((int(26.7 * SR), 2))
+
 # Anfang wie das Original (ruhig, Stösse auf den Schlüsselwörtern)
 add(hit(0.7, 50), 0.0, 0.7); add(hit(0.9, 45), 1.18, 0.8)
 for i, x in enumerate([1.98, 2.2, 2.52]):
@@ -153,7 +169,14 @@ add(whoosh(0.5), 47.4, 0.5); add(hit(0.7, 70), 48.58, 0.8)
 
 peak = np.max(np.abs(out)) or 1
 out = out / peak * 0.85
-with wave.open(os.path.join(HERE, "public/sfx6.wav"), "wb") as w:
+if FAST:
+    # jeder Sprung-Schnitt bekommt einen kurzen Whoosh/Stoss
+    for (o1, n1), (o2, n2) in zip(_pts, _pts[1:]):
+        if n1 == n2 and o2 > o1:
+            _add(whoosh(0.18, True), max(0, n1 - 0.08), 0.5); _add(hit(0.25, 90), n1, 0.35)
+    peak = np.max(np.abs(out)) or 1
+    out = out / peak * 0.85
+with wave.open(os.path.join(HERE, "public/sfx6fast.wav" if FAST else "public/sfx6.wav"), "wb") as w:
     w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
     w.writeframes((out * 32767).astype(np.int16).tobytes())
 print("ok")

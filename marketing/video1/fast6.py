@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Video 6 doppelt so schnell: Pausen in voice6.wav auf 0.1 s kürzen, dann Tempo x1.5 (Tonhöhe bleibt).
+Schreibt public/voice6fast.wav und src/map6.ts (Zeitkarte schnell -> original)."""
+import json, os, subprocess, wave
+import numpy as np
+HERE = os.path.dirname(os.path.abspath(__file__))
+TEMPO = 1.5
+KEEP = 0.10
+w = wave.open(os.path.join(HERE, "public/voice6.wav")); sr = w.getframerate(); ch = w.getnchannels()
+a = np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, ch).astype(np.float32)
+mono = np.abs(a).mean(1)
+hop = int(0.01 * sr)
+rms = np.array([np.sqrt((mono[i:i + hop] ** 2).mean()) for i in range(0, len(mono), hop)])
+loud = rms > 0.02 * 32768 * 0.1  # ~ -34 dB
+# Stille-Stücke > 0.2 s finden
+segs, i, n = [], 0, len(loud)
+while i < n:
+    if not loud[i]:
+        j = i
+        while j < n and not loud[j]: j += 1
+        if (j - i) * 0.01 > 0.2 and i > 0 and j < n: segs.append((i * 0.01, j * 0.01))
+        i = j
+    else:
+        i += 1
+pts = [(0.0, 0.0)]; out = []; pos = 0.0; newt = 0.0
+for s, e in segs:
+    out.append(a[int(pos * sr):int((s + KEEP / 2) * sr)]); newt += (s + KEEP / 2) - pos
+    pts.append((s + KEEP / 2, newt))
+    pos = e - KEEP / 2; pts.append((pos, newt))
+out.append(a[int(pos * sr):]); newt += len(a) / sr - pos; pts.append((len(a) / sr, newt))
+cut = np.concatenate(out).astype(np.int16)
+tmp = os.path.join(HERE, "public/_cut6.wav")
+with wave.open(tmp, "wb") as o:
+    o.setnchannels(ch); o.setsampwidth(2); o.setframerate(sr); o.writeframes(cut.tobytes())
+subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", tmp, "-af", f"atempo={TEMPO}", os.path.join(HERE, "public/voice6fast.wav")], check=True)
+os.remove(tmp)
+pts = [(o, n / TEMPO) for o, n in pts]
+with open(os.path.join(HERE, "src/map6.ts"), "w") as f:
+    f.write("// Zeitkarte Video 6 schnell: [neu, original] (erzeugt von fast6.py)\n")
+    f.write("export const MAP6: [number, number][] = " + json.dumps([[round(n, 3), round(o, 3)] for o, n in pts]) + ";\n")
+    f.write(f"export const DURATION6F_S = {round(pts[-1][1] + 1.6, 2)};\n")
+with open(os.path.join(HERE, "map6.json"), "w") as f:
+    json.dump(pts, f)
+print("Pausen gekürzt:", len(segs), "neu", round(pts[-1][1], 2), "s (vorher", round(len(a) / sr, 2), ")")
