@@ -24,6 +24,8 @@ data class BarStyle(
     val avatar: ImageBitmap?,
     /** Echte YouTube-Icons als weisse Masken, Schlüssel siehe [iconKey]. */
     val icons: Map<String, ImageBitmap>,
+    /** Tablet (ab 600 dp): grössere Symbole und Schrift, enger Block in der Mitte, Trennlinie oben (wie YouTube dort). */
+    val tablet: Boolean = false,
 ) {
     companion object {
         // Feste, deckende Farben wie im Vorlagenbild. Unsere Leiste muss deckend sein, sonst scheint der
@@ -43,6 +45,7 @@ data class BarStyle(
                 handle = if (dark) Color(0xFFEBEBEB) else Color(0xFF1F1F1F),
                 avatar = avatar,
                 icons = icons,
+                tablet = tablet,
             )
 
         fun iconKey(kind: TabKind, selected: Boolean) = "${kind.name}_$selected"
@@ -66,7 +69,10 @@ class BarStyleSampler(private val service: AccessibilityService) {
 
     private var avatar: ImageBitmap? = load(avatarFile)
     private val icons = mutableMapOf<String, ImageBitmap>()
-    private var dark: Boolean? = null
+    private val prefs = service.getSharedPreferences("bar_style", android.content.Context.MODE_PRIVATE)
+    // Zuletzt gemessenes YouTube-Design: Direkt nach dem Start nicht kurz das Systemdesign zeigen (weisse Leiste auf
+    // dunklem YouTube, bis die erste Messung da ist).
+    private var dark: Boolean? = if (prefs.contains(PREF_DARK)) prefs.getBoolean(PREF_DARK, true) else null
     private var lastAttemptAt = 0L
     private var checkedAt = 0L
     private var attempts = 0
@@ -162,6 +168,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
         val nowDark = luminance(sample) < 128
         if (dark != null && dark != nowDark) Log.i(TAG, "YouTube-Design gewechselt: ${if (nowDark) "dunkel" else "hell"}")
         dark = nowDark
+        prefs.edit().putBoolean(PREF_DARK, nowDark).apply()
         checkedAt = SystemClock.uptimeMillis()
         attempts = 0
         saveDebugImage(bitmap, b)
@@ -237,6 +244,7 @@ class BarStyleSampler(private val service: AccessibilityService) {
 
     private companion object {
         const val TAG = "FuckShorts"
+        const val PREF_DARK = "dark"
         const val MAX_ATTEMPTS = 30
         const val MIN_INTERVAL_MS = 1_000L
         const val RECHECK_MS = 30_000L

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -378,7 +379,16 @@ class BottomBarOverlay(
             // Die Leiste hat vier gleich breite Spalten: Startseite, Abos, Mein YouTube, Plus.
             setOnTouchListener(TapHandler(onTap = tap@{ x, width ->
                 if (SystemClock.uptimeMillis() < ignoreTapsUntil) return@tap
-                val column = (x / width * 4).toInt().coerceIn(0, 3)
+                val column = if (uiState?.style?.tablet == true) {
+                    // Tablet: enger Block in der Mitte (4 Spalten à 96 dp). Ausserhalb: kein Knopf.
+                    val slot = TABLET_SLOT_DP * resources.displayMetrics.density
+                    val start = (width - slot * 4) / 2f
+                    val c = Math.floor(((x - start) / slot).toDouble()).toInt()
+                    if (c !in 0..3) return@tap
+                    c
+                } else {
+                    (x / width * 4).toInt().coerceIn(0, 3)
+                }
                 val kind = COLUMNS[column]
                 if (kind != TabKind.CREATE || uiState?.hasCreate == true) {
                     if (kind != TabKind.CREATE) {
@@ -510,6 +520,10 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
             }
             .background(style.background),
     ) {
+        if (style.tablet && style.background == Color(0xFF0F0F0F)) {
+            // Tablet, dunkel: YouTube zeichnet oben eine feine Trennlinie (2 px, #2B2B2B am Galaxy Tab A8 gemessen).
+            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(1.dp).background(Color(0xFF2B2B2B)))
+        }
         if (state.showHandle) {
             Box(
                 Modifier
@@ -520,21 +534,28 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                     .background(style.handle),
             )
         }
-        Row(modifier = Modifier.fillMaxWidth().height(barHeight)) {
+        // Tablet: Die echte Leiste hat enge Spalten (96 dp) als Block in der Mitte; auf dem Handy teilen sich vier
+        // gleich breite Spalten die ganze Breite.
+        Row(
+            modifier = Modifier.fillMaxWidth().height(barHeight),
+            horizontalArrangement = if (style.tablet) Arrangement.Center else Arrangement.Start,
+        ) {
             val homeSelected = state.selected == TabKind.HOME
             val subsSelected = state.selected == TabKind.SUBSCRIPTIONS
+            val slot: Modifier = if (style.tablet) Modifier.width(TABLET_SLOT_DP.dp) else Modifier.weight(1f)
+            val iconSize = if (style.tablet) TABLET_ICON_DP.dp else 24.dp
             TabSlot(
-                modifier = Modifier.weight(1f),
+                modifier = slot,
                 kind = TabKind.HOME,
                 label = state.labels[TabKind.HOME] ?: "Home",
                 state = state,
                 onTap = onTap,
                 onLongPress = onLongPress,
             ) {
-                TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content)
+                TabIcon(if (homeSelected) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content, iconSize)
             }
             TabSlot(
-                modifier = Modifier.weight(1f),
+                modifier = slot,
                 kind = TabKind.SUBSCRIPTIONS,
                 label = state.labels[TabKind.SUBSCRIPTIONS] ?: "Subscriptions",
                 state = state,
@@ -545,6 +566,7 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                     TabIcon(
                         if (subsSelected) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
                         style.content,
+                        iconSize,
                     )
                     if (state.subscriptionsBadge) {
                         val shift = 3.dp
@@ -569,7 +591,7 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                 }
             }
             TabSlot(
-                modifier = Modifier.weight(1f),
+                modifier = slot,
                 kind = TabKind.YOU,
                 label = state.labels[TabKind.YOU] ?: "You",
                 state = state,
@@ -593,18 +615,16 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
                             contentDescription = null,
                             contentScale = ContentScale.None,
                             modifier = Modifier
-                                .size(size - AVATAR_INSET * 2)
+                                .size(if (style.tablet) size else size - AVATAR_INSET * 2)
                                 .clip(CircleShape),
                         )
                     }
                 } else {
-                    TabIcon(Icons.Filled.AccountCircle, style.content)
+                    TabIcon(Icons.Filled.AccountCircle, style.content, iconSize)
                 }
             }
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+                modifier = slot.fillMaxHeight(),
             ) {
                 if (state.hasCreate) {
                     // Wie im Vorlagenbild: Plus-Kreis etwas unter der Icon-Reihe (Mitte 25,5 dp ab Oberkante).
@@ -653,6 +673,7 @@ private fun TabSlot(
             Label(
                 text = label,
                 color = state.style.content,
+                tablet = state.style.tablet,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .offset { IntOffset(0, labelTop) },
@@ -665,7 +686,7 @@ private fun TabSlot(
             ) {
                 icon()
                 Spacer(Modifier.height(2.dp))
-                Label(text = label, color = state.style.content)
+                Label(text = label, color = state.style.content, tablet = state.style.tablet)
             }
         }
     }
@@ -691,15 +712,15 @@ private fun BoxScope.IconArea(
 }
 
 @Composable
-private fun Label(text: String, color: Color, modifier: Modifier = Modifier) {
+private fun Label(text: String, color: Color, tablet: Boolean = false, modifier: Modifier = Modifier) {
     // YouTube vergrössert die Schrift in seiner Leiste nicht mit der Systemschrift. Darum in dp statt sp,
     // sonst wird "Mein YouTube" bei grosser Schrift abgeschnitten.
     val density = LocalDensity.current
     Text(
         text = text,
         color = color,
-        fontSize = with(density) { LABEL_DP.dp.toSp() },
-        lineHeight = with(density) { 12.dp.toSp() },
+        fontSize = with(density) { (if (tablet) TABLET_LABEL_DP else LABEL_DP).dp.toSp() },
+        lineHeight = with(density) { (if (tablet) 14f else 12f).dp.toSp() },
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier,
@@ -708,9 +729,13 @@ private fun Label(text: String, color: Color, modifier: Modifier = Modifier) {
 
 /** Schriftgrösse wie die echte Leiste (gemessen: "Startseite" ist dort 129 px breit bei Dichte 2,875). */
 private const val LABEL_DP = 10.5f
+/** Tablet (Galaxy Tab A8, Dichte 1,75 gemessen): "Startseite" ist dort 89 px breit = 12,1 dp; Symbole ~28 dp; Spalte 96 dp. */
+private const val TABLET_LABEL_DP = 12.1f
+private const val TABLET_ICON_DP = 28f
+private const val TABLET_SLOT_DP = 96f
 private val AVATAR_INSET = 2.5.dp
 
 @Composable
-private fun TabIcon(icon: ImageVector, tint: Color) {
-    Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+private fun TabIcon(icon: ImageVector, tint: Color, size: androidx.compose.ui.unit.Dp = 24.dp) {
+    Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(size))
 }

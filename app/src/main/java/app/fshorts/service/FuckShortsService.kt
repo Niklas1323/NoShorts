@@ -1589,8 +1589,8 @@ class FuckShortsService : AccessibilityService() {
                 subscriptionsBadge = json.getBoolean("badge"),
                 hasCreate = json.getBoolean("create"),
                 barHeightPx = rest.height(),
-                iconCenterPx = (ICON_CENTER_DP * density).roundToInt(),
-                labelTopPx = (LABEL_TOP_DP * density).roundToInt(),
+                iconCenterPx = (iconCenterDp * density).roundToInt(),
+                labelTopPx = (labelTopDp * density).roundToInt(),
                 showHandle = rest.bottom >= displayBounds().bottom - 2,
                 style = currentStyle(),
             )
@@ -1920,12 +1920,16 @@ class FuckShortsService : AccessibilityService() {
             subscriptionsBadge = bar.tabs[TabKind.SUBSCRIPTIONS]?.badge == true,
             hasCreate = TabKind.CREATE in bar.tabs,
             barHeightPx = rest.height(),
-            iconCenterPx = (ICON_CENTER_DP * density).roundToInt(),
-            labelTopPx = (LABEL_TOP_DP * density).roundToInt(),
+            iconCenterPx = (iconCenterDp * density).roundToInt(),
+            labelTopPx = (labelTopDp * density).roundToInt(),
             showHandle = rest.bottom >= displayBounds().bottom - 2,
             style = currentStyle(),
         )
     }
+
+    /** Höhe von Symbol-Mitte und Schrift-Oberkante: Tablet (Galaxy Tab A8 gemessen) etwas höher als auf dem Handy. */
+    private val iconCenterDp get() = if (isTablet) TABLET_ICON_CENTER_DP else ICON_CENTER_DP
+    private val labelTopDp get() = if (isTablet) TABLET_LABEL_TOP_DP else LABEL_TOP_DP
 
     /** Tippt auf ⋮ beim Shorts-Regal. Den Menüpunkt "Nicht interessiert" wählt [handleShelfMenu]. */
     private fun tryHideShelf(shelves: List<Shelf>, now: Long) {
@@ -2525,6 +2529,8 @@ class FuckShortsService : AccessibilityService() {
         // Android braucht ein paar Bilder, bis unsere Leiste Berührungen durchlässt.
         private const val PASS_THROUGH_DELAY_MS = 80L
         private const val ICON_CENTER_DP = 20f
+        private const val TABLET_ICON_CENTER_DP = 14.4f
+        private const val TABLET_LABEL_TOP_DP = 30f
         private const val LABEL_TOP_DP = 32.5f
         private const val REST_STABLE_MS = 300L
         private const val SAMPLE_AFTER_VIDEO_MS = 1500L
