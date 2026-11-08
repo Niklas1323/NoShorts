@@ -927,3 +927,9 @@ Offen: Mini-Player-Schliessen kann den Design-Sampler kurz auf "hell" kippen (Le
 - **Weisse Leiste nach dem Start** (der früher einmal gesehene Fehler): Solange das YouTube-Design noch nicht gemessen war, nahm die Leiste das Systemdesign (am Tablet hell → weisse Leiste auf dunklem YouTube, ~1 s bis zur ersten Messung). Jetzt wird das zuletzt gemessene Design gespeichert (`bar_style` / `dark`) und gleich beim Start benutzt.
 - Tablet-Nachtest mit neuer Leiste: Video per Link + Zurück-Taste 2×0 echte Bilder, Wischen 3×0, Scrollen 0, Tabs und Plus richtig.
 - **Tablet: Abstand oben** (Niklas: "oben ein bisschen wenig Platz"): Erster heller Punkt unter der Trennlinie gemessen: echt Profilbild 6 / Abos 6 / Startseite 9 px, unsere 3 / 4 / 6 px. `TABLET_ICON_CENTER_DP` 14,4 → 16,1; danach 6 / 7 / 9 px.
+
+### Werbevideos (Regel von Niklas, 08.11.2026)
+Jedes Werbevideo endet IMMER mit: **"Comment TEST and sign up with the link in my bio"** (gesprochen + gross im Bild,
+"SIGN UP 👉 LINK IN BIO"). Das ist das Wichtigste am Video. Quellen: `marketing/video1/src/Ad*.tsx` (Remotion).
+Keine fremde Musik in Dateien zum Hochladen (Urheberrecht); Vorlagen-Musik nur in "NUR-ANSCHAUEN"-Dateien.
+ElevenLabs: Gratis-Konto meldete am 08.11. "Free Tier disabled" (eine Aufnahme ging danach trotzdem noch).

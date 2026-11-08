@@ -3,6 +3,7 @@ import { AbsoluteFill, Audio, random, staticFile, useCurrentFrame } from 'remoti
 import { BarIcon, Logo, RED, ease, lin, useFonts } from './Ad';
 import { MAP6 } from './map6';
 import { MAP6M } from './map6M';
+import { MAP6V, MAP6V_SIGN } from './map6v';
 
 /**
  * Werbevideo 6 "Stop giving a sh*t" (quer 16:9). Anfang = dieselben Sätze und derselbe Bildaufbau wie das Original
@@ -228,9 +229,9 @@ const S6: React.FC<{ t: number }> = ({ t }) => {
   const ph = ease(t, 19.66, 19.85);
   return (
     <AbsoluteFill style={{ opacity: a }}>
-      <Txt s={60} style={{ position: 'absolute', left: 0, right: 0, top: 110, opacity: ease(t, 15.66, 15.9) * (1 - ph) }}>BUT BE HONEST.</Txt>
+      <Txt s={60} style={{ position: 'absolute', left: 0, right: 0, top: 110, opacity: ease(t, 15.66, 15.9) * (1 - ph) }}>{V2.on ? <>BUT BE F<span style={{ color: RED }}>*</span>CKING HONEST.</> : 'BUT BE HONEST.'}</Txt>
       <Txt s={38} style={{ position: 'absolute', left: 0, right: 0, top: 200, color: '#ccc', opacity: ease(t, 17.48, 17.7) * (1 - ph) }}>IT'S NOT THEM WHO'S STOPPING YOU.</Txt>
-      <Txt s={96} c={RED} glow={RGLOW} style={{ position: 'absolute', left: 0, right: 0, top: 120, opacity: ph, transform: `scale(${1.5 - 0.5 * ph})` }}>IT'S THIS.</Txt>
+      <Txt s={96} c={RED} glow={RGLOW} style={{ position: 'absolute', left: 0, right: 0, top: 120, opacity: ph, transform: `scale(${1.5 - 0.5 * ph})` }}>{V2.on ? "IT'S THIS SH*T." : "IT'S THIS."}</Txt>
       <Floor />
       <Bulb x={760} y={620} on={1 - 0.6 * ph} />
       <You x={760} y={800} o={1 - 0.4 * ph} />
@@ -274,6 +275,7 @@ const S7: React.FC<{ t: number }> = ({ t }) => {
           <line x1="50" y1="50" x2={50 + 32 * Math.sin(clockA)} y2={50 - 32 * Math.cos(clockA)} stroke={RED} strokeWidth="5" strokeLinecap="round" />
         </svg>
         <Txt s={84} c={RED} glow={RGLOW} style={{ position: 'absolute', left: 40, width: 760, top: 470, opacity: hours, transform: `scale(${1.6 - 0.6 * hours})` }}>3 HOURS</Txt>
+        {V2.on && <Txt s={46} style={{ position: 'absolute', left: 40, width: 760, top: 400, opacity: hours }}>F<span style={{ color: RED }}>*</span>CKING</Txt>}
         <Txt s={40} style={{ position: 'absolute', left: 40, width: 760, top: 580, opacity: ease(t, 24.3, 24.5) }}>A DAY</Txt>
       </div>
       <Txt s={190} style={{ position: 'absolute', left: 0, right: 0, top: 410, opacity: gone, transform: `scale(${1.4 - 0.4 * gone})`, letterSpacing: 40 }}>GONE.</Txt>
@@ -291,7 +293,7 @@ const S8: React.FC<{ t: number }> = ({ t }) => {
   return (
     <AbsoluteFill style={{ opacity: a }}>
       <Txt s={40} style={{ position: 'absolute', left: 0, right: 0, top: 110, opacity: ease(t, 26.38, 26.6) }}>YOUR DREAMS DON'T DIE BECAUSE PEOPLE LAUGH.</Txt>
-      <Txt s={60} c={RED} glow={RGLOW} style={{ position: 'absolute', left: 0, right: 0, top: 190, opacity: ease(t, 28.8, 29.0) }}>THEY DIE ONE SHORT AT A TIME.</Txt>
+      <Txt s={60} c={RED} glow={RGLOW} style={{ position: 'absolute', left: 0, right: 0, top: 190, opacity: ease(t, 28.8, 29.0) }}>{V2.on ? 'THEY DIE ONE DAMN SHORT AT A TIME.' : 'THEY DIE ONE SHORT AT A TIME.'}</Txt>
       <Floor />
       <Bulb x={760} y={600} on={on} />
       <You x={760} y={800} o={0.5 + 0.5 * on} />
@@ -317,7 +319,7 @@ const S9: React.FC<{ t: number }> = ({ t }) => {
   return (
     <AbsoluteFill style={{ opacity: a }}>
       <Txt s={48} style={{ position: 'absolute', left: 0, right: 0, top: 110, opacity: ease(t, 31.84, 32.0) }}>AND YOUTUBE WON'T EVEN LET YOU</Txt>
-      <Txt s={72} c={RED} glow={RGLOW} style={{ position: 'absolute', left: 0, right: 0, top: 190, opacity: ease(t, 33.48, 33.65) }}>TURN THEM OFF.</Txt>
+      <Txt s={72} c={RED} glow={RGLOW} style={{ position: 'absolute', left: 0, right: 0, top: 190, opacity: ease(t, 33.48, 33.65) }}>{V2.on ? 'TURN THAT SH*T OFF.' : 'TURN THEM OFF.'}</Txt>
       <Bar x={960} y={520} shortsRed={red} />
       <div style={{ position: 'absolute', left: 960 - 140, top: 680, width: 280, height: 140, borderRadius: 80, border: `6px solid ${RED}`, boxShadow: RGLOW }}>
         <div style={{ position: 'absolute', left: 16 + knob * 140, top: 16, width: 96, height: 96, borderRadius: '50%', background: RED }} />
@@ -411,7 +413,11 @@ const S13: React.FC<{ t: number }> = ({ t }) => {
       <div style={{ opacity: btn, transform: `scale(${0.8 + 0.2 * btn + 0.03 * Math.sin(t * 8)})`, background: '#fff', color: RED, fontFamily: F, fontWeight: 900, fontSize: 56, letterSpacing: 4, padding: '22px 60px', borderRadius: 70, boxShadow: '0 0 40px rgba(255,255,255,.45)' }}>
         COMMENT "TEST"
       </div>
-      <Txt s={26} style={{ color: '#ccc', opacity: ease(t, 49.22, 49.5) }}>TRY IT FIRST · COMING SOON TO GOOGLE PLAY</Txt>
+      {V2.on ? (
+        <div style={{ opacity: ease(t, V2.signAt, V2.signAt + 0.2), transform: `scale(${0.85 + 0.15 * ease(t, V2.signAt, V2.signAt + 0.2) + 0.03 * Math.sin(t * 8 + 1)})`, background: RED, color: '#fff', fontFamily: F, fontWeight: 900, fontSize: 52, letterSpacing: 3, padding: '18px 54px', borderRadius: 70, boxShadow: RGLOW }}>
+          SIGN UP 👉 LINK IN BIO
+        </div>
+      ) : <Txt s={26} style={{ color: '#ccc', opacity: ease(t, 49.22, 49.5) }}>TRY IT FIRST · COMING SOON TO GOOGLE PLAY</Txt>}
     </AbsoluteFill>
   );
 };
@@ -433,10 +439,15 @@ const jumps = (M: [number, number][]) => M.filter((p, i) => i > 0 && M[i - 1][0]
 const JUMPS = jumps(MAP6);
 const JUMPS_M = jumps(MAP6M);
 
-export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean }> = ({ voice, fast, mid }) => {
+/** Fassung 2 (mehr Schimpfwörter, Schluss "Comment TEST + Link in Bio"): wird beim Rendern gesetzt. */
+const V2 = { on: false, signAt: 49.2 };
+
+export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean; v2?: boolean }> = ({ voice, fast, mid, v2 }) => {
+  V2.on = !!v2;
+  V2.signAt = v2 ? MAP6V_SIGN : 49.2;
   useFonts();
   const frame = useCurrentFrame();
-  const t = fast ? toOrig(MAP6, 1.5, frame / FPS6) : mid ? toOrig(MAP6M, 1.3, frame / FPS6) : frame / FPS6;
+  const t = v2 ? toOrig(MAP6V, 1.0, frame / FPS6) : fast ? toOrig(MAP6, 1.5, frame / FPS6) : mid ? toOrig(MAP6M, 1.3, frame / FPS6) : frame / FPS6;
   const PUNCH = fast ? [...PUNCH0, ...JUMPS] : mid ? [...PUNCH0, ...JUMPS_M] : PUNCH0;
   const FLASH = fast ? [...FLASH0, ...JUMPS.filter((_, i) => i % 2 === 0)] : FLASH0;
   const pk = Math.max(0, ...PUNCH.map((p) => (t >= p ? Math.exp(-(t - p) / 0.11) : 0)));
@@ -446,8 +457,8 @@ export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean }> = 
   const dy = sk * 10 * Math.cos(t * 83);
   return (
     <AbsoluteFill style={{ background: 'radial-gradient(60% 70% at 50% 50%, #141010 0%, #000 75%)', fontFamily: F, overflow: 'hidden' }}>
-      {voice && <Audio src={staticFile(fast ? 'voice6fast.wav' : mid ? 'voice6fastM.wav' : 'voice6.wav')} />}
-      {voice && <Audio src={staticFile(fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={fast || mid ? 0.35 : 0.5} />}
+      {voice && <Audio src={staticFile(v2 ? 'voice6v2.wav' : fast ? 'voice6fast.wav' : mid ? 'voice6fastM.wav' : 'voice6.wav')} />}
+      {voice && <Audio src={staticFile(v2 ? 'sfx6v2.wav' : fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={fast || mid || v2 ? 0.35 : 0.5} />}
       <AbsoluteFill style={{ transform: `translate(${dx}px, ${dy}px) scale(${1 + 0.06 * pk})` }}>
         <S1 t={t} /><S2 t={t} /><S3 t={t} /><S4 t={t} /><S5 t={t} /><S6 t={t} /><S7 t={t} />
         <S8 t={t} /><S9 t={t} /><S10 t={t} /><S11 t={t} /><S12 t={t} /><S13 t={t} />
