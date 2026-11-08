@@ -2089,6 +2089,10 @@ class FuckShortsService : AccessibilityService() {
             // aus YouTube verschwindet (siehe updateBar). Dafür ab jetzt jedes Bild prüfen.
             fastUntil = SystemClock.uptimeMillis() + FAST_WINDOW_MS
             startPolling()
+            // Tablet: Die Kamera braucht dort ~0,9 s, bis sie aufgeht (Galaxy Tab A8). So lange stand unsere Leiste
+            // ("viel zu lange", Wunsch von Niklas). Darum fährt sie sofort weg und bleibt kurz weg; dafür ist die
+            // echte Leiste bis zur Kamera zu sehen. Geht die Kamera nicht auf, kommt unsere danach wieder.
+            if (isTablet) overlay.slideAway(VIDEO_SLIDE_MS, CREATE_SLIDE_HOLD_MS, fast = true)
         }
         // Auch bei weggescrollter Leiste: ihre Knöpfe neu einlesen und über die Bedienungshilfen klicken.
         val fresh = scanner.findBar(root, screenBounds())
@@ -2538,6 +2542,7 @@ class FuckShortsService : AccessibilityService() {
         private const val PRE_SHOW_HOLD_MS = 700L
         private val SAVE_EXIT_WORDS = listOf("speichern", "save", "enregistrer", "guardar", "salva", "sauvegarder")
         private const val CREATE_HOLD_MS = 1_500L
+        private const val CREATE_SLIDE_HOLD_MS = 1_200L
         private const val NAV_HOLD_MS = 800L
         private const val THEME_HOLD_MS = 1_500L
         private const val SHADE_GAP_MS = 600L
