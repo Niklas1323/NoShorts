@@ -287,7 +287,7 @@ class FuckShortsService : AccessibilityService() {
             }
             // Tablet: Beim Runterwischen des Videos meldet YouTube nichts, bis der Mini-Player steht (~1 s echte
             // Leiste). Nach jeder Berührung darum Bild für Bild nachsehen, ob der Player wegrutscht.
-            if (isTablet && watchPageOpen && youTubeActive) startPolling()
+            if (watchPageOpen && youTubeActive) startPolling()
             // Unter einem Dialog weggefahren: Jede Berührung kann ihn schliessen (Abbrechen, daneben, Zurück-Geste).
             // Das merkt der Scan erst ~0,3 s später, so lange sähe man die echte. Darum sofort abgedunkelt zurück.
             if (dialogSlid) bringBackFromSlide()

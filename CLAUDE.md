@@ -866,3 +866,9 @@ Logo links oben), `miniclose` schliesst den Mini-Player (roter Fortschrittsstric
   Leiste nie sichtbar. Rest = Tipp → Erkennung (~80 ms) + Rendern; schneller geht es nur mit Raten (nicht gemacht).
 - Fund am Rand: Beim Schliessen des Mini-Players (X) meldete der Sampler einmal "YouTube-Design gewechselt: hell", unsere
   Leiste war ~30 s weiss auf dunklem YouTube (`Profilbild`-Sampler, Messung während der Mini-Player-Animation). Noch offen.
+
+**Video verlassen (Runterwischen, Werbung läuft):** Beim Runterwischen sah man ~12 Bilder (0,3 s) die ECHTE Leiste mit Shorts, bevor
+unsere kam (`barcheck` erkennt das nicht, nur Bilder ansehen; Lauf `lv3`). Ursache: YouTube blendet seine Leiste ab Beginn des Wischens
+ein, wir erfuhren davon erst über einen Scan/die Pane-Meldung. Am Handy lief das Nachführen des Players bei Berührung nur auf dem
+Tablet. Jetzt auch am Handy (`if (watchPageOpen && youTubeActive) startPolling()`). Danach 4× Runterwischen: 3× sauber, 1× ~2 schwache
+Bilder (~0,06 s). Rest = Zeit bis YouTube auf die Abfrage antwortet (Werbung, schwere Seite); schneller geht es nicht ohne Raten.
