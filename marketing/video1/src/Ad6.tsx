@@ -5,6 +5,7 @@ import { MAP6 } from './map6';
 import { MAP6M } from './map6M';
 import { MAP6V, MAP6V_SIGN } from './map6v';
 import { MAP6V3, MAP6V3_SIGN } from './map6v3';
+import { MAP6V4, MAP6V4_SIGN } from './map6v4';
 
 /**
  * Werbevideo 6 "Stop giving a sh*t" (quer 16:9). Anfang = dieselben Sätze und derselbe Bildaufbau wie das Original
@@ -418,7 +419,14 @@ const S13: React.FC<{ t: number }> = ({ t }) => {
         <div style={{ opacity: ease(t, V2.signAt, V2.signAt + 0.2), transform: `scale(${0.85 + 0.15 * ease(t, V2.signAt, V2.signAt + 0.2) + 0.03 * Math.sin(t * 8 + 1)})`, background: RED, color: '#fff', fontFamily: F, fontWeight: 900, fontSize: 52, letterSpacing: 3, padding: '18px 54px', borderRadius: 70, boxShadow: RGLOW }}>
           SIGN UP 👉 LINK IN BIO
         </div>
-      ) : <Txt s={26} style={{ color: '#ccc', opacity: ease(t, 49.22, 49.5) }}>TRY IT FIRST · COMING SOON TO GOOGLE PLAY</Txt>}
+      ) : null}
+      {V2.testers && (
+        <div style={{ opacity: ease(t, V2.signAt + 0.9, V2.signAt + 1.1), transform: `translateY(${16 * (1 - ease(t, V2.signAt + 0.9, V2.signAt + 1.1))}px)`, textAlign: 'center' }}>
+          <Txt s={40} ls={0.08}>COMING SOON TO GOOGLE PLAY</Txt>
+          <Txt s={30} ls={0.08} c="#ddd" style={{ marginTop: 10 }}>GOOGLE NEEDS <span style={{ color: RED }}>12 TESTERS</span> FOR <span style={{ color: RED }}>14 DAYS</span> · BE ONE OF THEM</Txt>
+        </div>
+      )}
+      {V2.on ? null : <Txt s={26} style={{ color: '#ccc', opacity: ease(t, 49.22, 49.5) }}>TRY IT FIRST · COMING SOON TO GOOGLE PLAY</Txt>}
     </AbsoluteFill>
   );
 };
@@ -441,15 +449,17 @@ const JUMPS = jumps(MAP6);
 const JUMPS_M = jumps(MAP6M);
 
 /** Fassung 2 (mehr Schimpfwörter, Schluss "Comment TEST + Link in Bio"): wird beim Rendern gesetzt. */
-const V2 = { on: false, signAt: 49.2 };
+const V2 = { on: false, signAt: 49.2, testers: false };
 
-export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean; v2?: boolean; v3?: boolean }> = ({ voice, fast, mid, v2, v3 }) => {
+export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean; v2?: boolean; v3?: boolean; v4?: boolean }> = ({ voice, fast, mid, v2, v3: v3in, v4 }) => {
+  const v3 = v3in || v4;
   V2.on = !!(v2 || v3);
-  V2.signAt = v3 ? MAP6V3_SIGN : v2 ? MAP6V_SIGN : 49.2;
+  V2.testers = !!v4;
+  V2.signAt = v4 ? MAP6V4_SIGN : v3 ? MAP6V3_SIGN : v2 ? MAP6V_SIGN : 49.2;
   const hard = v3 ? 1.7 : 1;
   useFonts();
   const frame = useCurrentFrame();
-  const t = v3 ? toOrig(MAP6V3, 1.0, frame / FPS6) : v2 ? toOrig(MAP6V, 1.0, frame / FPS6) : fast ? toOrig(MAP6, 1.5, frame / FPS6) : mid ? toOrig(MAP6M, 1.3, frame / FPS6) : frame / FPS6;
+  const t = v4 ? toOrig(MAP6V4, 1.0, frame / FPS6) : v3 ? toOrig(MAP6V3, 1.0, frame / FPS6) : v2 ? toOrig(MAP6V, 1.0, frame / FPS6) : fast ? toOrig(MAP6, 1.5, frame / FPS6) : mid ? toOrig(MAP6M, 1.3, frame / FPS6) : frame / FPS6;
   const PUNCH = fast ? [...PUNCH0, ...JUMPS] : mid ? [...PUNCH0, ...JUMPS_M] : PUNCH0;
   const FLASH = fast ? [...FLASH0, ...JUMPS.filter((_, i) => i % 2 === 0)] : FLASH0;
   const pk = Math.max(0, ...PUNCH.map((p) => (t >= p ? Math.exp(-(t - p) / 0.11) : 0)));
@@ -459,8 +469,8 @@ export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean; v2?:
   const dy = hard * sk * 10 * Math.cos(t * 83);
   return (
     <AbsoluteFill style={{ background: 'radial-gradient(60% 70% at 50% 50%, #141010 0%, #000 75%)', fontFamily: F, overflow: 'hidden' }}>
-      {voice && <Audio src={staticFile(v3 ? 'voice6v3.wav' : v2 ? 'voice6v2.wav' : fast ? 'voice6fast.wav' : mid ? 'voice6fastM.wav' : 'voice6.wav')} />}
-      {voice && <Audio src={staticFile(v3 ? 'sfx6v3.wav' : v2 ? 'sfx6v2.wav' : fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={fast || mid || v2 || v3 ? 0.35 : 0.5} />}
+      {voice && <Audio src={staticFile(v4 ? 'voice6v4.wav' : v3 ? 'voice6v3.wav' : v2 ? 'voice6v2.wav' : fast ? 'voice6fast.wav' : mid ? 'voice6fastM.wav' : 'voice6.wav')} />}
+      {voice && <Audio src={staticFile(v4 ? 'sfx6v4.wav' : v3 ? 'sfx6v3.wav' : v2 ? 'sfx6v2.wav' : fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={fast || mid || v2 || v3 ? 0.35 : 0.5} />}
       <AbsoluteFill style={{ transform: `translate(${dx}px, ${dy}px) scale(${1 + 0.06 * hard * pk})` }}>
         <S1 t={t} /><S2 t={t} /><S3 t={t} /><S4 t={t} /><S5 t={t} /><S6 t={t} /><S7 t={t} />
         <S8 t={t} /><S9 t={t} /><S10 t={t} /><S11 t={t} /><S12 t={t} /><S13 t={t} />

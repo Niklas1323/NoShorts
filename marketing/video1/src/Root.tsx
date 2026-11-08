@@ -11,6 +11,7 @@ import { DURATION6FM_S } from './map6M';
 import { Ad7, DURATION7_S, FPS7 } from './Ad7';
 import { DURATION6V_S } from './map6v';
 import { DURATION6V3_S } from './map6v3';
+import { DURATION6V4_S } from './map6v4';
 
 export const Root: React.FC = () => (
   <>
@@ -36,6 +37,8 @@ export const Root: React.FC = () => (
     <Composition id="Ad6V2" component={Ad6} durationInFrames={Math.round(DURATION6V_S * FPS6)} fps={FPS6} width={1920} height={1080} defaultProps={{ voice: true, v2: true }} />
     {/* Video 6 Fassung 3: wie Fassung 2, aber wütende Stimme und stärkeres Wackeln */}
     <Composition id="Ad6V3" component={Ad6} durationInFrames={Math.round(DURATION6V3_S * FPS6)} fps={FPS6} width={1920} height={1080} defaultProps={{ voice: true, v3: true }} />
+    {/* Video 6 Fassung 4: wie 3, Schluss ohne "Do it now", dafür Google Play / 12 Tester / 14 Tage im Bild */}
+    <Composition id="Ad6V4" component={Ad6} durationInFrames={Math.round(DURATION6V4_S * FPS6)} fps={FPS6} width={1920} height={1080} defaultProps={{ voice: true, v4: true }} />
     {/* Video 7: bunter Zeichenstil "One day ... the last time"; Ad7 = eigene Musik (hochladen), Ad7Orig = Musik der Vorlage (NUR ANSCHAUEN) */}
     <Composition id="Ad7" component={Ad7} durationInFrames={Math.round(DURATION7_S * FPS7)} fps={FPS7} width={1920} height={1080} defaultProps={{ music: 'own' as const }} />
     <Composition id="Ad7Orig" component={Ad7} durationInFrames={Math.round(DURATION7_S * FPS7)} fps={FPS7} width={1920} height={1080} defaultProps={{ music: 'orig' as const }} />

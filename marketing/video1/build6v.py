@@ -65,7 +65,9 @@ with open(f"{H}/src/map6{suf}.ts", "w") as f:
     f.write(f"// Zeitkarte Video 6 Fassung {suf}: [neu, original] (erzeugt von build6v.py)\n")
     f.write(f"export const MAP6{S}: [number, number][] = " + json.dumps([[round(nn, 3), round(o, 3)] for o, nn in pairs]) + ";\n")
     f.write(f"export const MAP6{S}_SIGN = {round(to_orig(sign), 3)};\n")
-    f.write(f"export const DURATION6{S}_S = {round(nd + 1.8, 2)};\n")
+    f.write(f"export const DURATION6{S}_S = {round(nd + float(os.environ.get('TAIL', '1.8')), 2)};\n")
+    lastbio = [t for x, t in N if x == "bio"]
+    f.write(f"export const MAP6{S}_BIO2 = {round(to_orig(lastbio[-1]) if len(lastbio) > 1 else to_orig(nd), 3)};\n")
 subprocess.run([sys.executable, f"{H}/sfx6.py"], env={**os.environ, "FAST": "1", "SUF": suf}, check=True)
 os.replace(f"{H}/public/sfx6fast{suf}.wav", f"{H}/public/sfx6{suf}.wav")
 print("fertig", suf, round(nd, 2), "s, sign", round(to_orig(sign), 2))
