@@ -30,6 +30,15 @@ for s, e in segs:
     pts.append((s + KEEP / 2, newt))
     pos = e - KEEP / 2; pts.append((pos, newt))
 out.append(a[int(pos * sr):]); newt += len(a) / sr - pos; pts.append((len(a) / sr, newt))
+# kurze Ein-/Ausblendung an jeder Schnittstelle (sonst knackt es)
+fade = int(0.012 * sr)
+for k in range(len(out)):
+    seg = out[k].copy()
+    if len(seg) > 2 * fade:
+        r = np.linspace(0, 1, fade)[:, None]
+        if k > 0: seg[:fade] *= r
+        if k < len(out) - 1: seg[-fade:] *= r[::-1]
+    out[k] = seg
 cut = np.concatenate(out).astype(np.int16)
 tmp = os.path.join(HERE, "public/_cut6.wav")
 with wave.open(tmp, "wb") as o:
