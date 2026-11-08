@@ -904,3 +904,8 @@ Video minimieren auf gescrollter Startseite: ~0,3 s keine Leiste (es gibt dort k
 | Mini-Player runterwischen / aufklappen / schliessen | aufklappen sauber; runterwischen auf gescrollter Startseite ~0,3 s keine Leiste (dort gibt es keine echte) | offen (kosmetisch) |
 | Tabs 15/15, Suche, ⋮, Short antippen, Benachrichtigungen, hell/dunkel | alles sauber | ok |
 Offen: Mini-Player-Schliessen kann den Design-Sampler kurz auf "hell" kippen (Leiste ~30 s weiss, einmal gesehen, nicht nachgestellt).
+
+### 08.11.2026 (Terminal, am Pixel getestet, Nachtest)
+- **Kamera mit Aufnahme → "Entwurf speichern und beenden"**: vorher war die echte Leiste (mit Shorts-Knopf) ~4 Bilder (~0,07 s) zu sehen, weil Android die Seite darunter erst meldet, wenn sie schon sichtbar ist. Fix: Tipp im Blatt (`menuOverBarless`, Beschriftung enthält "speichern"/"save"/…) zeigt unsere Leiste vorab (`showAfterSaveExit`, `saveExitAt` hält sie im Menü-Zweig). Am Pixel (Debug-Build, Log "Entwurf speichern und beenden, unsere vorab zeigen"): echte nie mehr zu sehen, unsere steht unter dem wegfahrenden Blatt.
+- Entwürfe-Liste: ⋮ → "Löschen" geht ohne Rückfrage; beide Test-Entwürfe (0:02) danach gelöscht, Kamera zeigt keinen "Entwürfe"-Knopf mehr. Die Löschen-Seite hat keine Leiste von uns und keine echte.
+- Hinweis: "Neu beginnen" und "Entwurf speichern und beenden" sind die einzigen zwei Einträge im Blatt (kein "Abbrechen"/"Löschen" dort).
