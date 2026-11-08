@@ -5,6 +5,7 @@ import { Ad2, DURATION2_S, FPS2 } from './Ad2';
 import { Ad3, DURATION3_S, FPS3 } from './Ad3';
 import { Ad4, DURATION4_S, FPS4 } from './Ad4';
 import { Ad5, DURATION5_S, FPS5 } from './Ad5';
+import { Ad6, DURATION6_S, FPS6 } from './Ad6';
 
 export const Root: React.FC = () => (
   <>
@@ -20,5 +21,7 @@ export const Root: React.FC = () => (
     <Composition id="Ad4" component={Ad4} durationInFrames={Math.round(DURATION4_S * FPS4)} fps={FPS4} width={1920} height={1080} defaultProps={{ voice: true }} />
     {/* Video 4b: kürzerer Swipe-Teil, YouTube behalten, mehr Dopamin (Zoom, Blitze, Effekte) */}
     <Composition id="Ad5" component={Ad5} durationInFrames={Math.round(DURATION5_S * FPS5)} fps={FPS5} width={1920} height={1080} defaultProps={{ voice: true }} />
+    {/* Video 6: "Stop giving a sh*t" – Anfang wie das Original, dann F*ck Shorts */}
+    <Composition id="Ad6" component={Ad6} durationInFrames={Math.round(DURATION6_S * FPS6)} fps={FPS6} width={1920} height={1080} defaultProps={{ voice: true }} />
   </>
 );
