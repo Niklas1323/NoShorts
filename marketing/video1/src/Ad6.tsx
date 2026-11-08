@@ -447,7 +447,7 @@ export const Ad6: React.FC<{ voice: boolean; fast?: boolean; mid?: boolean }> = 
   return (
     <AbsoluteFill style={{ background: 'radial-gradient(60% 70% at 50% 50%, #141010 0%, #000 75%)', fontFamily: F, overflow: 'hidden' }}>
       {voice && <Audio src={staticFile(fast ? 'voice6fast.wav' : mid ? 'voice6fastM.wav' : 'voice6.wav')} />}
-      {voice && <Audio src={staticFile(fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={0.5} />}
+      {voice && <Audio src={staticFile(fast ? 'sfx6fast.wav' : mid ? 'sfx6fastM.wav' : 'sfx6.wav')} volume={fast || mid ? 0.35 : 0.5} />}
       <AbsoluteFill style={{ transform: `translate(${dx}px, ${dy}px) scale(${1 + 0.06 * pk})` }}>
         <S1 t={t} /><S2 t={t} /><S3 t={t} /><S4 t={t} /><S5 t={t} /><S6 t={t} /><S7 t={t} />
         <S8 t={t} /><S9 t={t} /><S10 t={t} /><S11 t={t} /><S12 t={t} /><S13 t={t} />

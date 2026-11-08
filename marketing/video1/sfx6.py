@@ -171,10 +171,7 @@ add(whoosh(0.5), 47.4, 0.5); add(hit(0.7, 70), 48.58, 0.8)
 peak = np.max(np.abs(out)) or 1
 out = out / peak * 0.85
 if FAST:
-    # jeder Sprung-Schnitt bekommt einen kurzen Whoosh/Stoss
-    for (o1, n1), (o2, n2) in zip(_pts, _pts[1:]):
-        if n1 == n2 and o2 > o1:
-            _add(whoosh(0.18, True), max(0, n1 - 0.08), 0.5); _add(hit(0.25, 90), n1, 0.35)
+    # (keine Extra-Geräusche bei den Schnitten mehr: Niklas fand das Rascheln zu laut)
     peak = np.max(np.abs(out)) or 1
     out = out / peak * 0.85
 with wave.open(os.path.join(HERE, f"public/sfx6fast{_SUF}.wav" if FAST else "public/sfx6.wav"), "wb") as w:
