@@ -376,7 +376,7 @@ class FuckShortsService : AccessibilityService() {
                         if (looksLikeTap(SystemClock.uptimeMillis())) onNavigation()
                     }
                     AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-                        if (closesBarlessPage(event)) showBeforeBarlessCloses()
+                        if (closesBarlessPage(event)) showBeforeBarlessCloses(event)
                         // Lupe oben: Die Tastatur kommt gleich, gemeldet wird sie erst, wenn sie ganz da ist. Unsere
                         // fährt schon jetzt sanft weg (die Seite mit den Vorschlägen hat keine Leiste).
                         if (isSearchButton(event) && overlay.isShowing && !watchPageOpen) {
@@ -649,10 +649,19 @@ class FuckShortsService : AccessibilityService() {
      * der echten Leiste). Darum unsere schon jetzt zeigen. Geht die Kamera doch nicht zu, versteckt der nächste
      * Scan sie wieder.
      */
-    private fun showBeforeBarlessCloses() {
+    private fun showBeforeBarlessCloses(event: AccessibilityEvent) {
         val rest = restBounds ?: return
         val state = lastUiState ?: return
         if (watchPageOpen || overlay.isShowing) return
+        // Kamera mit Aufnahme: X öffnet das Blatt "Neu beginnen / Entwurf speichern", die Kamera geht nicht zu. Dann
+        // nicht vorab zeigen (unsere stand sonst ~0,1 s über dem hochfahrenden Blatt). Erkennbar am Weiter-Knopf.
+        val cameraRoot = event.source?.window?.root
+        if (cameraRoot != null &&
+            cameraRoot.findAccessibilityNodeInfosByViewId(selectors.fullId("shorts_camera_next_button_delegate")).isNotEmpty()
+        ) {
+            reason("Kamera mit Aufnahme: X öffnet ein Blatt, unsere nicht vorab")
+            return
+        }
         reason("Kamera wird geschlossen, unsere vorab zeigen")
         preShownAt = SystemClock.uptimeMillis()
         hiddenByScroll = false

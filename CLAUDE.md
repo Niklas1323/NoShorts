@@ -872,3 +872,12 @@ unsere kam (`barcheck` erkennt das nicht, nur Bilder ansehen; Lauf `lv3`). Ursac
 ein, wir erfuhren davon erst über einen Scan/die Pane-Meldung. Am Handy lief das Nachführen des Players bei Berührung nur auf dem
 Tablet. Jetzt auch am Handy (`if (watchPageOpen && youTubeActive) startPolling()`). Danach 4× Runterwischen: 3× sauber, 1× ~2 schwache
 Bilder (~0,06 s). Rest = Zeit bis YouTube auf die Abfrage antwortet (Werbung, schwere Seite); schneller geht es nicht ohne Raten.
+
+**Plus → Kamera mit Aufnahme, X (Blatt "Neu beginnen / Entwurf speichern und beenden"):** Beim X-Tipp zeigten wir unsere Leiste vorab
+("Kamera wird geschlossen"), das Blatt kam aber ~0,11–0,16 s später → unsere stand ~4 Bilder über dem hochfahrenden Blatt
+(besonders beim 2. Mal nach Zurück). Mit Aufnahme gibt es in der Kamera `shorts_camera_next_button_delegate` / `shorts_camera_undo_button_delegate`
+(ohne Aufnahme fehlen sie, per `uiautomator dump` verglichen). Jetzt: ist der Weiter-Knopf da, wird nicht vorab gezeigt
+(Protokoll "Kamera mit Aufnahme: X öffnet ein Blatt"). Geprüft: Aufnahme 2 s, X → Blatt, Zurück, X → Blatt, "Neu beginnen" (Clip
+gelöscht, nichts gespeichert), X → Kamera zu: keine Leiste über dem Blatt, nach dem Schliessen unsere sofort, echte nie.
+Plus → Kamera öffnen bleibt: unsere ~0,3 s über der schon sichtbaren Kamera (nur unsere; früher zeigen würde die echte hinter der
+wachsenden Kamera zeigen). Kamera ohne Aufnahme, X: sauber.
