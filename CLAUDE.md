@@ -881,3 +881,12 @@ Bilder (~0,06 s). Rest = Zeit bis YouTube auf die Abfrage antwortet (Werbung, sc
 gelöscht, nichts gespeichert), X → Kamera zu: keine Leiste über dem Blatt, nach dem Schliessen unsere sofort, echte nie.
 Plus → Kamera öffnen bleibt: unsere ~0,3 s über der schon sichtbaren Kamera (nur unsere; früher zeigen würde die echte hinter der
 wachsenden Kamera zeigen). Kamera ohne Aufnahme, X: sauber.
+
+**Werbung → Chrome Custom Tab:** Öffnen: unsere stand 0,3–0,4 s über dem schon undurchsichtigen Tab (dunkel/dunkelblau, noch leer).
+Ursachen: (1) `waitingForNewWindow` wartete bei einer anderen App auf "sichtbaren Inhalt", der leere Tab hat keinen; (2) "Leiste nicht
+mehr da" fuhr mit `hideSmooth()` (280 ms) über dem Tab weg; (3) erst der nächste Scan merkte den Tab. Jetzt: Fenster einer anderen App
+vorne = nicht warten, dort `hideAll()`, und eine STATE_CHANGED-Meldung einer anderen App-Aktivität (Klassenname enthält "Activity", nicht
+systemui, nicht Splitscreen) bis 1,5 s nach einer Berührung versteckt unsere SOFORT ("Andere App geöffnet (…), unsere sofort weg").
+Gemessen: nur noch 1 Bild unsere über dem Tab, echte nie sichtbar. Schliessen (Zurück): unsere kommt ~0,25 s, während der Tab noch
+wegfährt (nur unsere über dem Tab, echte nie; der Tab deckt die Leiste bis zuletzt) – bleibt, früher sicher ist besser als zu spät.
+Video minimieren auf gescrollter Startseite: ~0,3 s keine Leiste (es gibt dort keine echte; YouTube meldet erst nach Beginn des Wischens).

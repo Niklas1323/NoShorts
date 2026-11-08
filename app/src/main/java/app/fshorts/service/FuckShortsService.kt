@@ -315,6 +315,16 @@ class FuckShortsService : AccessibilityService() {
         }
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return
+        // Tipp in YouTube öffnet eine andere App (Werbung → Chrome Custom Tab): Deren Fenster ist sofort undurchsichtig.
+        // Nicht auf den nächsten Scan warten (unsere stand sonst ~0,2 s über dem Tab).
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null &&
+            pkg != selectors.youtubePackage && pkg != SYSTEM_UI && youTubeActive && overlay.isShowing &&
+            !overlay.isSliding && splitBounds == null && event.className?.contains("Activity") == true &&
+            SystemClock.uptimeMillis() - lastTouchAt < 1500
+        ) {
+            reason("Andere App geöffnet ($pkg), unsere sofort weg")
+            hideAll()
+        }
         if (app.fshorts.BuildConfig.DEBUG && (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED)
         ) {
@@ -1226,6 +1236,9 @@ class FuckShortsService : AccessibilityService() {
         if (front == null) return true
         if (front.id == barWindowId) return true
         val root = front.root ?: return true
+        // Eine andere App (z. B. Chrome Custom Tab nach einem Tipp auf Werbung) ist vorne: Ihr Fenster ist schon
+        // undurchsichtig, auf "Inhalt" warten hiess ~0,3 s unsere Leiste über dem leeren Tab.
+        if (root.packageName?.toString() != selectors.youtubePackage && root.packageName?.toString() != packageName) return false
         return !hasVisibleContent(root)
     }
 
@@ -1671,7 +1684,9 @@ class FuckShortsService : AccessibilityService() {
             lastBar = null
             lastObservedTop = -1
             // Video wird geöffnet (Tipp, nicht Plus/Kamera): sanft wegfahren. Sonst sofort weg.
-            if (now - lastNavAt < NAV_LINK_MS && now - createTappedAt > CREATE_HOLD_MS) hideSmooth() else hideAll()
+            // Eine andere App (Chrome Custom Tab nach Werbe-Tipp) ist schon vorne: sofort weg, nicht über ihr wegfahren.
+            val otherApp = frontPkg != null && frontPkg != selectors.youtubePackage && frontPkg != packageName
+            if (!otherApp && now - lastNavAt < NAV_LINK_MS && now - createTappedAt > CREATE_HOLD_MS) hideSmooth() else hideAll()
             return
         }
         // Taucht die echte Leiste gerade wieder auf oder fährt hoch (z. B. Video verlassen), steht unsere
