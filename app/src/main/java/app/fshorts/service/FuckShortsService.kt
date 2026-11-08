@@ -2529,7 +2529,7 @@ class FuckShortsService : AccessibilityService() {
         // Android braucht ein paar Bilder, bis unsere Leiste Berührungen durchlässt.
         private const val PASS_THROUGH_DELAY_MS = 80L
         private const val ICON_CENTER_DP = 20f
-        private const val TABLET_ICON_CENTER_DP = 14.4f
+        private const val TABLET_ICON_CENTER_DP = 16.1f
         private const val TABLET_LABEL_TOP_DP = 30f
         private const val LABEL_TOP_DP = 32.5f
         private const val REST_STABLE_MS = 300L
