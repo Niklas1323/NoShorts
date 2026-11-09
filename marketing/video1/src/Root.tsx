@@ -9,6 +9,7 @@ import { Ad6, DURATION6_S, FPS6 } from './Ad6';
 import { DURATION6F_S } from './map6';
 import { DURATION6FM_S } from './map6M';
 import { Ad7, DURATION7_S, FPS7 } from './Ad7';
+import { Ad8, DURATION8_S, FPS8 } from './Ad8';
 import { DURATION6V_S } from './map6v';
 import { DURATION6V3_S } from './map6v3';
 import { DURATION6V4_S } from './map6v4';
@@ -42,5 +43,7 @@ export const Root: React.FC = () => (
     {/* Video 7: bunter Zeichenstil "One day ... the last time"; Ad7 = eigene Musik (hochladen), Ad7Orig = Musik der Vorlage (NUR ANSCHAUEN) */}
     <Composition id="Ad7" component={Ad7} durationInFrames={Math.round(DURATION7_S * FPS7)} fps={FPS7} width={1920} height={1080} defaultProps={{ music: 'own' as const }} />
     <Composition id="Ad7Orig" component={Ad7} durationInFrames={Math.round(DURATION7_S * FPS7)} fps={FPS7} width={1920} height={1080} defaultProps={{ music: 'orig' as const }} />
+    {/* Video 8: "8 YEARS" hochkant, ohne Stimme, Rechnung 3 h/Tag von 13 bis 80 */}
+    <Composition id="Ad8" component={Ad8} durationInFrames={Math.round(DURATION8_S * FPS8)} fps={FPS8} width={1080} height={1920} defaultProps={{ sound: true }} />
   </>
 );
