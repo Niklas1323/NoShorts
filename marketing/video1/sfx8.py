@@ -130,9 +130,7 @@ def heartbeat():
     return hit(0.35, 45) * 0.8
 # Grundstimmung: dunkler Ton + Herzschlag bis zur Lösung
 add(pad([55, 82.4], 17.0), 0.0, 0.5)
-b = 0.0
-while b < 17.0:
-    add(heartbeat(), b, 0.5); add(heartbeat(), b + 0.28, 0.35); b += 1.0
+# (kein Herzschlag mehr: Niklas fand das "Bubum" störend)
 # Hook
 add(hit(1.0, 38), 0.0, 1.0); add(hit(0.5, 60), 0.45, 0.6); add(hit(0.5, 60), 0.9, 0.6)
 # Zähler: Ticks
