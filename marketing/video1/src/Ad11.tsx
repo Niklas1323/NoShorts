@@ -513,8 +513,8 @@ const Hud: React.FC<{ t: number }> = ({ t }) => {
 const SWEAR = ['fuck', 'bitch', 'shit'];
 const KEY = ['money', 'tiktok', 'instagram', 'shorts', 'gone', 'rich', 'nothing', 'fried', 'paused', 'free', 'take', 'delete', 'keep', 'kill', 'back', 'test', '12'];
 const SHAKE = ws.filter((w) => SWEAR.some((s) => w[0].includes(s))).map((w) => w[1]);
-const PUNCH = [...SCENES.map((s) => s.a + 0.12), ...ws.filter((w) => KEY.includes(w[0])).map((w) => w[1]), ...SHAKE];
-const FLASH = [...SHAKE, ...SCENES.slice(1).map((s) => s.a + 0.12)];
+const PUNCH = [...ws.filter((w) => KEY.includes(w[0])).map((w) => w[1]), ...SHAKE];
+const FLASH = [...SHAKE];
 
 export const Ad11: React.FC<{ voice: boolean }> = ({ voice }) => {
   useInter();
@@ -524,19 +524,19 @@ export const Ad11: React.FC<{ voice: boolean }> = ({ voice }) => {
   const pk = Math.max(0, ...PUNCH.map((p) => (t >= p ? Math.exp(-(t - p) / 0.09) : 0)));
   const sk = Math.max(0, ...SHAKE.map((p) => (t >= p && t < p + 0.32 ? 1 - (t - p) / 0.32 : 0)));
   const fl = Math.max(0, ...FLASH.map((p) => (t >= p && t < p + 0.1 ? 1 - (t - p) / 0.1 : 0)));
-  const pop = 1.12 - 0.12 * ease(t, sc.a, sc.a + 0.15);
+  const pop = 1.03 - 0.03 * ease(t, sc.a, sc.a + 0.2);
   return (
     <AbsoluteFill style={{ background: '#000', overflow: 'hidden' }}>
       {voice && <Audio src={staticFile('voice11.wav')} />}
       {voice && <Audio src={staticFile('sfx11.wav')} volume={0.4} />}
       <Backdrop t={t} />
-      <AbsoluteFill style={{ transform: `translate(${sk * 22 * Math.sin(t * 97)}px, ${sk * 16 * Math.cos(t * 83)}px) scale(${pop * (1 + 0.08 * pk)})` }}>
+      <AbsoluteFill style={{ transform: `translate(${sk * 6 * Math.sin(t * 60)}px, ${sk * 4 * Math.cos(t * 50)}px) scale(${pop * (1 + 0.025 * pk)})` }}>
         {sc.text && <Caption t={t} sc={sc} />}
         <C t={t} />
       </AbsoluteFill>
       {sc.k !== 'cta' && <Hud t={t} />}
-      <AbsoluteFill style={{ background: '#fff', opacity: fl * 0.25, pointerEvents: 'none' }} />
-      <AbsoluteFill style={{ background: `radial-gradient(70% 60% at 50% 50%, transparent 50%, rgba(229,23,43,${0.35 * sk}) 100%)`, pointerEvents: 'none' }} />
+      <AbsoluteFill style={{ background: '#fff', opacity: fl * 0.1, pointerEvents: 'none' }} />
+      <AbsoluteFill style={{ background: `radial-gradient(70% 60% at 50% 50%, transparent 50%, rgba(229,23,43,${0.25 * sk}) 100%)`, pointerEvents: 'none' }} />
     </AbsoluteFill>
   );
 };
