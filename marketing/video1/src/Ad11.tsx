@@ -281,15 +281,15 @@ const FightScene: React.FC<{ t: number }> = ({ t }) => {
   const sc = S('fight');
   const lt = t - sc.a;
   const tug = Math.sin(lt * 14) * 10;
-  const tiles = [[560, 520], [1360, 520], [960, 300]];
+  const tiles = [[560, 600], [1360, 600], [960, 450]];
   return (
     <Glow>
-      <Person x={960 + tug} y={760} s={1.4} />
+      <Person x={960 + tug} y={830} s={1.4} />
       {tiles.map(([x, y], i) => {
         const p = ease(lt, 0.1 + i * 0.12, 0.3 + i * 0.12);
         return (
           <g key={i} opacity={p}>
-            <line x1={x} y1={y} x2={960 + tug} y2={700} {...LINE} strokeWidth={3} strokeDasharray="12 10" />
+            <line x1={x} y1={y} x2={960 + tug} y2={770} {...LINE} strokeWidth={3} strokeDasharray="12 10" />
             <rect x={x - 60} y={y - 60} width={120} height={120} rx={30} {...LINE} strokeWidth={6} fill="#000" />
             <ShortsGlyph x={x} y={y} s={0.9} c={i === 2 ? RED : '#fff'} />
           </g>
