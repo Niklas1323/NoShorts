@@ -10,6 +10,7 @@ import { DURATION6F_S } from './map6';
 import { DURATION6FM_S } from './map6M';
 import { Ad7, DURATION7_S, FPS7 } from './Ad7';
 import { Ad8, DURATION8_S, FPS8 } from './Ad8';
+import { Ad9, DURATION9_S, FPS9 } from './Ad9';
 import { DURATION6V_S } from './map6v';
 import { DURATION6V3_S } from './map6v3';
 import { DURATION6V4_S } from './map6v4';
@@ -45,5 +46,7 @@ export const Root: React.FC = () => (
     <Composition id="Ad7Orig" component={Ad7} durationInFrames={Math.round(DURATION7_S * FPS7)} fps={FPS7} width={1920} height={1080} defaultProps={{ music: 'orig' as const }} />
     {/* Video 8: "8 YEARS" hochkant, ohne Stimme, Rechnung 3 h/Tag von 13 bis 80 */}
     <Composition id="Ad8" component={Ad8} durationInFrames={Math.round(DURATION8_S * FPS8)} fps={FPS8} width={1080} height={1920} defaultProps={{ sound: true }} />
+    {/* Video 9: "Lock the f*ck in" – Anfang wie die Vorlage, dann F*ck Shorts (quer) */}
+    <Composition id="Ad9" component={Ad9} durationInFrames={Math.round(DURATION9_S * FPS9)} fps={FPS9} width={1920} height={1080} defaultProps={{ voice: true }} />
   </>
 );
