@@ -13,6 +13,7 @@ import { Ad8, DURATION8_S, FPS8 } from './Ad8';
 import { Ad9, DURATION9_S, FPS9 } from './Ad9';
 import { Ad10, DURATION10_S, FPS10 } from './Ad10';
 import { Ad11, DURATION11_S, FPS11 } from './Ad11';
+import { Ad12, DURATION12_S, FPS12 } from './Ad12';
 import { DURATION6V_S } from './map6v';
 import { DURATION6V3_S } from './map6v3';
 import { DURATION6V4_S } from './map6v4';
@@ -54,5 +55,7 @@ export const Root: React.FC = () => (
     <Composition id="Ad10" component={Ad10} durationInFrames={Math.round(DURATION10_S * FPS10)} fps={FPS10} width={1920} height={1080} defaultProps={{ voice: true }} />
     {/* Video 11: "Your attention is worth money" – Strich-Stil, schnell */}
     <Composition id="Ad11" component={Ad11} durationInFrames={Math.round(DURATION11_S * FPS11)} fps={FPS11} width={1920} height={1080} defaultProps={{ voice: true }} />
+    {/* Video 12: "Lock in." hochkant – Köder, dann Nachtszene mit enttäuschtem Freund */}
+    <Composition id="Ad12" component={Ad12} durationInFrames={Math.round(DURATION12_S * FPS12)} fps={FPS12} width={1080} height={1920} defaultProps={{ voice: true }} />
   </>
 );
