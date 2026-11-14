@@ -191,6 +191,10 @@ class FuckShortsService : AccessibilityService() {
     private var coverWindowId = -1
     /** Höchste Lage eines offenen Panels im YouTube-Fenster (z. B. Werbe-Menü). MAX_VALUE = keins offen. */
     private var panelMinTop = Int.MAX_VALUE
+    /** Das offene Panel selbst: wird jedes Bild nachgesehen (eine Abfrage), damit unsere beim Zugehen sofort steht. */
+    private var panelNode: AccessibilityNodeInfo? = null
+    /** Test-Versionen: Aufbau einer Seite mit Panel einmal speichern (fürs Protokoll "Ningelog"). */
+    private var panelDumpedAt = 0L
     private var linkShortAt = 0L
     /** Unsere Leiste wurde vor dem Schliessen der Kamera schon gezeigt: kurz nicht wieder verstecken. */
     private var preShownAt = 0L
@@ -501,8 +505,9 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
-    private fun drawPending(): Boolean = overlay.isSlidingAway || (isTablet && overlay.isShowing &&
-        overlay.drawnAt < overlay.shownAt && SystemClock.uptimeMillis() - overlay.shownAt < TABLET_DRAW_WAIT_MS)
+    private fun drawPending(): Boolean = overlay.isSlidingAway || (overlay.isShowing &&
+        overlay.drawnAt < overlay.shownAt &&
+        SystemClock.uptimeMillis() - overlay.shownAt < if (isTablet) TABLET_DRAW_WAIT_MS else PHONE_DRAW_WAIT_MS)
 
     private fun snapToEdges(r: Rect): Rect {
         val s = screenBounds()
@@ -1118,6 +1123,7 @@ class FuckShortsService : AccessibilityService() {
 
         if (bar == null && !watchPageOpen && handlePanel(root, now)) return
         panelMinTop = Int.MAX_VALUE
+        panelNode = null
 
         // Echte Leiste ist wieder da (z. B. zurück aus der Kamera), unsere noch nicht: sofort zeigen. Jede weitere
         // Abfrage kostet jetzt 30–50 ms, weil YouTube gerade umbaut. Shorts & Co. prüft der nächste Scan.
@@ -1467,6 +1473,7 @@ class FuckShortsService : AccessibilityService() {
         val rest = restBounds
         val state = lastUiState
         if (top == null) {
+            panelNode = null
             if (panelMinTop == Int.MAX_VALUE) return false
             panelMinTop = Int.MAX_VALUE
             if (rest == null || state == null) return false
@@ -1477,8 +1484,25 @@ class FuckShortsService : AccessibilityService() {
             continueScanSoon()
             return true
         }
+        val firstSeen = panelMinTop == Int.MAX_VALUE
         panelMinTop = minOf(panelMinTop, top)
-        val closing = top > panelMinTop + CLOSING_DP * resources.displayMetrics.density
+        panelNode = scanner.findPanel(root, screen)
+        if (firstSeen && app.fshorts.BuildConfig.DEBUG && now - panelDumpedAt > PANEL_DUMP_INTERVAL_MS) {
+            // Test-Versionen: Aufbau etwas später speichern (ein Dump hält alles bis ~1 s auf), nur wenn das Panel noch
+            // offen ist. So sieht man im Protokoll, was für ein Panel es ist (Werbe-Video oder ⋮-Menü).
+            panelDumpedAt = now
+            handler.postDelayed({
+                if (panelMinTop == Int.MAX_VALUE || overlay.isShowing || !youTubeActive) return@postDelayed
+                val r = youTubeMainRoot() ?: return@postDelayed
+                DebugLog.add("Aufbau mit Panel gespeichert (oben=$panelMinTop)")
+                dumper.dump(r, windows, "panel")
+            }, PANEL_DUMP_DELAY_MS)
+        }
+        // Grosses Blatt bis weit nach oben (Werbe-Video: "Sponsored … Shop now" unter dem Player) ist eine ganze
+        // Seite, kein Menü: Rutscht es ein Stück (z. B. nächste Werbung), darf unsere NICHT darüber erscheinen
+        // (Video vom 14.11.). Nur ein kleines Menü-Panel (⋮ bei Werbung) zeigt unsere schon beim Runterfahren.
+        val bigSheet = panelMinTop < screen.top + screen.height() * BIG_SHEET_TOP
+        val closing = !bigSheet && top > panelMinTop + CLOSING_DP * resources.displayMetrics.density
         if (rest != null && state != null && (closing || top >= rest.top - 2)) {
             reason("Panel fährt raus (oben=$top)")
             preShownAt = now
@@ -1490,6 +1514,41 @@ class FuckShortsService : AccessibilityService() {
         }
         handler.postDelayed({ scheduleScan() }, POLL_MS)
         return true
+    }
+
+    /**
+     * Panel offen, unsere weg: eine Abfrage pro Bild. Ist das Panel weg (oder unter unsere Leiste gerutscht), sofort
+     * zeigen wie "Panel zu" im Scan. Baut YouTube das Panel neu (Knoten ungültig), erst neu suchen, nicht gleich zeigen.
+     */
+    private fun checkPanelGone(now: Long) {
+        val rest = restBounds ?: return
+        val state = lastUiState ?: return
+        if (overlay.isShowing) return
+        var node = panelNode ?: return
+        if (!node.refresh() || !node.isVisibleToUser) {
+            val again = youTubeMainRoot()?.let { scanner.findPanel(it, screen) }
+            if (again != null) {
+                panelNode = again
+                node = again
+            } else {
+                panelNode = null
+                panelMinTop = Int.MAX_VALUE
+                reason("Panel zu (Nachführen), unsere vorab zeigen")
+                preShownAt = now
+                hiddenByScroll = false
+                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                continueScanSoon()
+                return
+            }
+        }
+        val top = scanner.topOf(node)
+        if (top >= rest.top - 2) {
+            reason("Panel unter der Leiste (Nachführen, oben=$top)")
+            preShownAt = now
+            hiddenByScroll = false
+            overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            continueScanSoon()
+        }
     }
 
     /**
@@ -1636,7 +1695,14 @@ class FuckShortsService : AccessibilityService() {
     private fun updateBar(now: Long, fresh: FoundBar?) {
         val rest = restBounds
         val state = lastUiState
-        // Menü vorne oder Panel offen: Das regelt der Scan (Lage des Menüs), die Leiste ist nicht abfragbar.
+        // Panel offen: Die Leiste ist nicht abfragbar. Aber das Panel selbst jedes Bild nachsehen: Geht es zu (z. B.
+        // Werbe-Video verlassen), steht unsere sofort und nicht erst nach dem nächsten Scan (mit Werbung 0,3 s
+        // echte Leiste, Video vom 14.11.).
+        if (panelMinTop != Int.MAX_VALUE && !menuFront && coverWindowId == -1) {
+            checkPanelGone(now)
+            return
+        }
+        // Menü vorne: Das regelt der Scan (Lage des Menüs), die Leiste ist nicht abfragbar.
         if (menuFront || panelMinTop != Int.MAX_VALUE || coverWindowId != -1) return
         if (popupFront(foregroundWindow()?.root) != null) return
         // Unser eigener Tipp aufs Karten-⋮: Das Menü ist gleich wieder zu, unsere bleibt stehen (sonst 0,13 s weg).
@@ -2096,10 +2162,11 @@ class FuckShortsService : AccessibilityService() {
             // Tablet: Die Kamera braucht dort ~0,9 s, bis sie aufgeht (Galaxy Tab A8). So lange stand unsere Leiste
             // ("viel zu lange", Wunsch von Niklas). Darum fährt sie sofort weg und bleibt kurz weg; dafür ist die
             // echte Leiste bis zur Kamera zu sehen. Geht die Kamera nicht auf, kommt unsere danach wieder.
-            // Handy (Wunsch von Niklas, 14.11.): auch hier sofort nach unten wegfahren statt zu stehen und dann zu
-            // verschwinden. Die Kamera ist dort nach ~0,3 s da; bleibt sie aus (z. B. Fotos-Frage), kommt unsere
-            // nach der kurzen Pause wieder.
-            overlay.slideAway(VIDEO_SLIDE_MS, if (isTablet) CREATE_SLIDE_HOLD_MS else CREATE_SLIDE_HOLD_PHONE_MS, fast = true)
+            // Handy: Die ganze Leiste wegfahren zeigte darunter 4–6 Bilder die echte Leiste (Video vom 14.11.). Darum
+            // sinken nur die Knöpfe sofort weg (reagiert sofort, mit Animation), die Fläche bleibt und deckt die echte
+            // ab, bis die Kamera darüber ist; dann versteckt der Scan unsere wie vorher.
+            if (isTablet) overlay.slideAway(VIDEO_SLIDE_MS, CREATE_SLIDE_HOLD_MS, fast = true)
+            else overlay.sinkContent(CREATE_SINK_RESTORE_MS)
         }
         // Auch bei weggescrollter Leiste: ihre Knöpfe neu einlesen und über die Bedienungshilfen klicken.
         val fresh = scanner.findBar(root, screenBounds())
@@ -2184,14 +2251,14 @@ class FuckShortsService : AccessibilityService() {
                     scheduleScan()
                 }
                 // Nach dem Start oder Scrollen fehlen die Reiter, bis die Liste ein Stück nach unten gezogen wird.
-                attempt == TOP_TAB_NUDGE_AT || attempt == TOP_TAB_NUDGE_AT * 3 -> {
+                attempt == TOP_TAB_NUDGE_FAST || attempt == TOP_TAB_NUDGE_FAST * 3 -> {
                     nudgeFeedDown()
                     waitForTopTabThenClick(seq, attempt + 1)
                 }
-                attempt < TOP_TAB_TRIES -> waitForTopTabThenClick(seq, attempt + 1)
+                attempt < TOP_TAB_TRIES_FAST -> waitForTopTabThenClick(seq, attempt + 1)
                 else -> tapLog("$kind: Reiter oben kam nicht")
             }
-        }, REVEAL_POLL_MS)
+        }, if (attempt == 0) 0L else TOP_TAB_POLL_MS)
     }
 
     /** Prüft nach einer Weile, ob der Tab gewählt ist – aber nur, wenn du seither nicht schon weitergetippt hast. */
@@ -2518,16 +2585,25 @@ class FuckShortsService : AccessibilityService() {
         private const val FOREGROUND_GAP_MS = 500L
         private const val SLOW_SCAN_MS = 150L
         private const val REVEAL_POLL_MS = 50L
+        /** Handy: nach dem Zeigen höchstens so lange nicht abfragen, bis unsere Leiste gezeichnet ist. */
+        private const val PHONE_DRAW_WAIT_MS = 60L
+        /** Abos über den Reiter oben: jedes Bild nachsehen (vorher alle 50 ms, so sah man die Startseite länger). */
+        private const val TOP_TAB_POLL_MS = 16L
         private const val REVEAL_TRIES = 20
-        private const val TOP_TAB_TRIES = 60
         private const val HOME_TAP_TRIES = 8
         private const val HOME_TAP_HOLD_MS = 800L
-        private const val TOP_TAB_NUDGE_AT = 8
+        // gleiche Zeiten wie vorher (0,4 s / 1,2 s nudgen, 3 s aufgeben), aber jedes Bild nachsehen
+        private const val TOP_TAB_NUDGE_FAST = 25
+        private const val TOP_TAB_TRIES_FAST = 190
         private const val LINK_WINDOW_MS = 8_000L
         private const val LINK_END_MS = 400L
         private const val LINK_FIX_MS = 600L
         private const val LINK_SETTLE_MS = 2_000L
         private const val CLOSING_DP = 24f
+        /** Panel, das höher als dieser Anteil des Bildschirms reicht, ist eine ganze Seite (Werbe-Video), kein Menü. */
+        private const val BIG_SHEET_TOP = 0.45f
+        private const val PANEL_DUMP_INTERVAL_MS = 20_000L
+        private const val PANEL_DUMP_DELAY_MS = 1_500L
         private const val FINGERPRINT_MS = 200L
         // Android braucht ein paar Bilder, bis unsere Leiste Berührungen durchlässt.
         private const val PASS_THROUGH_DELAY_MS = 80L
@@ -2552,7 +2628,7 @@ class FuckShortsService : AccessibilityService() {
         private val SAVE_EXIT_WORDS = listOf("speichern", "save", "enregistrer", "guardar", "salva", "sauvegarder")
         private const val CREATE_HOLD_MS = 1_500L
         private const val CREATE_SLIDE_HOLD_MS = 1_200L
-        private const val CREATE_SLIDE_HOLD_PHONE_MS = 600L
+        private const val CREATE_SINK_RESTORE_MS = 1_500L
         private const val NAV_HOLD_MS = 800L
         private const val THEME_HOLD_MS = 1_500L
         private const val SHADE_GAP_MS = 600L

@@ -9,6 +9,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -114,6 +115,11 @@ class BottomBarOverlay(
     private var uiState by mutableStateOf<BarUiState?>(null)
     /** Leiste war versteckt: Abdunklung beim Wiederzeigen sofort richtig, ohne Animation (sonst sähe man sie verblassen). */
     private var dimInstant by mutableStateOf(true)
+    /** Plus getippt: Knöpfe sinken weg, die Fläche bleibt (deckt die echte Leiste ab, bis die Kamera da ist). */
+    private var sunk by mutableStateOf(false)
+    /** Versteckt: Knöpfe beim nächsten Zeigen sofort wieder oben, ohne Animation. */
+    private var sinkSnap by mutableStateOf(false)
+    private val restoreSink = Runnable { sunk = false }
     private var optimistic: TabKind? = null
     private var optimisticAt = 0L
 
@@ -326,8 +332,27 @@ class BottomBarOverlay(
         windowManager.updateViewLayout(v, params)
     }
 
+    /**
+     * Plus getippt (Handy): Die Knöpfe sinken sofort nach unten weg und blenden aus, die Fläche bleibt stehen. So
+     * reagiert die Leiste sofort, aber die echte Leiste darunter (mit Shorts-Knopf) sieht man nie. Versteckt wird
+     * erst, wenn die Kamera darüber ist (wie vorher). Geht keine Kamera auf, kommen die Knöpfe nach [restoreMs] zurück.
+     */
+    fun sinkContent(restoreMs: Long) {
+        val v = view ?: return
+        if (!isShowing) return
+        sinkSnap = false
+        sunk = true
+        v.removeCallbacks(restoreSink)
+        v.postDelayed(restoreSink, restoreMs)
+    }
+
     fun hide() {
         val v = view ?: return
+        view?.removeCallbacks(restoreSink)
+        if (sunk) {
+            sinkSnap = true
+            sunk = false
+        }
         if (!isShowing) return
         stopSlide()
         isShowing = false
@@ -418,6 +443,8 @@ class BottomBarOverlay(
                     BottomBar(
                         state = state,
                         dimInstant = dimInstant,
+                        sunk = sunk,
+                        sinkSnap = sinkSnap,
                         onTap = { kind ->
                             if (kind != TabKind.CREATE) {
                                 optimistic = kind
@@ -489,7 +516,14 @@ class BottomBarOverlay(
 }
 
 @Composable
-private fun BottomBar(state: BarUiState, dimInstant: Boolean, onTap: (TabKind) -> Unit, onLongPress: () -> Unit) {
+private fun BottomBar(
+    state: BarUiState,
+    dimInstant: Boolean,
+    sunk: Boolean,
+    sinkSnap: Boolean,
+    onTap: (TabKind) -> Unit,
+    onLongPress: () -> Unit,
+) {
     val style = state.style
     val density = LocalDensity.current
     val barHeight = with(density) { state.barHeightPx.toDp() }
@@ -530,9 +564,17 @@ private fun BottomBar(state: BarUiState, dimInstant: Boolean, onTap: (TabKind) -
         if (dimInstant) ink.snapTo(target)
         else ink.animateTo(target, tween(if (target > 0f) INK_IN_MS else INK_OUT_MS, easing = FastOutSlowInEasing))
     }
+    val sink = remember { Animatable(0f) }
+    LaunchedEffect(sunk, sinkSnap) {
+        when {
+            sunk -> sink.animateTo(1f, tween(SINK_MS, easing = FastOutLinearInEasing))
+            sinkSnap -> sink.snapTo(0f)
+            else -> sink.animateTo(0f, tween(RISE_MS, easing = FastOutSlowInEasing))
+        }
+    }
     val duck by animateFloatAsState(
         targetValue = if (state.dim > 0f) 0.94f else 1f,
-        animationSpec = if (state.dim > 0f) tween(INK_IN_MS, easing = FastOutSlowInEasing) else spring(dampingRatio = 0.42f, stiffness = 520f),
+        animationSpec = if (state.dim > 0f) tween(INK_IN_MS, easing = FastOutSlowInEasing) else spring(dampingRatio = 0.45f, stiffness = 300f),
         label = "duck",
     )
     Box(
@@ -596,6 +638,8 @@ private fun BottomBar(state: BarUiState, dimInstant: Boolean, onTap: (TabKind) -
             modifier = Modifier.fillMaxWidth().height(barHeight).graphicsLayer {
                 scaleX = duck
                 scaleY = duck
+                translationY = sink.value * size.height * 0.85f
+                alpha = 1f - sink.value
                 transformOrigin = TransformOrigin(0.5f, 0.35f)
             },
             horizontalArrangement = if (style.tablet) Arrangement.Center else Arrangement.Start,
@@ -790,8 +834,11 @@ private fun Label(text: String, color: Color, tablet: Boolean = false, modifier:
 /** Schriftgrösse wie die echte Leiste (gemessen: "Startseite" ist dort 129 px breit bei Dichte 2,875). */
 private const val LABEL_DP = 10.5f
 /** Abdunkeln beim ⋮-Menü: Tinte breitet sich aus (ms) bzw. zieht sich zurück. */
-private const val INK_IN_MS = 300
-private const val INK_OUT_MS = 240
+private const val INK_IN_MS = 480
+private const val INK_OUT_MS = 380
+/** Plus: Knöpfe sinken nach unten weg (ms), die Fläche bleibt stehen, bis die Kamera darüber ist. */
+private const val SINK_MS = 230
+private const val RISE_MS = 260
 /** Tablet (Galaxy Tab A8, Dichte 1,75 gemessen): "Startseite" ist dort 89 px breit = 12,1 dp; Symbole ~28 dp; Spalte 96 dp. */
 private const val TABLET_LABEL_DP = 12.1f
 private const val TABLET_ICON_DP = 28f

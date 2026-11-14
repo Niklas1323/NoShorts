@@ -942,3 +942,20 @@ ElevenLabs: Gratis-Konto meldete am 08.11. "Free Tier disabled" (eine Aufnahme g
 - Plus am Handy: fährt jetzt sofort nach unten weg wie auf dem Tablet (`slideAway`, Pause `CREATE_SLIDE_HOLD_PHONE_MS`
   600 ms). Wunsch des Nutzers; dafür kann man kurz die echte Leiste sehen, bis die Kamera (~0,3 s) darüber ist.
   **Am Pixel prüfen:** ⋮ auf/zu (Animation flüssig, kein Flackern), Dialog Suchfilter, Plus → Kamera, Plus + Zurück.
+- **Nachtrag (Build 216 → 217), zwei Videos des Nutzers Bild für Bild (Rotes Profilbild: bei uns Platz 3, echt Platz 4):**
+  - Plus (216): Wegfahren zeigte 4–6 Bilder die echte Leiste → Handy jetzt `overlay.sinkContent`: nur die Knöpfe sinken
+    weg (`SINK_MS` 230), die Fläche bleibt, bis die Kamera darüber ist (danach versteckt der Scan wie vor 216). Kommt keine
+    Kamera, kommen die Knöpfe nach `CREATE_SINK_RESTORE_MS` zurück. Tablet unverändert (`slideAway`).
+  - Tinte langsamer (`INK_IN_MS` 480, `INK_OUT_MS` 380), Zurückfedern weicher.
+  - **Werbe-Video** (Tipp auf Werbung in der Liste → Seite mit Player oben und Blatt "Sponsored … Shop now"): unsere stand
+    zeitweise ÜBER dieser Seite, und beim Verlassen ~0,35 s echte Leiste. Vermutung: Das Blatt ist `app_engagement_panel`,
+    die Seite gilt nicht als Video → `handlePanel`; "Panel fährt raus" (24 dp tiefer) zeigte unsere, wenn das Blatt rutschte;
+    beim Zugehen nur Scans (mit Werbung langsam). Jetzt: grosses Blatt (`BIG_SHEET_TOP` 45 %) = Seite, kein frühes Zeigen;
+    Panel jedes Bild nachsehen (`checkPanelGone`, `panelNode`). Test-Versionen speichern einmal den Aufbau ("panel") fürs
+    Ningelog. **Nicht am Handy geprüft – Ningelog mit Werbe-Video holen.**
+  - Normales Video mit Werbe-Kärtchen per Zurück-Geste verlassen: ~0,25 s echte Leiste (Video 2). Ursache offen (Protokoll).
+  - Kamera per Zurück-Geste zu: 2–6 Bilder echte (bekannte Grenze, Android meldet spät).
+  - Handy: nach dem Zeigen bis 60 ms nicht abfragen, bis unsere gezeichnet ist (`PHONE_DRAW_WAIT_MS`, wie Tablet).
+  - Abos von You: Neues Design hat Abos nur als Reiter oben auf der Startseite → erst Startseite, dann Reiter. Jetzt Reiter
+    jedes Bild suchen (`TOP_TAB_POLL_MS` 16 statt 50 ms). Ganz direkt ginge nur per Link (youtube.com/feed/subscriptions),
+    ungetestet, darum nicht eingebaut.

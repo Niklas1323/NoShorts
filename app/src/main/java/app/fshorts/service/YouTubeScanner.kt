@@ -261,6 +261,15 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
             .minOfOrNull { it.top }
     }
 
+    /** Das Panel selbst (gleiche Regeln wie [panelTop]), damit es danach jedes Bild mit einer Abfrage geprüft werden kann. */
+    fun findPanel(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
+        val r = Rect()
+        return root.findAccessibilityNodeInfosByViewId(sel.fullId(PANEL_ID))
+            .filter { it.isVisibleToUser }
+            .filter { it.getBoundsInScreen(r); r.width() >= screen.width() * 0.9 && r.bottom >= screen.bottom - 2 && r.top < screen.bottom - 2 }
+            .minByOrNull { it.getBoundsInScreen(r); r.top }
+    }
+
     fun isBarCovered(root: AccessibilityNodeInfo, bar: FoundBar): Boolean {
         val r = Rect()
         for (id in sel.coverIds) {
