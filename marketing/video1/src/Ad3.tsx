@@ -412,9 +412,57 @@ const TokView: React.FC<{ tok: Tok; t: number }> = ({ tok, t }) => {
   );
 };
 
+// ------------------------------------------------------------------------------------------------ Schluss Version 2
+/** Version 2 (zum erneuten Posten): "SIGN UP / LINK IN BIO" ist das Wichtigste, "comment tester" nur klein. */
+const EndingV2: React.FC<{ t: number }> = ({ t }) => {
+  const spring = (a: number, d = 0.45) => {
+    const x = Math.max(0, Math.min(1, (t - a) / d));
+    return x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.exp(-5.2 * x) * Math.cos(7.2 * x);
+  };
+  const logo = ease(t, 12.3, 12.65);
+  const line = ease(t, 12.75, 13.05);
+  const sign = spring(13.1);
+  const link = spring(13.65);
+  const hl = ease(t, 13.8, 14.15);
+  const free = ease(t, 14.5, 14.8);
+  const com = ease(t, 15.3, 15.6);
+  // ab 15.8 s: SIGN UP und LINK IN BIO pochen abwechselnd
+  const beat = (o: number) => (t > 15.8 ? 1 + 0.05 * Math.max(0, Math.sin((t - 15.8 + o) * Math.PI * 1.6)) : 1);
+  return (
+    <AbsoluteFill>
+      <div style={{ position: 'absolute', top: 370, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', opacity: logo, transform: `scale(${1.3 - 0.3 * logo})` }}>
+        <Logo size={150} />
+        <div style={{ marginTop: 18 }}>
+          <BrandName size={78} />
+        </div>
+      </div>
+      <div style={{ position: 'absolute', top: 720, width: '100%', textAlign: 'center', fontFamily: FONT, fontWeight: 800, fontSize: 46, color: 'rgba(255,255,255,.8)', opacity: line, transform: `translateY(${20 * (1 - line)}px)` }}>
+        Removes Shorts from YouTube.
+      </div>
+      <div style={{ position: 'absolute', top: 850, width: '100%', textAlign: 'center', fontFamily: BOLD, fontSize: 290, lineHeight: 1, letterSpacing: 4, color: '#fff', textShadow: '0 8px 40px rgba(229,23,43,.55)', transform: `scale(${sign * beat(0)})`, opacity: Math.min(1, sign * 2) }}>
+        SIGN UP
+      </div>
+      <div style={{ position: 'absolute', top: 1180, width: '100%', display: 'flex', justifyContent: 'center', transform: `scale(${link * beat(0.6)})`, opacity: Math.min(1, link * 2) }}>
+        <div style={{ position: 'relative', padding: '6px 34px 0', fontFamily: BOLD, fontSize: 150, lineHeight: 1.05, letterSpacing: 3, color: '#111' }}>
+          <div style={{ position: 'absolute', inset: 0, background: AMBER, borderRadius: 18, transform: `scaleX(${hl})`, transformOrigin: 'left' }} />
+          <span style={{ position: 'relative', color: hl > 0.5 ? '#111' : '#fff' }}>
+            <span style={{ fontSize: 128 }}>👉</span> LINK IN BIO
+          </span>
+        </div>
+      </div>
+      <div style={{ position: 'absolute', top: 1420, width: '100%', textAlign: 'center', fontFamily: FONT, fontWeight: 900, fontSize: 54, color: RED, opacity: free, transform: `translateY(${20 * (1 - free)}px)` }}>
+        Free for testers · Android
+      </div>
+      <div style={{ position: 'absolute', top: 1510, width: '100%', textAlign: 'center', fontFamily: FONT, fontWeight: 700, fontSize: 36, color: 'rgba(255,255,255,.55)', opacity: com, transform: `translateY(${14 * (1 - com)}px)` }}>
+        (and comment “tester”)
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 // ------------------------------------------------------------------------------------------------ Video
 
-export const Ad3: React.FC<{ refSound: boolean }> = ({ refSound }) => {
+export const Ad3: React.FC<{ refSound: boolean; v2?: boolean }> = ({ refSound, v2 = false }) => {
   useFonts3();
   const frame = useCurrentFrame();
   const t = frame / FPS3;
@@ -444,7 +492,8 @@ export const Ad3: React.FC<{ refSound: boolean }> = ({ refSound }) => {
           <div style={{ fontFamily: BOLD, fontSize: 150, letterSpacing: 4, color: endWord[2] ? '#ff1f1f' : '#fff' }}>{endWord[0]}</div>
         </AbsoluteFill>
       )}
-      {t >= 12.3 && (
+      {t >= 12.3 && v2 && <EndingV2 t={t} />}
+      {t >= 12.3 && !v2 && (
         <AbsoluteFill>
           <div style={{ position: 'absolute', top: 470, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', opacity: logo, transform: `scale(${1.3 - 0.3 * logo})` }}>
             <Logo size={210} />
