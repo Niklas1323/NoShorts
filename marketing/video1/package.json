@@ -7,12 +7,18 @@
   "dependencies": {
     "@fontsource/anton": "^5.1.0",
     "@fontsource/dancing-script": "^5.1.0",
+    "@fontsource/instrument-serif": "^5.1.0",
     "@fontsource/inter": "^5.1.0",
     "@fontsource/montserrat": "^5.1.0",
+    "@fontsource/roboto": "^5.1.0",
+    "@react-three/fiber": "^8.17.10",
     "@remotion/cli": "4.0.290",
+    "@remotion/three": "^4.0.290",
+    "@types/three": "^0.169.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "remotion": "4.0.290"
+    "remotion": "4.0.290",
+    "three": "^0.169.0"
   },
   "devDependencies": {
     "@types/react": "18.3.12",
