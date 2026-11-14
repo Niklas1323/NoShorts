@@ -6,11 +6,11 @@ import numpy as np
 from PIL import Image, ImageFilter
 H = os.path.dirname(os.path.abspath(__file__))
 P = os.path.join(H, '..', 'public', 'ad13')
-for n in ['yt_real', 'yt_fs', 'lock', 'lock_mon', 'search', 'app_home']:
+for n in ['yt_real', 'yt_fs', 'lock', 'lock_mon', 'lock_fri', 'search', 'app_home']:
     im = Image.open(f'{P}/{n}.png').convert('RGB').resize((540, 1212), Image.LANCZOS).filter(ImageFilter.GaussianBlur(9))
     im.save(f'{P}/{n}_blur.png')
 for n in ['bar_real', 'bar_real_full', 'bar_fs', 'bar_fs_empty', 'notif0', 'notif1', 'notif2', 'card0', 'card1', 'card2',
-          'shield', 'closed', 'header', 'vcard0', 'vcard1', 'vcard2']:
+          'shield', 'closed', 'header', 'vcard0', 'vcard1', 'vcard2', 'screentime']:
     im = Image.open(f'{P}/{n}.png').convert('RGBA'); pad = 70; a = im.split()[3]
     big = Image.new('L', (im.width + 2 * pad, im.height + 2 * pad), 0); big.paste(a, (pad, pad)); big = big.filter(ImageFilter.GaussianBlur(26))
     sh = Image.new('RGBA', big.size, (20, 12, 6, 0)); sh.putalpha(big.point(lambda v: int(v * 0.75))); sh.save(f'{P}/{n}_sh.png')

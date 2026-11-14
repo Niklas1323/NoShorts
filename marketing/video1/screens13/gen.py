@@ -297,6 +297,23 @@ layers += (layer('L_header', 1080, 160, hdr)
            + layer('L_ring', 300, 300, ring) + layer('L_ring_rect', 1000, 260, ring_rect) + layer('L_gleam', 600, 120, gleam)
            + layer('L_stop', 300, 300, stop) + layer('L_finger', 160, 160, finger))
 
+# ---- Video 14: weitere Shorts zum Weiterwischen, Freitag-Sperrbildschirm, Bildschirmzeit-Karte
+def short_screen(id_, pal, chan, cap):
+    return screen(id_, f'<div style="position:absolute;inset:0">{th_vertical(pal, 1080, 2424, "")}</div>'
+                  '<div style="position:absolute;left:0;top:0;width:1080px;height:2424px;background:linear-gradient(transparent 70%, rgba(0,0,0,.55))"></div>'
+                  + ''.join(f'<div style="position:absolute;right:40px;top:{1420 + k * 170}px;width:96px;height:96px;border-radius:48px;background:rgba(0,0,0,.35)"></div>' for k in range(4)) +
+                  f'<div style="position:absolute;left:40px;top:2060px;font:500 42px Roboto;color:#fff">{chan} · Subscribe</div>'
+                  f'<div style="position:absolute;left:40px;top:2130px;width:820px;font:400 38px Roboto;color:#fff">{cap}</div>', bg='#000')
+short_full2 = short_screen('short_full2', 4, '@dailyclips', 'POV: it is 3am and you are still here 💀')
+short_full3 = short_screen('short_full3', 5, '@funnyfails', 'part 47 of 120 #fyp')
+lock_fri = screen('lock_fri', lock_inner.replace('Thursday, November 19', 'Friday, November 20'), bg='#070b24')
+st = ('<div style="position:absolute;inset:0;border-radius:52px;background:rgba(30,30,34,.97);box-sizing:border-box;padding:44px 52px">'
+      '<div style="font:500 34px Roboto;color:#b9b9c6">Screen time today</div>'
+      '<div style="margin-top:6px;font:700 104px/1.05 Roboto;color:#fff;letter-spacing:-2px">3 h 12 min</div>'
+      '<div style="margin-top:30px;height:22px;border-radius:11px;background:#3a3a42;overflow:hidden"><div style="width:89%;height:100%;background:#FF0033"></div></div>'
+      '<div style="margin-top:18px;display:flex;justify-content:space-between;font:400 32px Roboto;color:#d6d6e2"><span>YouTube Shorts</span><span>2 h 51 min</span></div></div>')
+layers += layer('L_screentime', 900, 400, st)
+
 html = f'''<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{{font-family:Roboto;font-weight:300;src:url(file://{FONTS}/roboto/files/roboto-latin-300-normal.woff2)}}
 @font-face{{font-family:Roboto;font-weight:400;src:url(file://{FONTS}/roboto/files/roboto-latin-400-normal.woff2)}}
@@ -307,7 +324,7 @@ html = f'''<!doctype html><html><head><meta charset="utf-8"><style>
 .scr{{position:relative;width:1080px;height:2424px;overflow:hidden}}
 .lay{{position:relative;overflow:visible;background:transparent}}
 </style></head><body>
-{yt_real}{yt_fs}{uninstall}{lock}{lock_mon}{search}{short_full}{app_home}{layers}
+{yt_real}{yt_fs}{uninstall}{lock}{lock_mon}{lock_fri}{short_full2}{short_full3}{search}{short_full}{app_home}{layers}
 </body></html>'''
 open(os.path.join(H, 'screens.html'), 'w').write(html)
 print('ok')

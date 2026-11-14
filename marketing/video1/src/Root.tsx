@@ -15,6 +15,7 @@ import { Ad10, DURATION10_S, FPS10 } from './Ad10';
 import { Ad11, DURATION11_S, FPS11 } from './Ad11';
 import { Ad12, DURATION12_S, FPS12 } from './Ad12';
 import { Ad13, DURATION13_S, FPS13 } from './ad13/Ad13';
+import { Ad14, DURATION14_S, FPS14 } from './ad14/Ad14';
 import { DURATION6V_S } from './map6v';
 import { DURATION6V3_S } from './map6v3';
 import { DURATION6V4_S } from './map6v4';
@@ -59,5 +60,6 @@ export const Root: React.FC = () => (
     {/* Video 12: "Lock in." hochkant – Köder, dann Nachtszene mit enttäuschtem Freund */}
     <Composition id="Ad12" component={Ad12} durationInFrames={Math.round(DURATION12_S * FPS12)} fps={FPS12} width={1080} height={1920} defaultProps={{ voice: true }} />
     <Composition id="Ad13" component={Ad13} durationInFrames={Math.round(DURATION13_S * FPS13)} fps={FPS13} width={1080} height={1920} defaultProps={{ voice: true }} />
+    <Composition id="Ad14" component={Ad14} durationInFrames={Math.round(DURATION14_S * FPS14)} fps={FPS14} width={1080} height={1920} defaultProps={{ voice: true }} />
   </>
 );
