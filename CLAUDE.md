@@ -933,3 +933,12 @@ Jedes Werbevideo endet IMMER mit: **"Comment TEST and sign up with the link in m
 "SIGN UP 👉 LINK IN BIO"). Das ist das Wichtigste am Video. Quellen: `marketing/video1/src/Ad*.tsx` (Remotion).
 Keine fremde Musik in Dateien zum Hochladen (Urheberrecht); Vorlagen-Musik nur in "NUR-ANSCHAUEN"-Dateien.
 ElevenLabs: Gratis-Konto meldete am 08.11. "Free Tier disabled" (eine Aufnahme ging danach trotzdem noch).
+
+### 14.11.2026 (Cloud, NICHT am Handy getestet): Abdunkeln animiert, Plus fährt weg
+- Video des Nutzers: Beim ⋮-Menü sprang unsere Leiste in einem Bild von hell (40) auf dunkel (15) und zurück.
+  Jetzt `BottomBar`: Die Dunkelheit breitet sich wie Tinte vom Menü-Loch her aus (`INK_IN_MS` 300 ms) und zieht sich
+  beim Schliessen dorthin zurück (`INK_OUT_MS` 240 ms); die Knöpfe ducken sich auf 94 % und federn zurück. War die
+  Leiste versteckt, wird die Abdunklung ohne Animation gesetzt (`dimInstant`).
+- Plus am Handy: fährt jetzt sofort nach unten weg wie auf dem Tablet (`slideAway`, Pause `CREATE_SLIDE_HOLD_PHONE_MS`
+  600 ms). Wunsch des Nutzers; dafür kann man kurz die echte Leiste sehen, bis die Kamera (~0,3 s) darüber ist.
+  **Am Pixel prüfen:** ⋮ auf/zu (Animation flüssig, kein Flackern), Dialog Suchfilter, Plus → Kamera, Plus + Zurück.

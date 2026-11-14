@@ -8,6 +8,16 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -102,6 +112,8 @@ class BottomBarOverlay(
     private var lifecycleOwner: OverlayLifecycleOwner? = null
 
     private var uiState by mutableStateOf<BarUiState?>(null)
+    /** Leiste war versteckt: Abdunklung beim Wiederzeigen sofort richtig, ohne Animation (sonst sähe man sie verblassen). */
+    private var dimInstant by mutableStateOf(true)
     private var optimistic: TabKind? = null
     private var optimisticAt = 0L
 
@@ -272,6 +284,8 @@ class BottomBarOverlay(
             SystemClock.uptimeMillis() - optimisticAt < OPTIMISTIC_MS &&
             state.selected != optimistic
         val next = if (keepOptimistic) state.copy(selected = optimistic) else state
+        val instant = !isShowing || view?.alpha == 0f
+        if (instant != dimInstant) dimInstant = instant
         if (next != uiState) uiState = next
         // Nur so hoch wie die echte Leiste: Bei Navigation mit 3 Knöpfen bleiben die Knöpfe frei.
         target.set(rest.left, top, rest.right, top + rest.height())
@@ -403,6 +417,7 @@ class BottomBarOverlay(
                 uiState?.let { state ->
                     BottomBar(
                         state = state,
+                        dimInstant = dimInstant,
                         onTap = { kind ->
                             if (kind != TabKind.CREATE) {
                                 optimistic = kind
@@ -474,7 +489,7 @@ class BottomBarOverlay(
 }
 
 @Composable
-private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: () -> Unit) {
+private fun BottomBar(state: BarUiState, dimInstant: Boolean, onTap: (TabKind) -> Unit, onLongPress: () -> Unit) {
     val style = state.style
     val density = LocalDensity.current
     val barHeight = with(density) { state.barHeightPx.toDp() }
@@ -501,13 +516,54 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
         )
         return
     }
+    // Abdunkeln (⋮-Menü, Dialog) nicht springen lassen: Die Dunkelheit breitet sich wie Tinte von der Stelle des
+    // Menüs über die Leiste aus (Öffnen) und zieht sich dorthin zurück (Schliessen). Die Knöpfe ducken sich leicht
+    // weg und federn beim Aufhellen zurück.
+    val ink = remember { Animatable(if (state.dim > 0f) 1f else 0f) }
+    var inkLevel by remember { mutableFloatStateOf(state.dim) }
+    if (state.dim > 0f) inkLevel = state.dim
+    // Ursprung der Tinte: Mitte des Menü-Lochs, sonst Mitte der Leiste (jeweils an der Oberkante)
+    var inkOrigin by remember { mutableStateOf<Offset?>(null) }
+    state.hole?.let { inkOrigin = Offset(it.exactCenterX(), 0f) }
+    LaunchedEffect(state.dim > 0f) {
+        val target = if (state.dim > 0f) 1f else 0f
+        if (dimInstant) ink.snapTo(target)
+        else ink.animateTo(target, tween(if (target > 0f) INK_IN_MS else INK_OUT_MS, easing = FastOutSlowInEasing))
+    }
+    val duck by animateFloatAsState(
+        targetValue = if (state.dim > 0f) 0.94f else 1f,
+        animationSpec = if (state.dim > 0f) tween(INK_IN_MS, easing = FastOutSlowInEasing) else spring(dampingRatio = 0.42f, stiffness = 520f),
+        label = "duck",
+    )
     Box(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
                 drawContent()
-                if (state.dim > 0f) drawRect(Color.Black.copy(alpha = state.dim))
+                val p = ink.value
+                if (p > 0.001f && inkLevel > 0f) {
+                    val dark = Color.Black.copy(alpha = inkLevel)
+                    if (p >= 0.999f) {
+                        drawRect(dark)
+                    } else {
+                        val o = inkOrigin ?: Offset(size.width / 2f, 0f)
+                        val far = maxOf(
+                            Offset(0f, size.height).minus(o).getDistance(),
+                            Offset(size.width, size.height).minus(o).getDistance(),
+                        )
+                        val r = (far * 1.25f * p).coerceAtLeast(1f)
+                        drawRect(
+                            Brush.radialGradient(
+                                0f to dark,
+                                0.78f to dark,
+                                1f to Color.Transparent,
+                                center = o,
+                                radius = r,
+                            ),
+                        )
+                    }
+                }
                 state.hole?.let { h ->
                     drawRoundRect(
                         color = Color.Transparent,
@@ -537,7 +593,11 @@ private fun BottomBar(state: BarUiState, onTap: (TabKind) -> Unit, onLongPress: 
         // Tablet: Die echte Leiste hat enge Spalten (96 dp) als Block in der Mitte; auf dem Handy teilen sich vier
         // gleich breite Spalten die ganze Breite.
         Row(
-            modifier = Modifier.fillMaxWidth().height(barHeight),
+            modifier = Modifier.fillMaxWidth().height(barHeight).graphicsLayer {
+                scaleX = duck
+                scaleY = duck
+                transformOrigin = TransformOrigin(0.5f, 0.35f)
+            },
             horizontalArrangement = if (style.tablet) Arrangement.Center else Arrangement.Start,
         ) {
             val homeSelected = state.selected == TabKind.HOME
@@ -729,6 +789,9 @@ private fun Label(text: String, color: Color, tablet: Boolean = false, modifier:
 
 /** Schriftgrösse wie die echte Leiste (gemessen: "Startseite" ist dort 129 px breit bei Dichte 2,875). */
 private const val LABEL_DP = 10.5f
+/** Abdunkeln beim ⋮-Menü: Tinte breitet sich aus (ms) bzw. zieht sich zurück. */
+private const val INK_IN_MS = 300
+private const val INK_OUT_MS = 240
 /** Tablet (Galaxy Tab A8, Dichte 1,75 gemessen): "Startseite" ist dort 89 px breit = 12,1 dp; Symbole ~28 dp; Spalte 96 dp. */
 private const val TABLET_LABEL_DP = 12.1f
 private const val TABLET_ICON_DP = 28f
