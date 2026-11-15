@@ -177,7 +177,11 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
         // Tablet quer: Video-Seite mit zwei Spalten, der Player ist nur ~70 % breit (Handy: ganze Breite).
         val wide = r.width() >= screen.width() * (if (tablet) 0.6 else 0.9)
         val nearTop = r.top - screen.top < screen.height() * 0.35
-        val playerSized = r.height() >= 150 * density && r.height() <= screen.height() * 0.7
+        // Keine Obergrenze: Hochkant-Werbung vor dem Video macht den Player ~80 % hoch (gemessen 15.11.). Mit der
+        // früheren Grenze (70 %) galt das als "Video verlassen": unsere stand über der Werbung, und beim echten
+        // Verlassen kam die echte Leiste zuerst.
+        val playerSized = r.height() >= 150 * density
+
         // Vollbild (z. B. quer): Der Player füllt den ganzen Bildschirm, das Video ist weiter offen.
         val fullscreen = r.top <= screen.top + 2 && r.height() >= screen.height() * 0.95
         return wide && nearTop && (playerSized || fullscreen)

@@ -33,6 +33,8 @@ import kotlin.math.roundToInt
 class FuckShortsService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
+    /** Für Klicks, die unsere Animation nicht aufhalten dürfen (Plus). */
+    private val clicker = java.util.concurrent.Executors.newSingleThreadExecutor()
     private lateinit var selectors: Selectors
     private lateinit var scanner: YouTubeScanner
     private lateinit var overlay: BottomBarOverlay
@@ -185,6 +187,8 @@ class FuckShortsService : AccessibilityService() {
     private val menuWindows = HashMap<Int, Boolean>()
     /** YouTube-Fenster, in dem es keine Leiste gab (z. B. Kamera). -1 = keins. */
     private var barlessWindowId = -1
+    /** Fenster der Kamera nach Plus (meldet sich selbst, siehe onWindowSignal). -1 = keins. */
+    private var cameraWindowId = -1
     /** YouTube ging nach hinten, während eine Seite ohne Leiste offen war (nur Tablet, siehe scanInternal). */
     private var leftWithoutBar = false
     /** Anderes YouTube-Fenster (z. B. Premium-Werbung) über der Seite mit der Leiste. -1 = keins. */
@@ -216,7 +220,9 @@ class FuckShortsService : AccessibilityService() {
     private val scanRunnable = Runnable {
         scanPending = false
         // Unsere fährt gerade unter einen Dialog weg: erst fertig animieren lassen (ein Scan liesse sie ruckeln).
-        if (overlay.isSliding) {
+        // Ebenso, wenn sie gerade hereinfährt (Video verlassen) oder ihre Knöpfe wegsinken (Plus): Jede Abfrage an
+        // YouTube hält unseren Haupt-Thread 50–300 ms auf, die Animation wurde dann gar nicht gezeichnet.
+        if (overlay.isSliding || overlay.isRising || overlay.isSinking) {
             handler.postDelayed({ scheduleScan() }, POLL_MS)
             return@Runnable
         }
@@ -317,6 +323,12 @@ class FuckShortsService : AccessibilityService() {
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         menuDim = Prefs.menuDim(this)
         loadBarState()
+        // Fenster unserer Leiste schon jetzt anlegen (unsichtbar): Das erste Anlegen dauert ~0,5 s. Musste es erst beim
+        // ersten Zeigen entstehen (z. B. App-Update, während ein Video lief, dann Zurück), sah man so lange die echte.
+        val warmRest = restBounds
+        val warmState = lastUiState
+        if (warmRest != null && warmState != null) overlay.warmUp(warmRest, warmState.copy(style = currentStyle()))
+
         connected = true
         running = true
         scheduleScan()
@@ -331,6 +343,12 @@ class FuckShortsService : AccessibilityService() {
         }
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return
+        if (app.fshorts.BuildConfig.DEBUG && event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED && Log.isLoggable(TRACE_TAG, Log.VERBOSE) &&
+            event.eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED
+        ) {
+            Log.d(TAG, "Ereignis ${AccessibilityEvent.eventTypeToString(event.eventType)} $pkg w=${event.windowId} " +
+                "ch=${event.contentChangeTypes} wch=${event.windowChanges} ${event.className}")
+        }
         // Tipp in YouTube öffnet eine andere App (Werbung → Chrome Custom Tab): Deren Fenster ist sofort undurchsichtig.
         // Nicht auf den nächsten Scan warten (unsere stand sonst ~0,2 s über dem Tab).
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null &&
@@ -361,6 +379,7 @@ class FuckShortsService : AccessibilityService() {
                 }
             }
         }
+        if (!isTablet) onWindowSignal(event, pkg)
         // Tablet: Unsere Leiste wartet aufs Zeichnen. YouTube schickt beim Seitenwechsel viele Meldungen, jede
         // Abfrage dazu hielt das Zeichnen ~0,4 s auf. Nur später nachsehen lassen.
         if (drawPending()) {
@@ -426,6 +445,75 @@ class FuckShortsService : AccessibilityService() {
                 event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED -> scheduleScan()
             overlay.isShowing || shelfMenuOpenedAt != 0L -> scheduleScan()
         }
+    }
+
+    /**
+     * Handy: Fenster-Meldungen, auf die wir sofort reagieren, ohne YouTube etwas zu fragen (jede Abfrage kostet
+     * 50–200 ms, in denen man sonst die echte Leiste sah). Gemessen 15.11. (Pixel 9, YouTube 21.45):
+     * - Plus: ~100 ms nach dem Klick meldet sich die Kamera (CreationModesActivity, eigenes Fenster), ~50 ms später
+     *   deckt sie die Leiste ab (sie fährt von unten hoch).
+     * - Kamera zu (Zurück-Taste/-Geste): zuerst "Fenster entfernt", ~40 ms später meldet sich das Hauptfenster
+     *   (MainActivity). Der Scan zeigte unsere erst ~130 ms nach der ersten Meldung: 4 Bilder echte Leiste.
+     */
+    private fun onWindowSignal(event: AccessibilityEvent, pkg: String?) {
+        val now = SystemClock.uptimeMillis()
+        val wid = event.windowId
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                if (pkg != selectors.youtubePackage || wid == -1 || barWindowId == -1) return
+                val isActivity = event.className?.toString()?.endsWith("Activity") == true
+                if (!isActivity || event.contentChangeTypes != 0) return
+                if (wid != barWindowId) {
+                    if (now - createTappedAt < CREATE_HOLD_MS) onCameraAnnounced(wid, now)
+                } else if (wid != barlessWindowId) {
+                    onBarlessWindowGone("Hauptfenster meldet sich")
+                }
+            }
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                if (event.windowChanges and AccessibilityEvent.WINDOWS_CHANGE_REMOVED == 0 || wid == -1) return
+                if (wid == cameraWindowId) cameraWindowId = -1
+                // Legt sich nur ein anderes Fenster darüber (z. B. Androids Fotos-Frage über der Kamera), meldet
+                // Android die Kamera auch als "entfernt": Dann ist aber ein anderes App-Fenster in der Liste.
+                if (wid == barlessWindowId && wid != barWindowId &&
+                    windows.none { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.id != barWindowId }
+                ) onBarlessWindowGone("Fenster entfernt")
+
+            }
+        }
+    }
+
+    /** Plus getippt und die Kamera meldet sich: Dann ist sie schon über der Leiste (sie fährt von unten hoch): unsere weg. */
+    private fun onCameraAnnounced(windowId: Int, now: Long) {
+        if (cameraWindowId == windowId) return
+        cameraWindowId = windowId
+        val tappedAt = createTappedAt
+        handler.postDelayed({
+            if (createTappedAt != tappedAt || cameraWindowId != windowId || !overlay.isShowing || !overlay.isSunk) return@postDelayed
+            reason("Kamera deckt die Leiste ab, unsere weg")
+            lastBar = null
+            lastObservedTop = -1
+            barlessWindowId = windowId
+            overlay.hide()
+            scheduleScan()
+        }, CAMERA_COVER_MS)
+    }
+
+    /**
+     * Das Fenster ohne Leiste (Kamera) geht zu, darunter liegt die Seite mit der Leiste: unsere sofort zeigen, noch vor
+     * jeder Abfrage. Die Schliess-Animation zeigt sonst die echte Leiste (sie fährt mit der Seite seitlich herein).
+     */
+    private fun onBarlessWindowGone(why: String) {
+        val rest = restBounds ?: return
+        val state = lastUiState ?: return
+        if (barlessWindowId == -1 || barlessWindowId == barWindowId || watchPageOpen || overlay.isShowing) return
+        if (!youTubeActive || menuFront || menuOverBarless) return
+        reason("Seite ohne Leiste geht zu ($why), unsere vorab zeigen")
+        preShownAt = SystemClock.uptimeMillis()
+        hiddenByScroll = false
+        // Die Kamera ist noch ~4 Bilder ganz zu sehen, dann blendet die Seite mit der echten Leiste ein. Unsere fährt
+        // in dieser Zeit ein kurzes Stück von unten herein (statt über der Kamera aufzuspringen) und steht rechtzeitig.
+        overlay.showRising(rest, state.copy(style = currentStyle()), CLOSE_RISE_DP * resources.displayMetrics.density, RISE_MS)
+        continueScanSoon()
     }
 
     override fun onInterrupt() = Unit
@@ -505,7 +593,7 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
-    private fun drawPending(): Boolean = overlay.isSlidingAway || (overlay.isShowing &&
+    private fun drawPending(): Boolean = overlay.isSlidingAway || overlay.isRising || overlay.isSinking || (overlay.isShowing &&
         overlay.drawnAt < overlay.shownAt &&
         SystemClock.uptimeMillis() - overlay.shownAt < if (isTablet) TABLET_DRAW_WAIT_MS else PHONE_DRAW_WAIT_MS)
 
@@ -542,9 +630,11 @@ class FuckShortsService : AccessibilityService() {
      * Verlassen: eine Weile nur seine neue Lage lernen (sonst blitzte unsere Leiste über der Video-Seite auf).
      */
     private fun watchStillOpen(node: AccessibilityNodeInfo, now: Long): Boolean? {
-        if (isTablet && !node.refresh()) {
+        if (!node.refresh()) {
             // Tablet: Beim Drehen baut YouTube den Player neu (quer zwei Spalten). Neu suchen statt "verlassen",
             // sonst stand unsere ~0,3 s über dem Video. Nach Zurück ist keiner mehr da.
+            // Handy genauso: Beim Wechsel Werbung → Video kann der Player neu gebaut werden.
+
             val again = youTubeMainRoot()?.let { scanner.findWatchPlayer(it, screen) } ?: return false
             watchNode = again
             watchTop = scanner.topOf(again)
@@ -636,8 +726,29 @@ class FuckShortsService : AccessibilityService() {
         reason("Video verlassen (Pane, top $watchTop→$top)")
         preShownAt = SystemClock.uptimeMillis()
         hiddenByScroll = false
-        overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        showAfterVideo(rest, state, top - watchTop)
         continueScanSoon()
+    }
+
+    /**
+     * Video verlassen: Unsere Leiste fährt das letzte Stück von unten herein (Handy). YouTubes eigene Leiste fährt
+     * gleichzeitig in ~0,3 s von ganz unten hoch (gemessen 15.11.: 141, 119, 97, 79, 65, 51 … px unter der Ruhelage,
+     * Bild für Bild). Unsere beginnt höher und bremst stärker, liegt also immer darüber. Tablet: wie bisher sofort da.
+     */
+    private fun showAfterVideo(rest: Rect, state: BarUiState, movedPx: Int) {
+        val s = state.copy(style = currentStyle())
+        if (isTablet) {
+            overlay.show(rest.top, rest, s)
+            return
+        }
+        // Früh erkannt (Player erst wenig gerutscht): YouTubes Leiste hat noch gar nicht begonnen, unsere fährt fast
+        // die ganze Höhe herein. Spät erkannt (Player schon weit unten, z. B. YouTube mit Werbung beschäftigt): Die
+        // echte ist schon unterwegs, unsere beginnt weiter oben, damit sie in jedem Bild über ihr liegt.
+        val d = resources.displayMetrics.density
+        val early = 1f - ((movedPx - RISE_EARLY_DP * d) / ((RISE_LATE_DP - RISE_EARLY_DP) * d)).coerceIn(0f, 1f)
+        val from = (RISE_MIN_DP + (RISE_MAX_DP - RISE_MIN_DP) * early) * d
+        Log.d(TAG, "Leiste fährt herein: ${from.toInt()} px (Player $movedPx px tiefer)")
+        overlay.showRising(rest, s, minOf(from, rest.height() * 0.85f), RISE_MS)
     }
 
     /**
@@ -993,7 +1104,10 @@ class FuckShortsService : AccessibilityService() {
             barGoneAfterKeyboard = afterKeyboard
             val wasBarless = leftWithoutBar
             leftWithoutBar = false
-            if (rest != null && state != null && !watchPageOpen && !restoredState && !afterKeyboard && !wasBarless) {
+            // Vorne ist die Kamera (z. B. nach der Fotos-Frage zurück): dort gibt es keine Leiste. Vorher blitzte
+            // unsere ~0,13 s über der Kamera auf (gemessen 15.11.).
+            val onCamera = foreground.windowId == cameraWindowId || foreground.windowId == barlessWindowId
+            if (rest != null && state != null && !watchPageOpen && !restoredState && !afterKeyboard && !wasBarless && !onCamera) {
                 reason("YouTube wieder vorne, unsere sofort")
                 youTubeActive = true
                 youTubeSince = now
@@ -1067,7 +1181,8 @@ class FuckShortsService : AccessibilityService() {
                 reason("Video verlassen (Scan)")
                 preShownAt = SystemClock.uptimeMillis()
                 hiddenByScroll = false
-                overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                // Vom langsamen Scan erkannt: vermutlich spät.
+                showAfterVideo(rest, state, Int.MAX_VALUE / 2)
                 // Erst zeichnen lassen, dann weitersuchen: Die volle Suche blockiert sonst das Zeichnen.
                 continueScanSoon()
                 return
@@ -1735,12 +1850,13 @@ class FuckShortsService : AccessibilityService() {
                 hideSmooth()
                 return
             }
+            val moved = node?.let { scanner.topOf(it) - watchTop } ?: Int.MAX_VALUE / 2
             watchPageOpen = false
             watchNode = null
             reason("Video verlassen")
             preShownAt = SystemClock.uptimeMillis()
             hiddenByScroll = false
-            overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            showAfterVideo(rest, state, moved)
             scheduleScan()
             return
         }
@@ -2148,10 +2264,6 @@ class FuckShortsService : AccessibilityService() {
     private fun onTabTapped(kind: TabKind) {
         tapSeq++
         touchedSinceEnter = true
-        val root = youTubeMainRoot() ?: run {
-            tapLog("$kind: kein YouTube-Fenster gefunden")
-            return
-        }
         if (kind == TabKind.CREATE) {
             createTappedAt = SystemClock.uptimeMillis()
             // Plus öffnet die Kamera. Die erscheint erst ~300 ms später; bis dahin bleibt unsere Leiste stehen,
@@ -2167,7 +2279,32 @@ class FuckShortsService : AccessibilityService() {
             // ab, bis die Kamera darüber ist; dann versteckt der Scan unsere wie vorher.
             if (isTablet) overlay.slideAway(VIDEO_SLIDE_MS, CREATE_SLIDE_HOLD_MS, fast = true)
             else overlay.sinkContent(CREATE_SINK_RESTORE_MS)
+            // Handy: Den echten Knopf im Hintergrund klicken. Der Klick (und die Suche nach der Leiste) wartet auf
+            // YouTube, oft 50–200 ms; auf dem Haupt-Thread stand so lange unsere Animation still (gemessen 15.11.:
+            // die Knöpfe sanken gar nicht sichtbar). Klappt es nicht, läuft der alte Weg unten.
+            val known = lastBar?.nodes?.get(TabKind.CREATE)
+            if (!isTablet && known != null) {
+                val seq = tapSeq
+                clicker.execute {
+                    val ok = runCatching { click(known) }.getOrDefault(false)
+                    handler.post {
+                        tapLog("$kind: Klick ${if (ok) "ok" else "fehlgeschlagen"} (Hintergrund)")
+                        if (!ok && seq == tapSeq) youTubeMainRoot()?.let { clickTab(kind, it) }
+                        scheduleScan()
+                    }
+                }
+                return
+            }
         }
+        val root = youTubeMainRoot() ?: run {
+            tapLog("$kind: kein YouTube-Fenster gefunden")
+            return
+        }
+        clickTab(kind, root)
+    }
+
+    /** Sucht den echten Knopf und klickt ihn (mit allen Umwegen: weggescrollte Leiste, Abos-Reiter oben, Finger-Tipp). */
+    private fun clickTab(kind: TabKind, root: AccessibilityNodeInfo) {
         // Auch bei weggescrollter Leiste: ihre Knöpfe neu einlesen und über die Bedienungshilfen klicken.
         val fresh = scanner.findBar(root, screenBounds())
         val bar = fresh ?: lastBar?.let { scanner.rebuildBar(it.container) }
@@ -2578,6 +2715,13 @@ class FuckShortsService : AccessibilityService() {
         // Struktur-Dumps nach Tipps (nur Test-Versionen) kosten 0,2–0,4 s Abfragezeit genau dann, wenn die Video-
         // Lade-Seite aufgeht: unsere Leiste fuhr dadurch ~0,4 s zu spät weg. Die Aufbauten sind bekannt → aus.
         private const val DIAGNOSTIC_DUMPS = false
+        /**
+         * Nur zum Messen am Kabel (Test-Versionen): jede Meldung (ausser Inhalt/Scrollen) ins Protokoll.
+         * Einschalten: `adb shell setprop log.tag.FShortsTrace VERBOSE` (bis zum Neustart des Handys).
+         */
+        private const val TRACE_TAG = "FShortsTrace"
+
+
         private const val TABLET_DRAW_WAIT_MS = 500L
         private const val SCROLL_GONE_MS = 1_500L
         private const val FEED_GRACE_MS = 600L
@@ -2629,6 +2773,19 @@ class FuckShortsService : AccessibilityService() {
         private const val CREATE_HOLD_MS = 1_500L
         private const val CREATE_SLIDE_HOLD_MS = 1_200L
         private const val CREATE_SINK_RESTORE_MS = 1_500L
+        /** Meldet sich die Kamera, ist sie schon über der Leiste (gemessen 15.11.). Ein Bild Sicherheit. */
+        private const val CAMERA_COVER_MS = 20L
+        /** Kamera geht zu: Unsere fährt nur dieses kurze Stück herein (die echte steht dort sofort ganz da). */
+        private const val CLOSE_RISE_DP = 30f
+
+
+        /** Video verlassen (Handy): Unsere fährt die letzten RISE_FROM_DP von unten herein, in RISE_MS. */
+        private const val RISE_MAX_DP = 60f
+        private const val RISE_MIN_DP = 18f
+        /** Player höchstens so weit gerutscht = früh erkannt (ganze Fahrt); ab RISE_LATE_DP = spät (kurze Fahrt). */
+        private const val RISE_EARLY_DP = 24f
+        private const val RISE_LATE_DP = 140f
+        private const val RISE_MS = 240L
         private const val NAV_HOLD_MS = 800L
         private const val THEME_HOLD_MS = 1_500L
         private const val SHADE_GAP_MS = 600L

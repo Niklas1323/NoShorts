@@ -120,6 +120,11 @@ class BottomBarOverlay(
     /** Versteckt: Knöpfe beim nächsten Zeigen sofort wieder oben, ohne Animation. */
     private var sinkSnap by mutableStateOf(false)
     private val restoreSink = Runnable { sunk = false }
+    /** Plus getippt: bis dann sinken die Knöpfe (so lange keine Abfragen an YouTube, sie hielten die Animation an). */
+    private var sinkUntil = 0L
+    /** Video verlassen: Die Leiste fährt von unten herein. So viele Pixel steht sie gerade noch zu tief. */
+    private var risePx by mutableFloatStateOf(0f)
+    private var riser: android.animation.ValueAnimator? = null
     private var optimistic: TabKind? = null
     private var optimisticAt = 0L
 
@@ -175,6 +180,73 @@ class BottomBarOverlay(
         if (isSlidingAway || SystemClock.uptimeMillis() < holdHiddenUntil) return
         underMenu = false
         place(top, rest, state.copy(dim = 0f, hole = null, veil = null))
+    }
+
+    /** Fährt gerade von unten herein ([showRising]). Solange keine Abfragen an YouTube: sie hielten die Animation an. */
+    val isRising: Boolean get() = riser != null
+
+    /** Die Knöpfe sind weggesunken oder sinken gerade (Plus getippt). */
+    val isSunk: Boolean get() = sunk
+
+    /** So lange sinken die Knöpfe noch (0 = fertig). */
+    fun sinkRemainingMs(): Long = if (sunk) (sinkUntil - SystemClock.uptimeMillis()).coerceAtLeast(0L) else 0L
+
+    /** Die Knöpfe sinken gerade weg ([sinkContent]). */
+
+    val isSinking: Boolean get() = sunk && SystemClock.uptimeMillis() < sinkUntil
+
+    /**
+     * Wie [show], aber die Leiste fährt das letzte Stück ([fromPx]) von unten herein statt einfach dazustehen
+     * (Video verlassen). YouTubes eigene Leiste fährt dort in ~0,3 s von ganz unten hoch; unsere beginnt weiter oben
+     * und bremst stark ab, so liegt sie in jedem Bild über der echten. War sie schon da, bleibt sie einfach stehen.
+     */
+    fun showRising(rest: Rect, state: BarUiState, fromPx: Float, durationMs: Long) {
+        if (isSlidingAway || SystemClock.uptimeMillis() < holdHiddenUntil) return
+        val wasShowing = isShowing && view?.alpha != 0f
+        underMenu = false
+        if (!wasShowing && view != null) {
+            riser?.cancel()
+            risePx = fromPx
+            riser = android.animation.ValueAnimator.ofFloat(fromPx, 0f).apply {
+                duration = durationMs
+                // Gleichmässig abklingend (jedes Bild ~2/3 des Rests), wie YouTubes Leiste, nur schneller.
+                interpolator = android.animation.TimeInterpolator { x ->
+                    val end = Math.exp(-RISE_DECAY)
+                    ((1.0 - (Math.exp(-RISE_DECAY * x) - end) / (1.0 - end))).toFloat()
+                }
+                addUpdateListener { risePx = it.animatedValue as Float }
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        if (riser !== animation) return
+                        riser = null
+                        risePx = 0f
+                    }
+                })
+                start()
+            }
+        }
+        place(rest.top, rest, state.copy(dim = 0f, hole = null, veil = null))
+    }
+
+    /** Legt das Fenster unsichtbar an (Dienst-Start), damit das erste Zeigen so schnell ist wie jedes spätere. */
+    fun warmUp(rest: Rect, state: BarUiState) {
+        if (view != null) return
+        uiState = state.copy(dim = 0f, hole = null, veil = null)
+        target.set(rest.left, rest.top, rest.right, rest.top + rest.height())
+        applyBounds()
+        params.flags = currentFlags()
+        appliedFlags = params.flags
+        create().also {
+            it.alpha = 0f
+            windowManager.addView(it, params)
+        }
+    }
+
+    private fun stopRise() {
+        val running = riser
+        riser = null
+        running?.cancel()
+        risePx = 0f
     }
 
     /**
@@ -312,7 +384,8 @@ class BottomBarOverlay(
             v.alpha = 1f
             isShowing = true
             if (!moved) {
-                v.post { applyFlags() }
+                // Fährt sie gerade herein, erst gegen Ende: Das Umstellen des Fensters kostete sonst ein Bild der Fahrt.
+                if (riser != null) v.postDelayed({ applyFlags() }, RISE_TOUCH_MS) else v.post { applyFlags() }
                 return
             }
         }
@@ -342,6 +415,7 @@ class BottomBarOverlay(
         if (!isShowing) return
         sinkSnap = false
         sunk = true
+        sinkUntil = SystemClock.uptimeMillis() + SINK_MS
         v.removeCallbacks(restoreSink)
         v.postDelayed(restoreSink, restoreMs)
     }
@@ -355,6 +429,7 @@ class BottomBarOverlay(
         }
         if (!isShowing) return
         stopSlide()
+        stopRise()
         isShowing = false
         // Durchsichtig statt unsichtbar: Ein unsichtbares Fenster richtet Android beim Wiederzeigen neu ein
         // (1–2 Bilder später, z. B. beim Verlassen eines Videos sah man so die echte Leiste kurz).
@@ -445,6 +520,7 @@ class BottomBarOverlay(
                         dimInstant = dimInstant,
                         sunk = sunk,
                         sinkSnap = sinkSnap,
+                        rise = { risePx },
                         onTap = { kind ->
                             if (kind != TabKind.CREATE) {
                                 optimistic = kind
@@ -467,6 +543,8 @@ class BottomBarOverlay(
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         const val OPTIMISTIC_MS = 600L
         const val SLIDE_MS = 300L
+        const val RISE_TOUCH_MS = 110L
+
         const val IGNORE_AFTER_PASS_THROUGH_MS = 700L
         val COLUMNS = listOf(TabKind.HOME, TabKind.SUBSCRIPTIONS, TabKind.YOU, TabKind.CREATE)
     }
@@ -521,6 +599,7 @@ private fun BottomBar(
     dimInstant: Boolean,
     sunk: Boolean,
     sinkSnap: Boolean,
+    rise: () -> Float,
     onTap: (TabKind) -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -580,7 +659,11 @@ private fun BottomBar(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+                // Video verlassen: Die ganze Leiste fährt das letzte Stück von unten herein.
+                translationY = rise()
+            }
             .drawWithContent {
                 drawContent()
                 val p = ink.value
@@ -627,6 +710,8 @@ private fun BottomBar(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 10.dp)
+                    // Der Gestenstrich fährt nicht mit herein: Er steht still wie der vom System.
+                    .graphicsLayer { translationY = -rise() }
                     .size(width = 108.dp, height = 4.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(style.handle),
@@ -837,8 +922,11 @@ private const val LABEL_DP = 10.5f
 private const val INK_IN_MS = 480
 private const val INK_OUT_MS = 380
 /** Plus: Knöpfe sinken nach unten weg (ms), die Fläche bleibt stehen, bis die Kamera darüber ist. */
-private const val SINK_MS = 230
+private const val SINK_MS = 150
+
 private const val RISE_MS = 260
+/** Hereinfahren nach "Video verlassen": Abkling-Stärke der Kurve (5 = nach 1/5 der Zeit ist noch ~1/3 übrig). */
+private const val RISE_DECAY = 5.0
 /** Tablet (Galaxy Tab A8, Dichte 1,75 gemessen): "Startseite" ist dort 89 px breit = 12,1 dp; Symbole ~28 dp; Spalte 96 dp. */
 private const val TABLET_LABEL_DP = 12.1f
 private const val TABLET_ICON_DP = 28f
