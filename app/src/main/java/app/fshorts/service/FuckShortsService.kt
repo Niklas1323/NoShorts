@@ -193,6 +193,14 @@ class FuckShortsService : AccessibilityService() {
     private val menuWindows = HashMap<Int, Boolean>()
     /** YouTube-Fenster, in dem es keine Leiste gab (z. B. Kamera). -1 = keins. */
     private var barlessWindowId = -1
+    private var lastDisplay = Rect()
+    private var displayChangedAt = 0L
+    /** Je Bildschirmgrösse: Stand unsere Leiste, als diese Ausrichtung verlassen wurde? (siehe onScreenSizeChanged) */
+    private val shownWhenLeft = HashMap<String, Boolean>()
+    /** Mögliche neue Ruhelage mit höherer Unterkante und seit wann sie gemeldet wird (siehe rememberRestPosition). */
+
+    private var higherRest: Rect? = null
+    private var higherRestSince = 0L
     /** Fenster der Kamera nach Plus (meldet sich selbst, siehe onWindowSignal). -1 = keins. */
     private var cameraWindowId = -1
     /** YouTube ging nach hinten, während eine Seite ohne Leiste offen war (nur Tablet, siehe scanInternal). */
@@ -562,6 +570,14 @@ class FuckShortsService : AccessibilityService() {
         watchRelearnUntil = SystemClock.uptimeMillis() + WATCH_RELEARN_MS
         val known = restBySize[sizeKey(newScreen)]
         val wasShowing = overlay.isShowing
+        // Quer zeigt YouTube (21.45, Handy) gar keine Leiste. Zurück im Hochformat steht sie sofort wieder da: Stand
+        // unsere dort, bevor gedreht wurde, kommt sie gleich an die bekannte Stelle (sonst ~5 Bilder echte Leiste,
+        // bis der Scan sie findet).
+        // (Kurz vorher zählt auch: Oft merkt das Nachführen "Leiste weg" ein paar ms, bevor die neue Grösse da ist.)
+        shownWhenLeft[sizeKey(screen)] = wasShowing || SystemClock.uptimeMillis() - ourShownAt < 500
+
+        val wasShownHere = shownWhenLeft[sizeKey(newScreen)] == true && youTubeActive
+        Log.d(TAG, "Gedreht: ${newScreen.width()}x${newScreen.height()}, Lage bekannt=${known != null}, zeigte=$wasShowing/$wasShownHere, Video=$watchPageOpen")
         screen = newScreen
         if (known != null && state != null) {
             restBounds = Rect(known.first)
@@ -572,7 +588,7 @@ class FuckShortsService : AccessibilityService() {
             )
             lastObservedTop = -1
             goneFeed = null
-            if (wasShowing && !watchPageOpen) {
+            if ((wasShowing || wasShownHere) && !watchPageOpen) {
                 reason("gedreht, unsere an bekannter Stelle")
                 movedAt = SystemClock.uptimeMillis()
                 preShownAt = SystemClock.uptimeMillis()
@@ -1817,8 +1833,30 @@ class FuckShortsService : AccessibilityService() {
         // Tablet: Beim Schliessen der Kamera meldet YouTube die Leiste kurz 32 px zu hoch (Unterkante über der
         // gewohnten). Das ist keine neue Ruhelage, sonst stand unsere danach zu hoch und hell, darunter "Shorts".
         if (isTablet && rest != null && b.bottom < rest.bottom - 2) return
+        // Handy: Beim Drehen meldet YouTube die Leiste kurz zu hoch (gemessen 15.11.: 71 px, mehr als snapToEdges
+        // ausgleicht). So gelernt, stand unsere dauerhaft 71 px zu hoch, darunter ein Streifen der echten. Eine Lage
+        // mit höherer Unterkante gilt darum erst, wenn sie eine Weile unverändert bleibt (z. B. Wechsel auf
+        // 3-Knopf-Navigation), nicht bei einer einzelnen Messung.
+        if (!isTablet && rest != null && b.bottom < rest.bottom - 2) {
+            val now = SystemClock.uptimeMillis()
+            if (b != higherRest) {
+                higherRest = Rect(b)
+                higherRestSince = now
+                return
+            }
+            if (now - higherRestSince < HIGHER_REST_MS) return
+            Log.d(TAG, "Leiste: Ruhelage höher, jetzt ${b.toShortString()} (war ${rest.toShortString()})")
+            higherRest = null
+            restBounds = Rect(b)
+            return
+        }
+        higherRest = null
         // Tablet: Steht die ganze Leiste tiefer als die gemerkte Lage, war diese falsch (auch gespeichert): neu lernen.
-        val wrongRest = isTablet && rest != null && b.height() >= rest.height() - 2 && b.bottom > rest.bottom + 2
+        // Handy: nur wenn sie dabei ganz zu sehen ist und bis zum unteren Rand reicht (beim Wegscrollen ragt sie
+        // unten hinaus). So korrigiert sich eine früher falsch gelernte, zu hohe Lage von selbst.
+        val s = screenBounds()
+        val wrongRest = rest != null && b.height() >= rest.height() - 2 && b.bottom > rest.bottom + 2 &&
+            (isTablet || b.bottom == s.bottom)
         if (rest == null || wrongRest || b.height() > rest.height() + 2 || (b.height() >= rest.height() - 2 && b.top < rest.top)) {
             restBounds = Rect(b)
         }
@@ -2684,6 +2722,17 @@ class FuckShortsService : AccessibilityService() {
      */
     private fun updateSplit() {
         val display = displayBounds()
+        // Eben gedreht: Android meldet YouTubes Fenster noch kurz in der alten Ausrichtung (oder in Zwischengrössen
+        // der Dreh-Animation). Das ist kein Splitscreen – sonst sprang unsere Leiste beim Zurückdrehen mehrmals weg
+        // und wieder her (gemessen 15.11.: 2 × 3 Bilder echte Leiste).
+        if (display != lastDisplay) {
+            lastDisplay = Rect(display)
+            displayChangedAt = SystemClock.uptimeMillis()
+        }
+        if (SystemClock.uptimeMillis() - displayChangedAt < ROTATE_SETTLE_MS) {
+            splitBounds = null
+            return
+        }
         val main = youTubeMainWindow(windows)
         val b = main?.let { Rect().also { r -> it.getBoundsInScreen(r) } }
         val minSide = 300 * resources.displayMetrics.density
@@ -2874,6 +2923,9 @@ class FuckShortsService : AccessibilityService() {
         private const val RISE_EARLY_DP = 24f
         private const val RISE_LATE_DP = 140f
         private const val RISE_MS = 240L
+        private const val HIGHER_REST_MS = 1_500L
+        private const val ROTATE_SETTLE_MS = 800L
+
         private const val PANE_BURST_MS = 250L
         private const val PANE_BURST_POLL_MS = 5L
 
