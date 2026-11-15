@@ -2729,7 +2729,8 @@ class FuckShortsService : AccessibilityService() {
             lastDisplay = Rect(display)
             displayChangedAt = SystemClock.uptimeMillis()
         }
-        if (SystemClock.uptimeMillis() - displayChangedAt < ROTATE_SETTLE_MS) {
+        if (!isTablet && SystemClock.uptimeMillis() - displayChangedAt < ROTATE_SETTLE_MS) {
+
             splitBounds = null
             return
         }
