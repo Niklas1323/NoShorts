@@ -1054,3 +1054,38 @@ keine Leiste**. Bedienungshilfen dort: F*ck Shorts + Auto Clicker.
 - Die PIN-Eingabe des Sperrbildschirms ist auf Bildschirmfotos schwarz; ob sie offen ist, zeigt
   `dumpsys activity service com.android.systemui/.SystemUIService | grep -i bouncer`.
 - Lokale Builds: `./gradlew assembleDebug --offline` mit `JAVA_HOME=/c/Users/A023985/tools/jdk-17.0.20.1+1`.
+
+### 15.11.2026, Nachmittag (Terminal, Rückmeldung von Niklas, Pixel, Benutzer Leon)
+Niklas: App-Übersicht → zurück sieht jetzt perfekt aus; die ⋮-Abdunkel-Animation ist **perfekt, genau so behalten**.
+
+| Wunsch / Test | vorher | nachher | behoben? |
+|---|---|---|---|
+| Querformat: Leiste zu hoch | bis 207 px hoch (wie hochkant) | flach: 40 dp (~115 px), Symbol + Text nebeneinander, Symbole 22 dp, Plus 30 dp; Tipps 3/3 "ausgewählt"; hochkant unverändert | ja |
+| Abos: "Ladebildschirm" | Vorhang (PageCurtain) | entfernt (Datei gelöscht); Startseite blitzt wieder kurz | ja (Wunsch) |
+| Abos/Mein YouTube mit Mini-Player scrollen | unsere fuhr mit runter und sprang zurück ("ohne Grund runter") | bleibt stehen, 0 Bilder echte (2 × ~400 Bilder) | ja |
+| Tipp auf Werbung → Google Play | unsere sofort weg, ~0,18 s echte (abgedunkelt) | unsere dunkelt mit ab (Tinte 140 ms), weg bei Plays erster Inhalts-Meldung; 3/3 ohne echte | ja |
+| Google Play schliessen | 5–8 Bilder echte | 2–7 Bilder (Play verschwindet ~0,1 s bevor Android etwas meldet) | teilweise |
+| ⋮ bei Werbung ("Mein Anzeigen-Center") | auf: 4 Bilder hell über dem Panel; zu: Leiste fehlte, dann stockend hell | auf: Panel deckt sie ab, unsere weg wie YouTube; zu: unsere abgedunkelt mit dem Rest, hellt mit YouTube auf | ja |
+| Plus | Knöpfe sanken weg, Leiste wirkte leer | Plus-Knopf wird federnd grösser und dreht zum ×, Rest bleibt; unsere weg 40 ms nach Kamera-Meldung; 5/5 ohne echte | ja |
+| Kamera mit Aufnahme → X → "Neu beginnen" (Clip verworfen) → X | – | Blatt ohne Leiste darüber; Schliessen sauber | ok |
+| Kamera X | unsere ~8 Bilder über der noch sichtbaren Kamera | erscheint beim Ausblenden der Kamera (80 ms nach Fenster entfernt), 3/3 ohne echte | ja |
+| Short per Link (von Startbildschirm) + Weiterwischen | – | spielt mit unserer Leiste; Weiterwischen → YouTubes eigenes "Shorts-Feed-Limit" (mit Zurück zu, nicht ignoriert); Home-Tipp schliesst ihn | ok |
+| Suchfilter-Dialog | unsere weg, echte abgedunkelt MIT Shorts sichtbar | unsere abgedunkelt (Dialog ragt in 21.45 31 px in die Leiste: `popupFront` lässt schmalere Fenster zu) | ja |
+| Leiste beim Scrollen wie das Original | – | **nicht eingebaut**, siehe unten | nein |
+
+**Scrollen wie das Original (versucht, verworfen):** YouTube 21.45 meldet beim schnellen Wischen die Leiste gleich
+als ganz unten (2424) bzw. entfernt, ohne Zwischenlagen; beim langsamen Scrollen bleibt sie oft stehen. Danach zeigt
+YouTube sie manchmal nach ~1–2 s **von selbst wieder an, ohne etwas zu melden** (in der Oberfläche weiter "entfernt").
+Fuhr unsere mit weg, war in diesen Fällen die echte mit Shorts ~2 s zu sehen (Aufnahme sc5). Ein Mitfahren, das nie die
+echte zeigt, geht so nicht. Unsere bleibt darum beim Scrollen stehen.
+
+**Erkenntnisse:**
+- Querformat (Handy, 21.45): YouTube zeigt KEINE untere Leiste. `BottomBarOverlay.setTarget`/`CompactRow`.
+- Google Play nach Werbe-Tipp: halb durchsichtiges Fenster `com.android.vending`; YouTube wird in ~150 ms auf ~50 %
+  abgedunkelt, dann blendet das Blatt ein. Bestes Zeichen: erste `TYPE_WINDOW_CONTENT_CHANGED` (View) von Play, ~60–110
+  ms nach dem Tipp. Abfragen an Plays Oberfläche (Baum durchsuchen) kosteten pro Bild ~50 ms und verzögerten alles.
+- Werbe-Menü-Panel: `app_engagement_panel`, fährt in ~4 Bildern hoch, YouTube dunkelt auf ~50 % ab; beim Zugehen meldet
+  YouTube die Lage nur alle ~130 ms. `coverByPanel` zeichnet unsere nur oberhalb der Panel-Kante (`showCoveredBy`).
+- Kamera öffnen: "YouTube nicht mehr aktiv" kommt ~30 ms vor der Kamera-Meldung, aber 3–4 Bilder zu früh (echte
+  sichtbar) – nicht verwenden. Kamera-Meldung + 40 ms passt.
+- Kamera X: Android meldet das Fenster sofort als entfernt, die Kamera ist aber noch ~130 ms zu sehen.
