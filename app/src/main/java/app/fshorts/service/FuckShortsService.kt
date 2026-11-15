@@ -3079,7 +3079,8 @@ class FuckShortsService : AccessibilityService() {
         private const val CREATE_SLIDE_HOLD_MS = 1_200L
         private const val CREATE_SINK_RESTORE_MS = 1_500L
         /** Meldet sich die Kamera, ist sie schon über der Leiste (gemessen 15.11.). Ein Bild Sicherheit. */
-        private const val CAMERA_COVER_MS = 20L
+        private const val CAMERA_COVER_MS = 0L
+
 
 
         /** Kamera geht zu: Unsere fährt nur dieses kurze Stück herein (die echte steht dort sofort ganz da). */

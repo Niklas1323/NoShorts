@@ -57,6 +57,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+
 import androidx.compose.ui.graphics.drawscope.clipRect
 
 import androidx.compose.ui.geometry.Offset
@@ -747,7 +749,9 @@ private fun BottomBar(
     val sink = remember { Animatable(0f) }
     LaunchedEffect(sunk, sinkSnap) {
         when {
-            sunk -> sink.animateTo(1f, tween(SINK_MS, easing = FastOutLinearInEasing))
+            // Plus getippt: Der Knopf wird federnd grösser und dreht sich zum "×" (sofort sichtbar, die übrige Leiste
+            // bleibt stehen und deckt die echte ab, bis die Kamera darüber ist).
+            sunk -> sink.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 520f))
             sinkSnap -> sink.snapTo(0f)
             else -> sink.animateTo(0f, tween(RISE_MS, easing = FastOutSlowInEasing))
         }
@@ -836,15 +840,11 @@ private fun BottomBar(
             modifier = Modifier.graphicsLayer {
                 scaleX = duck
                 scaleY = duck
-                translationY = sink.value * size.height * 0.85f
-                alpha = 1f - sink.value
             },
         ) else Row(
             modifier = Modifier.fillMaxWidth().height(barHeight).graphicsLayer {
                 scaleX = duck
                 scaleY = duck
-                translationY = sink.value * size.height * 0.85f
-                alpha = 1f - sink.value
                 transformOrigin = TransformOrigin(0.5f, 0.35f)
             },
             horizontalArrangement = if (style.tablet) Arrangement.Center else Arrangement.Start,
@@ -942,9 +942,15 @@ private fun BottomBar(
                         // Runder Knopf, mittig in seiner Spalte: alle vier Elemente haben gleichen Abstand.
                         Box(
                             modifier = Modifier
+                                .graphicsLayer {
+                                    val p = sink.value
+                                    scaleX = 1f + PLUS_GROW * p
+                                    scaleY = 1f + PLUS_GROW * p
+                                    rotationZ = PLUS_TURN * p
+                                }
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(style.plusBackground),
+                                .background(lerp(style.plusBackground, style.content, PLUS_LIGHTEN * sink.value.coerceIn(0f, 1f))),
                             contentAlignment = Alignment.Center,
                         ) {
                             val color = style.content
@@ -1101,7 +1107,11 @@ private const val LABEL_DP = 10.5f
 private const val INK_IN_MS = 480
 private const val INK_OUT_MS = 380
 /** Plus: Knöpfe sinken nach unten weg (ms), die Fläche bleibt stehen, bis die Kamera darüber ist. */
-private const val SINK_MS = 150
+private const val SINK_MS = 260
+/** Plus getippt: Knopf wird so viel grösser, dreht sich so weit (Grad, 45 = "×") und hellt so stark auf. */
+private const val PLUS_GROW = 0.18f
+private const val PLUS_TURN = 135f
+private const val PLUS_LIGHTEN = 0.18f
 /** Handy quer: Höhe der flachen Leiste (ganz) und davon unten der Streifen für den Gestenstrich. */
 private const val COMPACT_TOTAL_DP = 40f
 private const val COMPACT_HANDLE_DP = 12f
