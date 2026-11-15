@@ -119,6 +119,8 @@ class BottomBarOverlay(
     private var sunk by mutableStateOf(false)
     /** Versteckt: Knöpfe beim nächsten Zeigen sofort wieder oben, ohne Animation. */
     private var sinkSnap by mutableStateOf(false)
+    /** Dauer, mit der sich die Tinte beim Abdunkeln ausbreitet (⋮-Menü: INK_IN_MS, Google Play: schneller). */
+    private var inkInMs by mutableStateOf(INK_IN_MS)
     /** Handy quer: flache Leiste, Wert = Höhe der Gestenleiste darunter. -1 = normale Leiste. */
     private var compactNav by mutableStateOf(-1)
     private val restoreSink = Runnable { sunk = false }
@@ -266,8 +268,9 @@ class BottomBarOverlay(
      * Darum: abgedunkelt wie YouTube den Rest, mit einem Loch, wo das Menü ist. Berührungen gehen durch
      * (Tipp neben das Menü schliesst es, wie bei YouTube).
      */
-    fun showUnderMenu(rest: Rect, state: BarUiState, dim: Float, sheet: Rect) {
+    fun showUnderMenu(rest: Rect, state: BarUiState, dim: Float, sheet: Rect, inkMs: Int = INK_IN_MS) {
         underMenu = true
+        if (inkMs != inkInMs) inkInMs = inkMs
         val hole = Rect(sheet).apply { offset(-rest.left, -rest.top) }
         place(rest.top, rest, state.copy(dim = dim, hole = hole, veil = null))
     }
@@ -360,6 +363,12 @@ class BottomBarOverlay(
 
     private fun place(top: Int, rest: Rect, state: BarUiState, keepSlide: Boolean = false) {
         if (!keepSlide) stopSlide()
+        if (fading) {
+            fading = false
+            view?.animate()?.cancel()
+            view?.alpha = 1f
+        }
+
         val keepOptimistic = optimistic != null &&
             SystemClock.uptimeMillis() - optimisticAt < OPTIMISTIC_MS &&
             state.selected != optimistic
@@ -458,8 +467,31 @@ class BottomBarOverlay(
         v.postDelayed(restoreSink, restoreMs)
     }
 
+    /** Blendet in [ms] aus und versteckt danach (Überblendung mit einem darüber einblendenden Fenster). */
+    fun fadeOut(ms: Long) {
+        val v = view ?: return
+        if (!isShowing) return
+        fading = true
+        v.animate().cancel()
+        v.animate().alpha(0f).setDuration(ms).setStartDelay(0L).withEndAction {
+            if (fading) {
+                fading = false
+                hide()
+            }
+        }.start()
+    }
+
+    private var fading = false
+
+    /** Blendet gerade aus ([fadeOut]). */
+    val isFading: Boolean get() = fading
+
     fun hide() {
         val v = view ?: return
+        if (fading) {
+            fading = false
+            v.animate().cancel()
+        }
         view?.removeCallbacks(restoreSink)
         if (sunk) {
             sinkSnap = true
@@ -469,6 +501,13 @@ class BottomBarOverlay(
         stopSlide()
         stopRise()
         isShowing = false
+        // Versteckt nie abgedunkelt zurücklassen: Sonst kam sie beim nächsten Zeigen erst dunkel und hellte auf
+        // (gemessen 15.11. nach Google Play: 6 Bilder).
+        if (uiState?.dim != 0f || uiState?.hole != null) {
+            dimInstant = true
+            uiState = uiState?.copy(dim = 0f, hole = null)
+        }
+
         // Durchsichtig statt unsichtbar: Ein unsichtbares Fenster richtet Android beim Wiederzeigen neu ein
         // (1–2 Bilder später, z. B. beim Verlassen eines Videos sah man so die echte Leiste kurz).
         v.alpha = 0f
@@ -559,6 +598,7 @@ class BottomBarOverlay(
                         sunk = sunk,
                         sinkSnap = sinkSnap,
                         compactNav = compactNav,
+                        inkMs = inkInMs,
                         rise = { risePx },
                         onTap = { kind ->
                             if (kind != TabKind.CREATE) {
@@ -639,6 +679,7 @@ private fun BottomBar(
     sunk: Boolean,
     sinkSnap: Boolean,
     compactNav: Int,
+    inkMs: Int,
     rise: () -> Float,
     onTap: (TabKind) -> Unit,
     onLongPress: () -> Unit,
@@ -681,7 +722,8 @@ private fun BottomBar(
     LaunchedEffect(state.dim > 0f) {
         val target = if (state.dim > 0f) 1f else 0f
         if (dimInstant) ink.snapTo(target)
-        else ink.animateTo(target, tween(if (target > 0f) INK_IN_MS else INK_OUT_MS, easing = FastOutSlowInEasing))
+        else ink.animateTo(target, tween(if (target > 0f) inkMs else INK_OUT_MS, easing = FastOutSlowInEasing))
+
     }
     val sink = remember { Animatable(0f) }
     LaunchedEffect(sunk, sinkSnap) {

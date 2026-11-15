@@ -61,6 +61,14 @@ class FuckShortsService : AccessibilityService() {
     private var tapProbeUntil = 0L
     /** Zuletzt die graue Lade-Seite eines Videos gesehen (unsere ist dann weg). */
     private var loadingPageAt = 0L
+    /** Google Play (Werbung) geht über YouTube auf, unsere ist abgedunkelt (siehe dimForSheetApp). 0 = nein. */
+    private var sheetAppAt = 0L
+    /** Google Play hat (nach dem Werbe-Tipp) zum ersten Mal Inhalt gemeldet: Es ist gezeichnet. */
+    private var sheetAppContentAt = 0L
+    /** Android hat (nach dem Werbe-Tipp) ein Startfenster entfernt: Das Play-Blatt ist gezeichnet. */
+    private var sheetAppDrawnAt = 0L
+    /** Seit dann liegt das Play-Blatt über YouTube (unsere weg); beim Schliessen sofort zeigen. 0 = nein. */
+    private var sheetAppLeftAt = 0L
     /** Video offen und die Startseite hat sich gemeldet (PANE_APPEARED): bis dann den Player ganz dicht nachsehen. */
     private var paneBurstUntil = 0L
     /** Zuletzt ist unsere weggefahren, weil nach einem Tipp die echte Leiste ganz hinausfuhr (Video geht auf). */
@@ -356,7 +364,21 @@ class FuckShortsService : AccessibilityService() {
         }
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return
+        if (sheetAppAt != 0L && pkg == PLAY_STORE_PKG && event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+            event.className?.toString() == "android.view.View" && SystemClock.uptimeMillis() - sheetAppAt > 40
+        ) {
+            sheetAppContentAt = SystemClock.uptimeMillis()
+            Log.d(TAG, "Play: erster Inhalt nach ${sheetAppContentAt - sheetAppAt} ms")
+            handler.removeCallbacks(sheetAppWatch)
+            handler.post(sheetAppWatch)
+        }
+        if (app.fshorts.BuildConfig.DEBUG && event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED && pkg != selectors.youtubePackage &&
+            pkg != SYSTEM_UI && Log.isLoggable(TRACE_TAG, Log.VERBOSE)
+        ) {
+            Log.d(TAG, "Inhalt $pkg w=${event.windowId} ch=${event.contentChangeTypes} ${event.className}")
+        }
         if (app.fshorts.BuildConfig.DEBUG && event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+
             Log.d(TAG, "Scroll dy=${event.scrollDeltaY} ${event.className}")
         }
         if (app.fshorts.BuildConfig.DEBUG && event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED && Log.isLoggable(TRACE_TAG, Log.VERBOSE) &&
@@ -375,8 +397,10 @@ class FuckShortsService : AccessibilityService() {
             !overlay.isSliding && splitBounds == null && event.className?.contains("Activity") == true &&
             SystemClock.uptimeMillis() - lastTouchAt < 1500
         ) {
-            reason("Andere App geöffnet ($pkg), unsere sofort weg")
-            hideAll()
+            if (pkg == PLAY_STORE_PKG && !isTablet) dimForSheetApp() else {
+                reason("Andere App geöffnet ($pkg), unsere sofort weg")
+                hideAll()
+            }
         }
         if (app.fshorts.BuildConfig.DEBUG && (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED)
@@ -489,6 +513,12 @@ class FuckShortsService : AccessibilityService() {
                 }
             }
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                if (sheetAppAt != 0L && event.windowChanges and AccessibilityEvent.WINDOWS_CHANGE_REMOVED != 0 &&
+                    wid != barWindowId
+                ) sheetAppDrawnAt = now
+                if (sheetAppLeftAt != 0L && event.windowChanges and
+                    (AccessibilityEvent.WINDOWS_CHANGE_ACTIVE or AccessibilityEvent.WINDOWS_CHANGE_REMOVED) != 0
+                ) onSheetAppMaybeClosed(now)
                 if (event.windowChanges and AccessibilityEvent.WINDOWS_CHANGE_REMOVED == 0 || wid == -1) return
                 // Legt sich nur ein anderes Fenster darüber (z. B. Androids Fotos-Frage über der Kamera), meldet
                 // Android die Kamera auch als "entfernt": Dann ist aber ein anderes App-Fenster in der Liste.
@@ -532,6 +562,117 @@ class FuckShortsService : AccessibilityService() {
         // in dieser Zeit ein kurzes Stück von unten herein (statt über der Kamera aufzuspringen) und steht rechtzeitig.
         overlay.showRising(rest, state.copy(style = currentStyle()), CLOSE_RISE_DP * resources.displayMetrics.density, RISE_MS)
         continueScanSoon()
+    }
+
+    /**
+     * Werbung getippt, Google Play öffnet sich als halb durchsichtiges Fenster über YouTube (gemessen 15.11.): YouTube
+     * wird ~0,18 s lang abgedunkelt (auf ~50 %), dann fährt das Play-Blatt von unten hoch. Vorher war unsere sofort weg
+     * und man sah so lange die echte Leiste (abgedunkelt). Jetzt dunkelt unsere mit (Tinte wie beim ⋮-Menü) und
+     * verschwindet erst, wenn das Blatt über ihr ist.
+     */
+    private fun dimForSheetApp() {
+        // Schon dran (abdunkeln läuft, blendet aus oder Blatt liegt schon darüber): nichts neu anfangen.
+        if (sheetAppAt != 0L || overlay.isFading || SystemClock.uptimeMillis() - sheetAppLeftAt < SHEET_APP_REPEAT_MS) return
+        val rest = restBounds
+
+        val state = lastUiState
+        if (rest == null || state == null || !overlay.isShowing) {
+            reason("Andere App geöffnet ($PLAY_STORE_PKG), unsere sofort weg")
+            hideAll()
+            return
+        }
+        sheetAppAt = SystemClock.uptimeMillis()
+        reason("Google Play öffnet sich über YouTube, unsere dunkelt mit ab")
+        val cx = rest.centerX()
+        overlay.showUnderMenu(rest, state.copy(style = currentStyle()), SHEET_APP_DIM, Rect(cx, rest.top, cx, rest.top), SHEET_APP_INK_MS)
+        handler.removeCallbacks(sheetAppWatch)
+        handler.postDelayed(sheetAppWatch, POLL_MS)
+    }
+
+    private val sheetAppWatch = object : Runnable {
+        override fun run() {
+            if (sheetAppAt == 0L) return
+            if (!overlay.isShowing) {
+                sheetAppAt = 0L
+                return
+            }
+            val now = SystemClock.uptimeMillis()
+            val rest = restBounds
+            // Bestes Zeichen (gemessen 15.11.): Plays erste Inhalts-Meldung (View) nach dem Öffnen kommt mit dem ersten
+            // gezeichneten Bild (Lade-Kreis), ein Bild später blendet das Blatt ein. Dann blendet unsere in
+            // SHEET_APP_FADE_MS aus (Überblendung mit dem Blatt). Sonst: Startfenster entfernt, notfalls nach
+            // SHEET_APP_COVER_MS. Keine Abfragen an Plays Oberfläche hier: Die kosteten pro Bild bis ~50 ms und
+            // hielten unser Zeichnen auf (Abdunkeln kaum zu sehen, Ausblenden ~6 Bilder zu spät).
+            val covered = rest != null && (sheetAppContentAt >= sheetAppAt || sheetAppDrawnAt >= sheetAppAt ||
+                now - sheetAppAt >= SHEET_APP_COVER_MS)
+            if (covered || now - sheetAppAt > SHEET_APP_MAX_MS) {
+                reason(if (covered) "Play-Blatt über der Leiste, unsere blendet aus (${now - sheetAppAt} ms)" else "Play-Blatt kam nicht, unsere weg")
+                sheetAppAt = 0L
+                sheetAppLeftAt = now
+                overlay.hide()
+                scheduleScan()
+                return
+            }
+            handler.postDelayed(this, POLL_MS)
+        }
+    }
+
+    /**
+     * Google-Play-Blatt (nach Werbe-Tipp) wird geschlossen: Es verschwindet in einem Bild, darunter steht YouTube
+     * sofort wieder hell mit der echten Leiste. Der Scan zeigte unsere erst ~60 ms später (5 Bilder echte Leiste,
+     * gemessen 15.11.). Erstes Zeichen: Play-Fenster verliert "aktiv" bzw. wird entfernt.
+     */
+    private fun onSheetAppMaybeClosed(now: Long) {
+        if (now - sheetAppLeftAt > SHEET_APP_RETURN_MS) {
+            sheetAppLeftAt = 0L
+            return
+        }
+        val all = windows
+        if (Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+            Log.d(TAG, "Play zu? Fenster: " + all.joinToString { "${it.id}:${it.root?.packageName}:${if (it.isActive) "A" else ""}" } + " bar=$barWindowId")
+        }
+        if (all.any { it.isActive && it.root?.packageName?.toString() == PLAY_STORE_PKG }) return
+        val main = all.firstOrNull { it.id == barWindowId } ?: return
+
+        if (main.root?.packageName?.toString() != selectors.youtubePackage) return
+        val rest = restBounds ?: return
+        val state = lastUiState ?: return
+        sheetAppLeftAt = 0L
+        if (overlay.isShowing || watchPageOpen) return
+        reason("Google Play geht zu, unsere sofort")
+        youTubeActive = true
+        youTubeSince = now
+        preShownAt = now
+        hiddenByScroll = false
+        overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+        continueScanSoon()
+    }
+
+    /** Liegt ein Teil des Play-Blatts (nicht das bildschirmgrosse, durchsichtige Fenster selbst) über unserer Leiste? */
+    private fun sheetOverBar(root: AccessibilityNodeInfo, rest: Rect): Boolean {
+        val display = displayBounds()
+        val r = Rect()
+        var checked = 0
+        fun walk(node: AccessibilityNodeInfo, depth: Int): Boolean {
+            if (checked++ > 400 || depth > 25) return false
+            if (depth > 0 && node.isVisibleToUser) {
+                node.getBoundsInScreen(r)
+                val fullScreen = r.height() >= display.height() - 4 * resources.displayMetrics.density * 30
+                if (!fullScreen && !r.isEmpty && Rect.intersects(r, rest)) {
+                    if (Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+                        Log.d(TAG, "Play-Knoten über Leiste: ${node.className} ${node.viewIdResourceName} ${r.toShortString()} " +
+                            "tiefe=$depth alpha? text=${(node.text ?: node.contentDescription)?.toString()?.take(20)}")
+                    }
+                    return true
+                }
+            }
+            for (i in 0 until node.childCount) {
+                val c = node.getChild(i) ?: continue
+                if (walk(c, depth + 1)) return true
+            }
+            return false
+        }
+        return walk(root, 0)
     }
 
     override fun onInterrupt() = Unit
@@ -910,6 +1051,11 @@ class FuckShortsService : AccessibilityService() {
             overlay.hide()
             return
         }
+        // Google Play geht über YouTube auf, unsere dunkelt mit: das regelt sheetAppWatch.
+        if (sheetAppAt != 0L) {
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return
+        }
         if (shelfMenuOpenedAt != 0L) {
             handleShelfMenu(now)
             return
@@ -969,6 +1115,12 @@ class FuckShortsService : AccessibilityService() {
         if (keyboard) {
             fastUntil = maxOf(fastUntil, now + KEYBOARD_FAST_MS)
             handler.postDelayed({ scheduleScan() }, POLL_MS)
+        }
+        if (!keyboard && !isTablet && foreground?.packageName?.toString() == PLAY_STORE_PKG && youTubeActive &&
+            overlay.isShowing && now - lastTouchAt < 1500
+        ) {
+            dimForSheetApp()
+            return
         }
         if (foreground == null || !youTubeInFront || keyboard) {
             reason(if (keyboard) "Tastatur offen" else "YouTube nicht vorne (${foreground?.packageName})")
@@ -1870,6 +2022,7 @@ class FuckShortsService : AccessibilityService() {
      * Verschwindet die Leiste aus einem anderen Grund (z. B. Video geöffnet), verschwindet unsere mit.
      */
     private fun updateBar(now: Long, fresh: FoundBar?) {
+        if (sheetAppAt != 0L) return
         val rest = restBounds
         val state = lastUiState
         // Panel offen: Die Leiste ist nicht abfragbar. Aber das Panel selbst jedes Bild nachsehen: Geht es zu (z. B.
@@ -1978,6 +2131,11 @@ class FuckShortsService : AccessibilityService() {
             lastObservedTop = -1
             // Video wird geöffnet (Tipp, nicht Plus/Kamera): sanft wegfahren. Sonst sofort weg.
             // Eine andere App (Chrome Custom Tab nach Werbe-Tipp) ist schon vorne: sofort weg, nicht über ihr wegfahren.
+            // Werbung → Google Play: Oft meldet sich Plays Startfenster vor der Seiten-Meldung. Auch dann mit abdunkeln.
+            if (frontPkg == PLAY_STORE_PKG && !isTablet && now - lastTouchAt < 1500 && overlay.isShowing) {
+                dimForSheetApp()
+                return
+            }
             val otherApp = frontPkg != null && frontPkg != selectors.youtubePackage && frontPkg != packageName
             if (!otherApp && now - lastNavAt < NAV_LINK_MS && now - createTappedAt > CREATE_HOLD_MS) hideSmooth() else hideAll()
             return
@@ -2891,6 +3049,22 @@ class FuckShortsService : AccessibilityService() {
         private const val RISE_LATE_DP = 140f
         private const val RISE_MS = 240L
         private const val HIGHER_REST_MS = 1_500L
+        private const val PLAY_STORE_PKG = "com.android.vending"
+        /** Google Play dunkelt YouTube auf ~50 % ab (gemessen 226 → 121). */
+        private const val SHEET_APP_DIM = 0.5f
+        private const val SHEET_APP_MAX_MS = 900L
+        private const val SHEET_APP_COVER_MS = 150L
+        /** Google Play dunkelt in ~150 ms ab: unsere Tinte hier genauso schnell (beim ⋮-Menü bleibt sie langsam). */
+        private const val SHEET_APP_INK_MS = 140
+
+
+        private const val SHEET_APP_REPEAT_MS = 3_000L
+
+
+
+        private const val SHEET_APP_RETURN_MS = 120_000L
+
+
         private const val ROTATE_SETTLE_MS = 800L
 
         private const val PANE_BURST_MS = 250L
