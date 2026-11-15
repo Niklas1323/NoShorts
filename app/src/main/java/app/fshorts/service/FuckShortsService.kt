@@ -384,6 +384,14 @@ class FuckShortsService : AccessibilityService() {
         ) {
             Log.d(TAG, "Inhalt $pkg w=${event.windowId} ch=${event.contentChangeTypes} ${event.className}")
         }
+        // Nur zum Messen: auch YouTubes Inhalts-Meldungen (sehr viele). Einschalten: setprop log.tag.FShortsTraceYT VERBOSE
+        if (app.fshorts.BuildConfig.DEBUG && event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+            pkg == selectors.youtubePackage && Log.isLoggable("FShortsTraceYT", Log.VERBOSE)
+        ) {
+            Log.d(TAG, "YT-Inhalt w=${event.windowId} ch=${event.contentChangeTypes} ${event.className} " +
+                "\"${(event.contentDescription ?: event.text.firstOrNull())?.toString()?.take(24)}\"")
+        }
+
         if (app.fshorts.BuildConfig.DEBUG && event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
 
             Log.d(TAG, "Scroll dy=${event.scrollDeltaY} ${event.className}")
@@ -1878,10 +1886,14 @@ class FuckShortsService : AccessibilityService() {
         // YouTube dahinter. Hell wird sie (Tinte zieht sich zurück), wenn das Panel weg ist.
         val closing = top > panelMinTop + CLOSING_DP * resources.displayMetrics.density
         if (closing) {
-            reason("Panel fährt zu (oben=$top), unsere abgedunkelt")
-            preShownAt = now
-            hiddenByScroll = false
-            overlay.showCoveredBy(rest, state.copy(style = currentStyle()), PANEL_DIM, screen.bottom)
+            // YouTube hellt die Seite ab hier in ~0,13 s auf (und springt dann ganz hell). Unsere kommt abgedunkelt und
+            // hellt im selben Takt auf (vorher blieb sie ~5 Bilder länger dunkel als die Seite).
+            if (!overlay.isShowing) {
+                reason("Panel fährt zu (oben=$top), unsere hellt mit YouTube auf")
+                preShownAt = now
+                hiddenByScroll = false
+                overlay.showFromDim(rest, state.copy(style = currentStyle()), PANEL_DIM, PANEL_BRIGHTEN_MS)
+            }
             return
         }
         if (top > rest.top + 2) {
@@ -2190,6 +2202,17 @@ class FuckShortsService : AccessibilityService() {
             else -> lastBar?.let { scanner.liveTop(it.container, screen) }
         }
         if (observedTop == null) {
+            // Handy: Gleich nach einer Berührung ist die echte weg. Vielleicht geht gerade das Werbe-Menü auf (YouTube
+            // nimmt seine Leiste dafür ~20 ms nach dem Tipp weg, das Panel kommt ~30 ms später und ist nach 1 Bild
+            // über der Leiste). Darum hier kurz jedes Bild nach dem Panel sehen, nicht erst beim nächsten Scan.
+            if (!isTablet && overlay.isShowing && now - lastTouchAt < PANEL_PROBE_MS && panelMinTop == Int.MAX_VALUE) {
+                val main = youTubeMainRoot()
+                if (main != null && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+                    Log.d(TAG, "Panel-Probe ${now - lastTouchAt} ms nach Berührung: ${scanner.panelDebug(main)}")
+                }
+
+                if (main != null && scanner.panelTop(main, screen) != null && handlePanel(main, now)) return
+            }
             if (now - themeChangedAt < THEME_HOLD_MS) {
                 // YouTube baut sich nach hell/dunkel neu auf, die Leiste fehlt kurz: unsere stehen lassen.
                 reason("Design gewechselt, YouTube baut neu auf")
@@ -3171,6 +3194,10 @@ class FuckShortsService : AccessibilityService() {
         private const val PANEL_DIM = 0.5f
         private const val PANEL_FROM_BAR_MS = 500L
         private const val POPUP_EDGE_PX = 8
+        private const val PANEL_PROBE_MS = 250L
+        private const val PANEL_BRIGHTEN_MS = 90
+
+
 
 
 

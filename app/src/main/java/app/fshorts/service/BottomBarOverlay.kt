@@ -125,6 +125,8 @@ class BottomBarOverlay(
     private var sinkSnap by mutableStateOf(false)
     /** Ein Panel liegt ab dieser Höhe (px ab Oberkante unserer Leiste) über ihr: darunter nichts zeichnen. */
     private var coverFromPx by mutableFloatStateOf(Float.MAX_VALUE)
+    /** Dauer, mit der sich die Tinte beim Aufhellen zurückzieht (⋮-Menü: INK_OUT_MS, Werbe-Menü: schneller). */
+    private var inkOutMs by mutableStateOf(INK_OUT_MS)
     /** Dauer, mit der sich die Tinte beim Abdunkeln ausbreitet (⋮-Menü: INK_IN_MS, Google Play: schneller). */
     private var inkInMs by mutableStateOf(INK_IN_MS)
     /** Handy hochkant: so viele px ist unsere höher als die echte (Inhalt um diesen Rand tiefer gesetzt). */
@@ -200,10 +202,32 @@ class BottomBarOverlay(
      */
     fun showCoveredBy(rest: Rect, state: BarUiState, dim: Float, panelTop: Int) {
         underMenu = true
+        // YouTube hellt nach dem Werbe-Menü in ~0,13 s auf (gemessen): unsere genauso schnell.
+        if (inkOutMs != PANEL_INK_OUT_MS) inkOutMs = PANEL_INK_OUT_MS
         val cx = rest.centerX() - rest.left
         place(rest.top, rest, state.copy(dim = dim, hole = Rect(cx, 0, cx, 0), veil = null))
         val cover = (panelTop - rest.top + topExtraFor(rest)).toFloat()
         if (cover != coverFromPx) coverFromPx = cover
+    }
+
+    /**
+     * Zeigen und dabei aufhellen: erstes Bild abgedunkelt um [dim], dann hellt die Leiste in [ms] auf (z. B. nach dem
+     * Werbe-Menü im Takt von YouTubes Seite). Berührungen gehen gleich wieder.
+     */
+    fun showFromDim(rest: Rect, state: BarUiState, dim: Float, ms: Int) {
+        if (isSlidingAway || SystemClock.uptimeMillis() < holdHiddenUntil) return
+        underMenu = true
+        if (inkOutMs != ms) inkOutMs = ms
+        val cx = rest.centerX() - rest.left
+        place(rest.top, rest, state.copy(dim = dim, hole = Rect(cx, 0, cx, 0), veil = null))
+        val v = view ?: return
+        val shownAt = this.shownAt
+        // Ein Bild später aufhellen (dann ist die Abdunklung sicher gezeichnet und die Tinte steht auf "dunkel").
+        v.postDelayed({
+            if (!isShowing || this.shownAt != shownAt || uiState?.dim == 0f) return@postDelayed
+            underMenu = false
+            place(rest.top, rest, state.copy(dim = 0f, hole = null, veil = null))
+        }, FRAME_MS)
     }
 
     /** Fährt gerade von unten herein ([showRising]). Solange keine Abfragen an YouTube: sie hielten die Animation an. */
@@ -291,6 +315,7 @@ class BottomBarOverlay(
     fun showUnderMenu(rest: Rect, state: BarUiState, dim: Float, sheet: Rect, inkMs: Int = INK_IN_MS) {
         underMenu = true
         if (inkMs != inkInMs) inkInMs = inkMs
+        if (inkOutMs != INK_OUT_MS) inkOutMs = INK_OUT_MS
         val hole = Rect(sheet).apply { offset(-rest.left, -rest.top + topExtraFor(rest)) }
         place(rest.top, rest, state.copy(dim = dim, hole = hole, veil = null))
     }
@@ -545,7 +570,9 @@ class BottomBarOverlay(
         // Durchsichtig statt unsichtbar: Ein unsichtbares Fenster richtet Android beim Wiederzeigen neu ein
         // (1–2 Bilder später, z. B. beim Verlassen eines Videos sah man so die echte Leiste kurz).
         v.alpha = 0f
-        applyFlags()
+        // Fenster-Flags erst im nächsten Bild umstellen: Das Umstellen richtet das Fenster neu ein, und Android zeigte
+        // das Ausblenden erst danach (gemessen 15.11.: unsere stand so noch 3 Bilder über dem Werbe-Menü).
+        v.post { if (!isShowing) applyFlags() }
     }
 
     /**
@@ -634,6 +661,7 @@ class BottomBarOverlay(
                         compactNav = compactNav,
                         topExtra = topExtra,
                         inkMs = inkInMs,
+                        inkOutMs = inkOutMs,
                         cover = { coverFromPx },
                         rise = { risePx },
                         onTap = { kind ->
@@ -658,6 +686,8 @@ class BottomBarOverlay(
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         const val OPTIMISTIC_MS = 600L
         const val SLIDE_MS = 300L
+        const val FRAME_MS = 40L
+
         const val RISE_TOUCH_MS = 110L
 
         const val IGNORE_AFTER_PASS_THROUGH_MS = 700L
@@ -717,6 +747,7 @@ private fun BottomBar(
     compactNav: Int,
     topExtra: Int,
     inkMs: Int,
+    inkOutMs: Int,
     cover: () -> Float,
     rise: () -> Float,
     onTap: (TabKind) -> Unit,
@@ -760,7 +791,7 @@ private fun BottomBar(
     LaunchedEffect(state.dim > 0f) {
         val target = if (state.dim > 0f) 1f else 0f
         if (dimInstant) ink.snapTo(target)
-        else ink.animateTo(target, tween(if (target > 0f) inkMs else INK_OUT_MS, easing = FastOutSlowInEasing))
+        else ink.animateTo(target, tween(if (target > 0f) inkMs else inkOutMs, easing = FastOutSlowInEasing))
 
     }
     val sink = remember { Animatable(0f) }
@@ -797,7 +828,10 @@ private fun BottomBar(
             }
             .drawWithContent {
                 drawContent()
-                val p = ink.value
+                // Eben erst (wieder) gezeigt: Abdunklung sofort richtig zeichnen, nicht auf die Animation warten (sonst
+                // war das erste Bild noch hell bzw. noch dunkel, gemessen 15.11. beim Schliessen des Werbe-Menüs).
+                val p = if (dimInstant) (if (state.dim > 0f) 1f else 0f) else ink.value
+
                 if (p > 0.001f && inkLevel > 0f) {
                     val dark = Color.Black.copy(alpha = inkLevel)
                     if (p >= 0.999f) {
@@ -1123,6 +1157,8 @@ private const val LABEL_DP = 10.5f
 /** Abdunkeln beim ⋮-Menü: Tinte breitet sich aus (ms) bzw. zieht sich zurück. */
 private const val INK_IN_MS = 480
 private const val INK_OUT_MS = 380
+private const val PANEL_INK_OUT_MS = 150
+
 /** Plus: Knöpfe sinken nach unten weg (ms), die Fläche bleibt stehen, bis die Kamera darüber ist. */
 private const val SINK_MS = 260
 /** Handy hochkant: unsere Leiste ist so viel höher als die echte. */

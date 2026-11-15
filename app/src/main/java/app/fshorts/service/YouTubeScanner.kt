@@ -270,7 +270,17 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
             .minOfOrNull { it.top }
     }
 
+    /** Nur zum Messen: alle Panel-Knoten, auch unsichtbare, mit Lage. */
+    fun panelDebug(root: AccessibilityNodeInfo): String {
+        val r = Rect()
+        return root.findAccessibilityNodeInfosByViewId(sel.fullId(PANEL_ID)).joinToString { n ->
+            n.getBoundsInScreen(r)
+            "${r.toShortString()} vis=${n.isVisibleToUser} kids=${n.childCount}"
+        }
+    }
+
     /** Das Panel selbst (gleiche Regeln wie [panelTop]), damit es danach jedes Bild mit einer Abfrage geprüft werden kann. */
+
     fun findPanel(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
         val r = Rect()
         return root.findAccessibilityNodeInfosByViewId(sel.fullId(PANEL_ID))
