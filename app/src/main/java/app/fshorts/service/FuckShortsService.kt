@@ -2378,7 +2378,10 @@ class FuckShortsService : AccessibilityService() {
         if (menuWindows[front.windowId] == true) return null
         val rest = restBounds ?: return null
         val b = windowBounds(front.windowId)
-        if (b.contains(rest) || Rect.intersects(b, rest)) return null
+        if (b.contains(rest)) return null
+        // Ein Dialog in der Mitte (YouTube 21.45: Suchfilter [80,279][1000,2248]) ragt ein Stück in die Leiste, ist aber
+        // schmaler als sie: weiterhin ein Popup (sonst war unsere weg und die echte abgedunkelt mit Shorts zu sehen).
+        if (Rect.intersects(b, rest) && b.left <= rest.left + POPUP_EDGE_PX && b.right >= rest.right - POPUP_EDGE_PX) return null
         return b.takeIf { it.width().toLong() * it.height() < screen.width().toLong() * screen.height() * 7 / 10 }
     }
 
@@ -3141,6 +3144,8 @@ class FuckShortsService : AccessibilityService() {
         /** YouTube dunkelt hinter dem Werbe-Menü-Panel auf ~50 % ab (gemessen 57 → 118). */
         private const val PANEL_DIM = 0.5f
         private const val PANEL_FROM_BAR_MS = 500L
+        private const val POPUP_EDGE_PX = 8
+
 
 
 
