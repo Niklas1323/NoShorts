@@ -70,6 +70,9 @@ class FuckShortsService : AccessibilityService() {
     private var probeGen = 0
     private val probeThread = android.os.HandlerThread("fshorts-richtung").also { it.start() }
     private val probeHandler = Handler(probeThread.looper)
+    /** Liste der Seite, im Hintergrund gemerkt, wenn unsere wegfährt (die echte ist dann oft nicht entfernt). */
+    @Volatile
+    private var probeFeed: AccessibilityNodeInfo? = null
     /** Die echte Leiste wurde beim Scrollen aus der Oberfläche genommen (unsere ist dann weggefahren). */
     private var realGoneByScroll = false
     /** Das offene Panel ging über einer Seite mit unserer Leiste auf (siehe coverByPanel). */
@@ -959,7 +962,7 @@ class FuckShortsService : AccessibilityService() {
     private fun startDirectionProbe() {
         dirUntil = lastTouchAt + DIR_PROBE_MS
         val gen = ++probeGen
-        val feed = goneFeed
+        val feed = goneFeed ?: probeFeed
         val scr = Rect(screen)
         val trace = app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)
         probeHandler.post { runDirectionProbe(gen, feed, scr, trace) }
@@ -1015,7 +1018,24 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
+    /**
+     * Unsere fährt beim Scrollen weg. Gleich im Hintergrund die Liste der Seite merken: Beim nächsten Fingerauflegen
+     * muss die Richtungserkennung sofort ein Element haben. Ohne Liste suchte sie erst den ganzen Baum ab (bei
+     * beschäftigtem YouTube zu langsam, gemessen 16.11.: 15 Bilder echte Leiste).
+     */
+    private fun followAway() {
+        if (!overlay.isScrolledAway) {
+            val known = goneFeed
+            val scr = Rect(screen)
+            probeHandler.post {
+                probeFeed = known?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { scanner.findFeed(it, scr) }
+            }
+        }
+        overlay.scrollAway(SCROLL_AWAY_MS)
+    }
+
     /** Handy, Startseite/Abos/Mein YouTube: dort fährt unsere beim Scrollen mit der echten weg und wieder herein. */
+
     private fun scrollFollowPage(): Boolean {
         if (isTablet || watchPageOpen || splitBounds != null || menuFront || dialogDimmed) return false
         if (panelMinTop != Int.MAX_VALUE || sheetAppAt != 0L) return false
@@ -2370,7 +2390,7 @@ class FuckShortsService : AccessibilityService() {
                 if (scrollFollowPage() && touchScrollNow(now)) {
                     realGoneByScroll = true
                     if (!overlay.isScrolledAway) reason("echte beim Scrollen weg, unsere fährt runter")
-                    overlay.scrollAway(SCROLL_AWAY_MS)
+                    followAway()
                 } else {
                     reason("echte weggescrollt und entfernt, unsere bleibt")
                 }
@@ -2439,7 +2459,7 @@ class FuckShortsService : AccessibilityService() {
         ) {
             // Die echte fährt (noch in der Oberfläche) nach unten raus: unsere hinterher.
             reason("echte fährt beim Scrollen raus (top=$observedTop), unsere mit")
-            overlay.scrollAway(SCROLL_AWAY_MS)
+            followAway()
         }
         val visibleNow = observedTop < screen.bottom - 2
         val wasHidden = lastObservedTop < 0 || lastObservedTop >= screen.bottom - 2
