@@ -210,6 +210,8 @@ class FuckShortsService : AccessibilityService() {
 
     private var higherRest: Rect? = null
     private var higherRestSince = 0L
+    private var shorterRest: Rect? = null
+    private var shorterRestSince = 0L
     /** Kamera mit X geschlossen (siehe onBarlessWindowGone). */
     private var xCloseAt = 0L
     private var xDelayed = false
@@ -2065,7 +2067,11 @@ class FuckShortsService : AccessibilityService() {
         // ausgleicht). So gelernt, stand unsere dauerhaft 71 px zu hoch, darunter ein Streifen der echten. Eine Lage
         // mit höherer Unterkante gilt darum erst, wenn sie eine Weile unverändert bleibt (z. B. Wechsel auf
         // 3-Knopf-Navigation), nicht bei einer einzelnen Messung.
-        if (!isTablet && rest != null && b.bottom < rest.bottom - 2) {
+        // Handy: Auch eine höhere/grössere Leiste (gleiche Unterkante, z. B. kurz beim Mini-Player) wurde sofort gelernt:
+        // unsere stand dann 64 px zu hoch (gesehen 15.11., Niklas: "Leiste ist höher geworden"). Darum gilt jede höhere
+        // Lage erst, wenn sie eine Weile unverändert bleibt.
+        val taller = rest != null && b.bottom >= rest.bottom - 2 && b.top < rest.top - 2
+        if (!isTablet && rest != null && (b.bottom < rest.bottom - 2 || taller)) {
             val now = SystemClock.uptimeMillis()
             if (b != higherRest) {
                 higherRest = Rect(b)
@@ -2078,7 +2084,25 @@ class FuckShortsService : AccessibilityService() {
             restBounds = Rect(b)
             return
         }
+        // Handy: Früher zu gross gelernt (gleiche Unterkante, Oberkante zu hoch) und die echte steht seit einer Weile
+        // ruhig tiefer, ohne Berührung (also nicht halb weggescrollt): wieder auf die echte Grösse.
+        val shorter = rest != null && kotlin.math.abs(b.bottom - rest.bottom) <= 2 && b.top > rest.top + 2 &&
+            b.height() >= rest.height() / 2
+        if (!isTablet && shorter) {
+            val now = SystemClock.uptimeMillis()
+            if (b != shorterRest || lastTouchAt > shorterRestSince) {
+                shorterRest = Rect(b)
+                shorterRestSince = now
+                return
+            }
+            if (now - shorterRestSince < SHORTER_REST_MS) return
+            Log.d(TAG, "Leiste: Ruhelage war zu gross, jetzt ${b.toShortString()} (war ${rest?.toShortString()})")
+            shorterRest = null
+            restBounds = Rect(b)
+            return
+        }
         higherRest = null
+        shorterRest = null
         // Tablet: Steht die ganze Leiste tiefer als die gemerkte Lage, war diese falsch (auch gespeichert): neu lernen.
         // Handy: nur wenn sie dabei ganz zu sehen ist und bis zum unteren Rand reicht (beim Wegscrollen ragt sie
         // unten hinaus). So korrigiert sich eine früher falsch gelernte, zu hohe Lage von selbst.
@@ -3131,6 +3155,8 @@ class FuckShortsService : AccessibilityService() {
         private const val RISE_LATE_DP = 140f
         private const val RISE_MS = 240L
         private const val HIGHER_REST_MS = 1_500L
+        private const val SHORTER_REST_MS = 3_000L
+
         private const val PLAY_STORE_PKG = "com.android.vending"
         /** Google Play dunkelt YouTube auf ~50 % ab (gemessen 226 → 121). */
         private const val SHEET_APP_DIM = 0.5f

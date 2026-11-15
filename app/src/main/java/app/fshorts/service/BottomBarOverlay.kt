@@ -127,6 +127,8 @@ class BottomBarOverlay(
     private var coverFromPx by mutableFloatStateOf(Float.MAX_VALUE)
     /** Dauer, mit der sich die Tinte beim Abdunkeln ausbreitet (⋮-Menü: INK_IN_MS, Google Play: schneller). */
     private var inkInMs by mutableStateOf(INK_IN_MS)
+    /** Handy hochkant: so viele px ist unsere höher als die echte (Inhalt um diesen Rand tiefer gesetzt). */
+    private var topExtra by mutableStateOf(0)
     /** Handy quer: flache Leiste, Wert = Höhe der Gestenleiste darunter. -1 = normale Leiste. */
     private var compactNav by mutableStateOf(-1)
     private val restoreSink = Runnable { sunk = false }
@@ -200,7 +202,7 @@ class BottomBarOverlay(
         underMenu = true
         val cx = rest.centerX() - rest.left
         place(rest.top, rest, state.copy(dim = dim, hole = Rect(cx, 0, cx, 0), veil = null))
-        val cover = (panelTop - rest.top).toFloat()
+        val cover = (panelTop - rest.top + topExtraFor(rest)).toFloat()
         if (cover != coverFromPx) coverFromPx = cover
     }
 
@@ -277,7 +279,7 @@ class BottomBarOverlay(
      */
     fun showVeiled(rest: Rect, state: BarUiState, veil: Int, panel: Rect? = null) {
         underMenu = true
-        val hole = panel?.let { Rect(it).apply { offset(-rest.left, -rest.top) } }
+        val hole = panel?.let { Rect(it).apply { offset(-rest.left, -rest.top + topExtraFor(rest)) } }
         place(rest.top, rest, state.copy(dim = 0f, hole = hole, veil = veil))
     }
 
@@ -289,7 +291,7 @@ class BottomBarOverlay(
     fun showUnderMenu(rest: Rect, state: BarUiState, dim: Float, sheet: Rect, inkMs: Int = INK_IN_MS) {
         underMenu = true
         if (inkMs != inkInMs) inkInMs = inkMs
-        val hole = Rect(sheet).apply { offset(-rest.left, -rest.top) }
+        val hole = Rect(sheet).apply { offset(-rest.left, -rest.top + topExtraFor(rest)) }
         place(rest.top, rest, state.copy(dim = dim, hole = hole, veil = null))
     }
 
@@ -435,9 +437,12 @@ class BottomBarOverlay(
         val nav = compactNavPx(rest)
         if (nav != compactNav) compactNav = nav
         if (nav < 0) {
-            target.set(rest.left, top, rest.right, top + rest.height())
+            val extra = topExtraFor(rest)
+            if (extra != topExtra) topExtra = extra
+            target.set(rest.left, top - extra, rest.right, top + rest.height())
             return
         }
+        if (topExtra != 0) topExtra = 0
         val d = service.resources.displayMetrics.density
         val h = (COMPACT_TOTAL_DP * d).toInt()
         val screenBottom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -447,6 +452,16 @@ class BottomBarOverlay(
         }
         val bottom = minOf(top + rest.height(), screenBottom)
         target.set(rest.left, bottom - h, rest.right, bottom)
+    }
+
+    /**
+     * Handy hochkant: unsere ist [TOP_EXTRA_DP] höher als die echte (Wunsch von Niklas: "nur ein ganz kleines bisschen
+     * höher als das Original"); so deckt sie auch die oberste Kante der durchsichtigen echten Leiste sicher ab. Die Knöpfe
+     * bleiben an derselben Stelle (der Inhalt wird um diesen Rand nach unten gesetzt).
+     */
+    private fun topExtraFor(rest: Rect): Int {
+        if (service.resources.configuration.smallestScreenWidthDp >= 600 || compactNavPx(rest) >= 0) return 0
+        return (TOP_EXTRA_DP * service.resources.displayMetrics.density).toInt()
     }
 
     /** Handy quer: Höhe der Gestenleiste unten (mindestens 0) = flache Leiste. Sonst -1. */
@@ -617,6 +632,7 @@ class BottomBarOverlay(
                         sunk = sunk,
                         sinkSnap = sinkSnap,
                         compactNav = compactNav,
+                        topExtra = topExtra,
                         inkMs = inkInMs,
                         cover = { coverFromPx },
                         rise = { risePx },
@@ -699,6 +715,7 @@ private fun BottomBar(
     sunk: Boolean,
     sinkSnap: Boolean,
     compactNav: Int,
+    topExtra: Int,
     inkMs: Int,
     cover: () -> Float,
     rise: () -> Float,
@@ -842,7 +859,7 @@ private fun BottomBar(
                 scaleY = duck
             },
         ) else Row(
-            modifier = Modifier.fillMaxWidth().height(barHeight).graphicsLayer {
+            modifier = Modifier.offset { IntOffset(0, topExtra) }.fillMaxWidth().height(barHeight).graphicsLayer {
                 scaleX = duck
                 scaleY = duck
                 transformOrigin = TransformOrigin(0.5f, 0.35f)
@@ -1108,6 +1125,9 @@ private const val INK_IN_MS = 480
 private const val INK_OUT_MS = 380
 /** Plus: Knöpfe sinken nach unten weg (ms), die Fläche bleibt stehen, bis die Kamera darüber ist. */
 private const val SINK_MS = 260
+/** Handy hochkant: unsere Leiste ist so viel höher als die echte. */
+private const val TOP_EXTRA_DP = 2f
+
 /** Plus getippt: Knopf wird so viel grösser, dreht sich so weit (Grad, 45 = "×") und hellt so stark auf. */
 private const val PLUS_GROW = 0.18f
 private const val PLUS_TURN = 45f
