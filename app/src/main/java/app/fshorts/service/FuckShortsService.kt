@@ -61,6 +61,17 @@ class FuckShortsService : AccessibilityService() {
     private var tapProbeUntil = 0L
     /** Zuletzt die graue Lade-Seite eines Videos gesehen (unsere ist dann weg). */
     private var loadingPageAt = 0L
+    /** Zuletzt nach oben gewischt (Liste rutscht runter): in dieser Berührung fährt unsere nicht weg. */
+    private var lastUpScrollAt = 0L
+    /** Richtung des Wischens, solange unsere weggescrollt ist (siehe startDirectionProbe, eigener Thread). */
+    @Volatile
+    private var dirUntil = 0L
+    @Volatile
+    private var probeGen = 0
+    private val probeThread = android.os.HandlerThread("fshorts-richtung").also { it.start() }
+    private val probeHandler = Handler(probeThread.looper)
+    /** Die echte Leiste wurde beim Scrollen aus der Oberfläche genommen (unsere ist dann weggefahren). */
+    private var realGoneByScroll = false
     /** Das offene Panel ging über einer Seite mit unserer Leiste auf (siehe coverByPanel). */
     private var panelFromBar = false
     /** Google Play (Werbung) geht über YouTube auf, unsere ist abgedunkelt (siehe dimForSheetApp). 0 = nein. */
@@ -250,7 +261,7 @@ class FuckShortsService : AccessibilityService() {
         // Unsere fährt gerade unter einen Dialog weg: erst fertig animieren lassen (ein Scan liesse sie ruckeln).
         // Ebenso, wenn sie gerade hereinfährt (Video verlassen) oder ihre Knöpfe wegsinken (Plus): Jede Abfrage an
         // YouTube hält unseren Haupt-Thread 50–300 ms auf, die Animation wurde dann gar nicht gezeichnet.
-        if (overlay.isSliding || overlay.isRising || overlay.isSinking) {
+        if (overlay.isSliding || overlay.isRising || overlay.isSinking || overlay.isScrollMoving) {
             handler.postDelayed({ scheduleScan() }, POLL_MS)
             return@Runnable
         }
@@ -278,6 +289,14 @@ class FuckShortsService : AccessibilityService() {
             handler.postDelayed({ scheduleScan() }, QUIET_FULL_SCAN_MS - (nowQuiet - lastScanAt))
             return@Runnable
         }
+        // Handy, unsere beim Scrollen weggefahren, gerade wird gewischt (kein Tipp): keine volle Suche. Sie dauerte beim
+        // Hochwischen bis 0,4 s und hielt das Nachführen auf, die echte war so zuerst oben (gemessen 15.11.).
+        if (!isTablet && overlay.isScrolledAway && youTubeActive && lastNavAt < lastTouchAt &&
+            nowQuiet - lastTouchAt < SCROLL_SCAN_HOLD_MS
+        ) {
+            handler.postDelayed({ scheduleScan() }, SCROLL_SCAN_RETRY_MS)
+            return@Runnable
+        }
         lastScanAt = nowQuiet
         scan()
     }
@@ -293,8 +312,22 @@ class FuckShortsService : AccessibilityService() {
             // So sind wir sofort da, wenn die echte wieder reinfährt.
             val waitingForBar = (!overlay.isShowing && (lastBar != null || watchPageOpen)) || panelMinTop != Int.MAX_VALUE
             val probing = now < tapProbeUntil && !watchPageOpen
+            // Nur zum Messen (Test-Versionen): setprop log.tag.FShortsMeasure VERBOSE → jedes Bild die Lage der echten
+            // Leiste ins Protokoll und nie aufhören nachzusehen; log.tag.FShortsGhost VERBOSE → unsere unsichtbar.
+            val measure = app.fshorts.BuildConfig.DEBUG && Log.isLoggable("FShortsMeasure", Log.VERBOSE)
+            val g = app.fshorts.BuildConfig.DEBUG && Log.isLoggable("FShortsGhost", Log.VERBOSE)
+            if (g != BottomBarOverlay.ghost) BottomBarOverlay.ghost = g
+
+            if (measure && connected && youTubeActive) measureRealBar()
+            // Unsere ist weggescrollt und die Richtung wird gerade im eigenen Thread geprüft: hier keine Abfragen
+            // (sie hielten den Haupt-Thread auf, das Hereinfahren kam dann zu spät).
+            if (overlay.isScrolledAway && now < dirUntil) {
+                handler.postDelayed(this, POLL_MS)
+                return
+            }
             if (!connected || !Access.unlocked || !youTubeActive ||
-                (now > pollUntil && !waitingForBar && now > fastUntil && !probing)
+                (now > pollUntil && !waitingForBar && now > fastUntil && !probing && !measure && now >= dirUntil)
+
             ) {
                 polling = false
                 return
@@ -315,8 +348,23 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
+    /** Nur zum Messen: Lage der echten Leiste jetzt (ohne etwas zu ändern). */
+    private fun measureRealBar() {
+        val t0 = SystemClock.uptimeMillis()
+        val c = lastBar?.container
+        val live = c?.let { scanner.liveTop(it, screen) }
+        val desc = if (live != null) {
+            "gemerkt top=$live"
+        } else {
+            val again = youTubeMainRoot()?.let { scanner.findBar(it, screen) }
+            if (again != null) "neu gefunden top=${again.bounds.top} h=${again.bounds.height()}" else "keine"
+        }
+        Log.d(TAG, "Mess: $desc (${SystemClock.uptimeMillis() - t0} ms) unsere=${if (overlay.isShowing) "da" else "weg"}")
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
+
         selectors = Selectors.load(this)
         scanner = YouTubeScanner(selectors, resources.displayMetrics.density, isTablet)
         overlay = BottomBarOverlay(this, ::onTabTapped, ::onBarLongPressed)
@@ -324,9 +372,12 @@ class FuckShortsService : AccessibilityService() {
         sampler = BarStyleSampler(this)
         touchWatcher = TouchWatcher(this) {
             if (!touchedSinceEnter && youTubeActive) Log.d(TAG, "Berührung in YouTube")
+            if (app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) Log.d(TAG, "Finger auf")
+
             touchedSinceEnter = true
             lastTouchAt = SystemClock.uptimeMillis()
             if (shadeOverYouTube) onShadeTouched()
+            if (!isTablet && youTubeActive && overlay.isScrolledAway) startDirectionProbe()
             if (DIAGNOSTIC_DUMPS && app.fshorts.BuildConfig.DEBUG) dumpAfterTapSoon(lastTouchAt)
             // Tipp auf ein Video in der Liste: YouTube zeigt die Video-Seite, meldet aber ~1 s gar nichts. Darum kurz
             // selbst laufend nachsehen (sonst stand unsere 0,5–1 s über der grauen Lade-Seite).
@@ -493,7 +544,7 @@ class FuckShortsService : AccessibilityService() {
                         fastUntil = SystemClock.uptimeMillis() + FAST_WINDOW_MS
                         startPolling()
                     }
-                    AccessibilityEvent.TYPE_VIEW_SCROLLED -> onScrolled()
+                    AccessibilityEvent.TYPE_VIEW_SCROLLED -> onScrolled(event.scrollDeltaY)
                 }
                 // Jede Änderung kann heissen, dass die Leiste gerade rein- oder rausfährt: Bild für Bild nachführen.
                 if (lastBar != null) startPolling()
@@ -788,7 +839,7 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
-    private fun drawPending(): Boolean = overlay.isSlidingAway || overlay.isRising || overlay.isSinking || (overlay.isShowing &&
+    private fun drawPending(): Boolean = overlay.isSlidingAway || overlay.isRising || overlay.isSinking || overlay.isScrollMoving || (overlay.isShowing &&
         overlay.drawnAt < overlay.shownAt &&
         SystemClock.uptimeMillis() - overlay.shownAt < if (isTablet) TABLET_DRAW_WAIT_MS else PHONE_DRAW_WAIT_MS)
 
@@ -886,11 +937,98 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /** Beim Scrollen fährt YouTube seine Leiste raus/rein. Wir prüfen ab jetzt jedes Bild, damit unsere stehen bleibt. */
-    private fun onScrolled() {
+    private fun onScrolled(dy: Int = 0) {
         lastScrollAt = SystemClock.uptimeMillis()
-        if (youTubeActive) updateBar(SystemClock.uptimeMillis(), null)
+        if (dy < 0) lastUpScrollAt = lastScrollAt
+        // Hochwischen, unsere ist weggescrollt: YouTube zeigt seine Leiste gleich wieder, unsere kommt schon jetzt.
+        if (dy < 0 && overlay.isScrolledAway && youTubeActive) {
+            realGoneByScroll = false
+            reason("Hochwischen, unsere fährt herein")
+            overlay.scrollBack(SCROLL_BACK_MS)
+        }
+        if (youTubeActive && !(overlay.isScrolledAway && lastScrollAt < dirUntil)) updateBar(SystemClock.uptimeMillis(), null)
         startPolling()
     }
+
+    /**
+     * Unsere ist weggescrollt und der Finger liegt wieder auf. Wischt er nach oben, zeigt YouTube seine Leiste ~80 ms
+     * später wieder (gemessen 15.11.); Meldungen dazu kommen erst nach >100 ms (gedrosselt), und solange YouTube die
+     * Leiste hochfährt, antwortet es auf Abfragen gar nicht. Darum: ein Element der Liste merken und jedes Bild nachsehen,
+     * wohin es sich bewegt. Rutscht der Inhalt nach unten (= hochwischen), fährt unsere sofort herein – vor der echten.
+     */
+    private fun startDirectionProbe() {
+        dirUntil = lastTouchAt + DIR_PROBE_MS
+        val gen = ++probeGen
+        val feed = goneFeed
+        val scr = Rect(screen)
+        val trace = app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)
+        probeHandler.post { runDirectionProbe(gen, feed, scr, trace) }
+    }
+
+    /**
+     * Läuft im eigenen Thread (alle [DIR_PROBE_STEP_MS]): Der Haupt-Thread war während des Wischens oft 50–120 ms mit
+     * Abfragen beschäftigt, so kam die Erkennung zu spät (gemessen 15.11.: bis 14 Bilder echte Leiste).
+     */
+    private fun runDirectionProbe(gen: Int, feedIn: AccessibilityNodeInfo?, scr: Rect, trace: Boolean) {
+        val feed = feedIn?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { scanner.findFeed(it, scr) } ?: return
+        val r = Rect()
+        fun pick(): Pair<AccessibilityNodeInfo, Int>? {
+            if (!feed.refresh()) return null
+            for (i in 0 until feed.childCount) {
+                val c = feed.getChild(i) ?: continue
+                c.getBoundsInScreen(r)
+                if (r.height() > 0 && r.top > scr.top + scr.height() / 6 && r.top < scr.bottom - scr.height() / 3) return c to r.top
+            }
+            return null
+        }
+        var picked = pick()
+        val step = DIR_PROBE_DP * resources.displayMetrics.density
+        while (gen == probeGen && SystemClock.uptimeMillis() < dirUntil) {
+            val p = picked
+            if (p == null || !p.first.refresh()) {
+                picked = pick()
+            } else {
+                p.first.getBoundsInScreen(r)
+                val moved = r.top - p.second
+                if (trace) Log.d(TAG, "Richtung: $moved px, ${SystemClock.uptimeMillis() - lastTouchAt} ms nach Finger")
+                if (moved > step) {
+                    handler.postAtFrontOfQueue {
+                        if (gen != probeGen || !overlay.isScrolledAway) return@postAtFrontOfQueue
+                        dirUntil = 0L
+                        lastUpScrollAt = SystemClock.uptimeMillis()
+                        realGoneByScroll = false
+                        reason("Hochwischen erkannt (Inhalt $moved px runter), unsere fährt herein")
+                        overlay.scrollBack(SCROLL_BACK_MS)
+                        if (trace) {
+                            Log.d(TAG, "Zustand: ${overlay.debugState()}")
+                            handler.postDelayed({ Log.d(TAG, "Zustand +100: ${overlay.debugState()}") }, 100)
+                            handler.postDelayed({ Log.d(TAG, "Zustand +300: ${overlay.debugState()}") }, 300)
+                        }
+
+                    }
+                    return
+                }
+                // Runterwischen: die echte bleibt weg, unsere auch.
+                if (-moved > step) return
+            }
+            SystemClock.sleep(DIR_PROBE_STEP_MS)
+        }
+    }
+
+    /** Handy, Startseite/Abos/Mein YouTube: dort fährt unsere beim Scrollen mit der echten weg und wieder herein. */
+    private fun scrollFollowPage(): Boolean {
+        if (isTablet || watchPageOpen || splitBounds != null || menuFront || dialogDimmed) return false
+        if (panelMinTop != Int.MAX_VALUE || sheetAppAt != 0L) return false
+        val sel = lastUiState?.selected ?: return false
+        return sel == TabKind.HOME || sel == TabKind.SUBSCRIPTIONS || sel == TabKind.YOU
+    }
+
+    /**
+     * Die echte fährt gerade wegen Wischen raus: Finger kurz vorher aufgelegt, seither kein Tipp (Klick). YouTube nimmt
+     * die Leiste beim schnellen Wischen oft schon weg, bevor es "gescrollt" meldet – darum zählt die Berührung.
+     */
+    private fun touchScrollNow(now: Long): Boolean =
+        now - lastTouchAt < SCROLL_TOUCH_MS && lastNavAt < lastTouchAt && !watchPageOpen && lastUpScrollAt < lastTouchAt
 
     /**
      * Ein Tipp in YouTube. Nur wenn die echte Leiste dabei ganz da war, darf unsere danach mit ihr verschwinden
@@ -2201,7 +2339,11 @@ class FuckShortsService : AccessibilityService() {
             fresh != null -> fresh.bounds.top
             else -> lastBar?.let { scanner.liveTop(it.container, screen) }
         }
+        if (overlay.isScrolledAway && app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+            Log.d(TAG, "Weg-Nachführen: echte=${observedTop ?: "keine"} frisch=${fresh != null} gemerkt=${lastBar != null}")
+        }
         if (observedTop == null) {
+
             // Handy: Gleich nach einer Berührung ist die echte weg. Vielleicht geht gerade das Werbe-Menü auf (YouTube
             // nimmt seine Leiste dafür ~20 ms nach dem Tipp weg, das Panel kommt ~30 ms später und ist nach 1 Bild
             // über der Leiste). Darum hier kurz jedes Bild nach dem Panel sehen, nicht erst beim nächsten Scan.
@@ -2220,9 +2362,18 @@ class FuckShortsService : AccessibilityService() {
                 return
             }
             if (!barGoneAfterKeyboard && keepWhileScrolledAway(now)) {
-                reason("echte weggescrollt und entfernt, unsere bleibt")
                 hiddenByScroll = true
                 overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+                // Handy, Startseite/Abos/Mein YouTube: Beim schnellen Runterwischen nimmt YouTube (21.45) seine Leiste
+                // ~3 Bilder nach Beginn weg und zeigt sie erst beim Hochwischen wieder (gemessen 15.11. mit unsichtbarer
+                // eigener Leiste). Unsere fährt dann wie das Original nach unten weg.
+                if (scrollFollowPage() && touchScrollNow(now)) {
+                    realGoneByScroll = true
+                    if (!overlay.isScrolledAway) reason("echte beim Scrollen weg, unsere fährt runter")
+                    overlay.scrollAway(SCROLL_AWAY_MS)
+                } else {
+                    reason("echte weggescrollt und entfernt, unsere bleibt")
+                }
                 return
             }
             if (now - preShownAt < PRE_SHOW_HOLD_MS) return
@@ -2264,6 +2415,32 @@ class FuckShortsService : AccessibilityService() {
         }
         // Taucht die echte Leiste gerade wieder auf oder fährt hoch (z. B. Video verlassen), steht unsere
         // sofort ganz da. So kommt die echte nie zuerst.
+        // Weggescrollt: Kommt die echte zurück (YouTube meldet sie ~0,2 s bevor sie sichtbar hochfährt), fährt unsere
+        // sofort herein und ist so vor der echten oben. Fährt die echte noch raus, bleibt unsere unten.
+        val previousTop = lastObservedTop
+        val realOut = observedTop > rest.top + SCROLL_OUT_PX
+        val realRising = previousTop >= 0 && observedTop < previousTop - 1
+        if (!isTablet && (overlay.isScrolledAway || realGoneByScroll)) {
+            // Zurück nur, wenn die echte wirklich wieder hochfährt oder ganz da ist (nicht bei gleicher Meldung: sonst
+            // fuhr unsere hin und her, gemessen 15.11.).
+            if (!realOut || realRising) {
+                realGoneByScroll = false
+                if (overlay.isScrolledAway) {
+                    // Steht die echte schon ganz da (YouTube setzt sie z. B. bei einem Tipp ohne Animation zurück),
+                    // unsere sofort ganz; fährt sie noch hoch, unsere schnell herein.
+                    val instant = !realOut && !realRising
+                    reason("echte kommt zurück (top=$observedTop), unsere ${if (instant) "sofort" else "fährt herein"}")
+                    overlay.scrollBack(if (instant) 0L else SCROLL_BACK_MS)
+                }
+
+            }
+        } else if (scrollFollowPage() && realOut && (previousTop < 0 || observedTop > previousTop) &&
+            touchScrollNow(now) && overlay.isShowing
+        ) {
+            // Die echte fährt (noch in der Oberfläche) nach unten raus: unsere hinterher.
+            reason("echte fährt beim Scrollen raus (top=$observedTop), unsere mit")
+            overlay.scrollAway(SCROLL_AWAY_MS)
+        }
         val visibleNow = observedTop < screen.bottom - 2
         val wasHidden = lastObservedTop < 0 || lastObservedTop >= screen.bottom - 2
         val appearing = visibleNow && wasHidden
@@ -2273,6 +2450,7 @@ class FuckShortsService : AccessibilityService() {
             reason("echte taucht auf (top=$observedTop)")
             hiddenByScroll = false
             overlay.show(rest.top, rest, state.copy(style = currentStyle()))
+            overlay.scrollBack(SCROLL_BACK_MS)
             return
         }
         if (watchPageOpen) {
@@ -3195,6 +3373,22 @@ class FuckShortsService : AccessibilityService() {
         private const val PANEL_FROM_BAR_MS = 500L
         private const val POPUP_EDGE_PX = 8
         private const val PANEL_PROBE_MS = 250L
+        /** Scrollen: unsere fährt in so vielen ms raus (die echte braucht ~50) bzw. wieder herein (die echte ~170). */
+        private const val SCROLL_AWAY_MS = 200L
+        private const val SCROLL_BACK_MS = 90L
+        private const val DIR_PROBE_MS = 450L
+        private const val DIR_PROBE_DP = 6f
+        private const val DIR_PROBE_STEP_MS = 8L
+
+
+        private const val SCROLL_TOUCH_MS = 1_500L
+        /** Die echte gilt als "raus", sobald sie so viele px tiefer steht als in Ruhe. */
+        private const val SCROLL_OUT_PX = 6
+
+        private const val SCROLL_SCAN_HOLD_MS = 700L
+        private const val SCROLL_SCAN_RETRY_MS = 50L
+
+
         private const val PANEL_BRIGHTEN_MS = 90
 
 

@@ -230,6 +230,65 @@ class BottomBarOverlay(
         }, FRAME_MS)
     }
 
+    /** Beim Scrollen weggefahren: so viele Pixel steht der Inhalt tiefer (0 = ganz da). */
+    private var scrollPx by mutableFloatStateOf(0f)
+    private var scroller: android.animation.ValueAnimator? = null
+    private var scrollTarget = 0f
+
+    /** Fährt gerade beim Scrollen raus oder herein (solange keine langen Abfragen, sie hielten die Animation an). */
+    val isScrollMoving: Boolean get() = scroller != null || SystemClock.uptimeMillis() < scrollQuietUntil
+    private var scrollQuietUntil = 0L
+
+    /** Beim Scrollen (ganz oder teilweise) nach unten weggefahren. Berührungen gehen dann durch. */
+
+    val isScrolledAway: Boolean get() = scrollTarget > 0f
+
+    /**
+     * Die echte Leiste ist beim Runterscrollen weggefahren: unsere fährt nach unten hinterher (das Fenster bleibt, nur
+     * der Inhalt rutscht raus). Die echte ist dabei schneller (~3 Bilder), unsere liegt also immer über ihr.
+     */
+    fun scrollAway(ms: Long) {
+        val h = target.height().toFloat()
+        if (!isShowing || scrollTarget >= h) return
+        scrollTo(h, ms, android.view.animation.PathInterpolator(0.3f, 0f, 0.8f, 0.15f))
+        applyFlags()
+    }
+
+    /** Die echte kommt zurück (Hochscrollen): unsere fährt schnell wieder herein, vor der echten. 0 ms = sofort. */
+    fun scrollBack(ms: Long) {
+        if (scrollTarget == 0f && scroller == null) return
+        if (ms <= 0L) {
+            scroller?.cancel()
+            scroller = null
+            scrollTarget = 0f
+            scrollPx = 0f
+        } else {
+            scrollTo(0f, ms, android.view.animation.PathInterpolator(0.05f, 0.7f, 0.1f, 1f))
+        }
+        applyFlags()
+    }
+
+    /** Nur fürs Test-Protokoll: Zustand der Leiste. */
+    fun debugState(): String = "zeigt=$isShowing alpha=${view?.alpha} ty=${view?.translationY} scroll=$scrollPx/$scrollTarget " +
+        "slideAway=$isSlidingAway hold=${holdHiddenUntil - SystemClock.uptimeMillis()} rise=$risePx"
+
+    private fun scrollTo(to: Float, ms: Long, curve: android.animation.TimeInterpolator) {
+        scrollTarget = to
+        scrollQuietUntil = SystemClock.uptimeMillis() + ms + SCROLL_QUIET_AFTER_MS
+        scroller?.cancel()
+        scroller = android.animation.ValueAnimator.ofFloat(scrollPx, to).apply {
+            duration = ms
+            interpolator = curve
+            addUpdateListener { scrollPx = it.animatedValue as Float }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (scroller === animation) scroller = null
+                }
+            })
+            start()
+        }
+    }
+
     /** Fährt gerade von unten herein ([showRising]). Solange keine Abfragen an YouTube: sie hielten die Animation an. */
     val isRising: Boolean get() = riser != null
 
@@ -559,6 +618,11 @@ class BottomBarOverlay(
         if (!isShowing) return
         stopSlide()
         stopRise()
+        // Versteckt: beim nächsten Zeigen ganz da (nicht weggescrollt).
+        scroller?.cancel()
+        scroller = null
+        scrollTarget = 0f
+        scrollPx = 0f
         isShowing = false
         // Versteckt nie abgedunkelt zurücklassen: Sonst kam sie beim nächsten Zeigen erst dunkel und hellte auf
         // (gemessen 15.11. nach Google Play: 6 Bilder).
@@ -595,7 +659,7 @@ class BottomBarOverlay(
     }
 
     private fun currentFlags(): Int =
-        if (!isShowing || passThrough || underMenu) BASE_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else BASE_FLAGS
+        if (!isShowing || passThrough || underMenu || scrollTarget > 0f) BASE_FLAGS or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else BASE_FLAGS
 
     private fun applyBounds(): Boolean {
         // Immer über die ganze Bildschirmbreite ab dem linken Rand: So kann die Leiste nie seitlich verrutschen.
@@ -663,7 +727,8 @@ class BottomBarOverlay(
                         inkMs = inkInMs,
                         inkOutMs = inkOutMs,
                         cover = { coverFromPx },
-                        rise = { risePx },
+                        rise = { risePx + scrollPx },
+
                         onTap = { kind ->
                             if (kind != TabKind.CREATE) {
                                 optimistic = kind
@@ -680,13 +745,18 @@ class BottomBarOverlay(
         }
     }
 
-    private companion object {
+    companion object {
+        /** Nur zum Messen (Test-Versionen): unsere Leiste unsichtbar zeichnen. */
+        var ghost by mutableStateOf(false)
+
+
         const val BASE_FLAGS = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         const val OPTIMISTIC_MS = 600L
         const val SLIDE_MS = 300L
         const val FRAME_MS = 40L
+        const val SCROLL_QUIET_AFTER_MS = 150L
 
         const val RISE_TOUCH_MS = 110L
 
@@ -812,6 +882,8 @@ private fun BottomBar(
     Box(
         modifier = Modifier
             .drawWithContent {
+                // Nur zum Messen: unsere unsichtbar (die Logik läuft weiter).
+                if (BottomBarOverlay.ghost) return@drawWithContent
                 // Panel über dem unteren Teil: nur darüber zeichnen (das Panel "verschluckt" die Leiste).
                 val c = cover()
                 if (c >= size.height) {
