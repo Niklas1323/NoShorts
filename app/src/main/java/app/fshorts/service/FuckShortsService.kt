@@ -38,7 +38,6 @@ class FuckShortsService : AccessibilityService() {
     private lateinit var selectors: Selectors
     private lateinit var scanner: YouTubeScanner
     private lateinit var overlay: BottomBarOverlay
-    private lateinit var curtain: PageCurtain
     private lateinit var dumper: TreeDumper
     private lateinit var sampler: BarStyleSampler
     private lateinit var touchWatcher: TouchWatcher
@@ -306,7 +305,6 @@ class FuckShortsService : AccessibilityService() {
         selectors = Selectors.load(this)
         scanner = YouTubeScanner(selectors, resources.displayMetrics.density, isTablet)
         overlay = BottomBarOverlay(this, ::onTabTapped, ::onBarLongPressed)
-        curtain = PageCurtain(this)
         dumper = TreeDumper(this)
         sampler = BarStyleSampler(this)
         touchWatcher = TouchWatcher(this) {
@@ -685,7 +683,6 @@ class FuckShortsService : AccessibilityService() {
         connected = false
         handler.removeCallbacksAndMessages(null)
         if (::overlay.isInitialized) overlay.destroy()
-        if (::curtain.isInitialized) curtain.destroy()
         if (::touchWatcher.isInitialized) touchWatcher.stop()
         super.onDestroy()
     }
@@ -2344,7 +2341,6 @@ class FuckShortsService : AccessibilityService() {
      */
     private fun onTabTapped(kind: TabKind) {
         tapSeq++
-        if (curtain.isShown) curtain.hide(0L)
 
         touchedSinceEnter = true
         if (kind == TabKind.CREATE) {
@@ -2433,43 +2429,14 @@ class FuckShortsService : AccessibilityService() {
             return true
         }
         val home = bar.nodes[TabKind.HOME] ?: return false
-        if (isTablet) {
-            if (!click(home)) return false
-            tapLog("$kind: Reiter nicht da, erst Startseite")
-            waitForTopTabThenClick(tapSeq, 0)
-            scheduleScan()
-            return true
-        }
-        // Handy: Die Startseite blitzte auf dem Weg zu Abos ~0,15 s auf (Wunsch: direkt auf Abos). Darum zuerst der
-        // Vorhang in Seitenfarbe, zwei Bilder später der Klick auf Startseite, dann der Reiter. Der Vorhang geht auf,
-        // sobald der Reiter geklickt ist (siehe waitForTopTabThenClick) oder spätestens nach CURTAIN_MAX_MS.
-        showCurtain()
-        val seq = tapSeq
-        handler.postDelayed({
-            if (seq != tapSeq) {
-                curtain.hide(0L)
-                return@postDelayed
-            }
-            if (click(home)) {
-                tapLog("$kind: Reiter nicht da, erst Startseite (Vorhang)")
-                waitForTopTabThenClick(seq, 0)
-            } else {
-                curtain.hide(0L)
-                tapLog("$kind: Startseite liess sich nicht klicken")
-            }
-            scheduleScan()
-        }, CURTAIN_LEAD_MS)
+        // Ein "Vorhang" über der kurz sichtbaren Startseite (15.11.) sah wie ein Ladebildschirm aus: auf Wunsch
+        // von Niklas wieder entfernt. Der Weg per Link (youtube.com/feed/subscriptions) legt Abos auf den Stapel von
+        // "Mein YouTube" (danach zeigte dieser Tab Abos) und bleibt darum verworfen.
+        if (!click(home)) return false
+        tapLog("$kind: Reiter nicht da, erst Startseite")
+        waitForTopTabThenClick(tapSeq, 0)
+        scheduleScan()
         return true
-    }
-
-    /** Vorhang in YouTubes Seitenfarbe über dem Inhalt (unter der Statusleiste bis zu unserer Leiste). */
-    private fun showCurtain() {
-        val rest = restBounds ?: return
-        val id = resources.getIdentifier("status_bar_height", "dimen", "android")
-        val statusBar = if (id != 0) resources.getDimensionPixelSize(id) else (24 * resources.displayMetrics.density).toInt()
-        val dark = currentStyle().background != androidx.compose.ui.graphics.Color.White
-        val color = if (dark) android.graphics.Color.rgb(0x0F, 0x0F, 0x0F) else android.graphics.Color.WHITE
-        curtain.show(screen.top + statusBar, rest.top, color, CURTAIN_MAX_MS)
     }
 
     /** Von You zurück merkt sich YouTube den Reiter Abos: gleich auf den Reiter Startseite, nicht erst nach [VERIFY_MS]. */
@@ -2500,8 +2467,6 @@ class FuckShortsService : AccessibilityService() {
                     val clicked = click(top)
                     tapLog("$kind: Reiter oben geklickt (${if (clicked) "ok" else "fehlgeschlagen"})")
                     if (clicked) verifyLater(kind)
-                    // YouTube wechselt ein paar Bilder nach dem Klick auf Abos: so lange bleibt der Vorhang noch zu.
-                    curtain.hide(if (clicked) CURTAIN_AFTER_CLICK_MS else 0L)
                     scheduleScan()
                 }
                 // Nach dem Start oder Scrollen fehlen die Reiter, bis die Liste ein Stück nach unten gezogen wird.
@@ -2510,10 +2475,7 @@ class FuckShortsService : AccessibilityService() {
                     waitForTopTabThenClick(seq, attempt + 1)
                 }
                 attempt < TOP_TAB_TRIES_FAST -> waitForTopTabThenClick(seq, attempt + 1)
-                else -> {
-                    curtain.hide(0L)
-                    tapLog("$kind: Reiter oben kam nicht")
-                }
+                else -> tapLog("$kind: Reiter oben kam nicht")
             }
         }, if (attempt == 0) 0L else TOP_TAB_POLL_MS)
     }
@@ -2907,11 +2869,7 @@ class FuckShortsService : AccessibilityService() {
         private const val CREATE_SINK_RESTORE_MS = 1_500L
         /** Meldet sich die Kamera, ist sie schon über der Leiste (gemessen 15.11.). Ein Bild Sicherheit. */
         private const val CAMERA_COVER_MS = 20L
-        /** Abos von einer anderen Seite: Vorhang so viel früher als der Klick auf Startseite (2–3 Bilder zum Zeichnen). */
-        private const val CURTAIN_LEAD_MS = 45L
-        /** So lange nach dem Klick auf den Abos-Reiter bleibt der Vorhang noch zu (YouTube wechselt die Seite). */
-        private const val CURTAIN_AFTER_CLICK_MS = 120L
-        private const val CURTAIN_MAX_MS = 1_200L
+
 
         /** Kamera geht zu: Unsere fährt nur dieses kurze Stück herein (die echte steht dort sofort ganz da). */
         private const val CLOSE_RISE_DP = 30f

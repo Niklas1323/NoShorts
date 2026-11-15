@@ -119,6 +119,8 @@ class BottomBarOverlay(
     private var sunk by mutableStateOf(false)
     /** Versteckt: Knöpfe beim nächsten Zeigen sofort wieder oben, ohne Animation. */
     private var sinkSnap by mutableStateOf(false)
+    /** Handy quer: flache Leiste, Wert = Höhe der Gestenleiste darunter. -1 = normale Leiste. */
+    private var compactNav by mutableStateOf(-1)
     private val restoreSink = Runnable { sunk = false }
     /** Plus getippt: bis dann sinken die Knöpfe (so lange keine Abfragen an YouTube, sie hielten die Animation an). */
     private var sinkUntil = 0L
@@ -232,7 +234,7 @@ class BottomBarOverlay(
     fun warmUp(rest: Rect, state: BarUiState) {
         if (view != null) return
         uiState = state.copy(dim = 0f, hole = null, veil = null)
-        target.set(rest.left, rest.top, rest.right, rest.top + rest.height())
+        setTarget(rest.top, rest)
         applyBounds()
         params.flags = currentFlags()
         appliedFlags = params.flags
@@ -344,7 +346,7 @@ class BottomBarOverlay(
         stopSlide()
         val next = state.copy(dim = 0f, hole = null, veil = null)
         if (next != uiState) uiState = next
-        target.set(rest.left, rest.top, rest.right, rest.top + rest.height())
+        setTarget(rest.top, rest)
         if (applyBounds()) windowManager.updateViewLayout(v, params)
     }
 
@@ -366,7 +368,7 @@ class BottomBarOverlay(
         if (instant != dimInstant) dimInstant = instant
         if (next != uiState) uiState = next
         // Nur so hoch wie die echte Leiste: Bei Navigation mit 3 Knöpfen bleiben die Knöpfe frei.
-        target.set(rest.left, top, rest.right, top + rest.height())
+        setTarget(top, rest)
 
         val v = view
         if (v == null) {
@@ -394,6 +396,42 @@ class BottomBarOverlay(
             appliedFlags = params.flags
             windowManager.updateViewLayout(v, params)
         }
+    }
+
+    /**
+     * Lage des Fensters. Handy quer: YouTube zeigt dort gar keine eigene Leiste (21.45 gemessen), unsere ist allein und
+     * flach (Symbol und Text nebeneinander, COMPACT_CONTENT_DP plus Gestenleiste) statt 207 px hoch. Wunsch von
+     * Niklas: Sie bedeckte quer sehr viel vom Bildschirm.
+     */
+    private fun setTarget(top: Int, rest: Rect) {
+        val nav = compactNavPx(rest)
+        if (nav != compactNav) compactNav = nav
+        if (nav < 0) {
+            target.set(rest.left, top, rest.right, top + rest.height())
+            return
+        }
+        val d = service.resources.displayMetrics.density
+        val h = (COMPACT_TOTAL_DP * d).toInt()
+        val screenBottom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.bounds.bottom
+        } else {
+            service.resources.displayMetrics.heightPixels
+        }
+        val bottom = minOf(top + rest.height(), screenBottom)
+        target.set(rest.left, bottom - h, rest.right, bottom)
+    }
+
+    /** Handy quer: Höhe der Gestenleiste unten (mindestens 0) = flache Leiste. Sonst -1. */
+    private fun compactNavPx(rest: Rect): Int {
+        val cfg = service.resources.configuration
+        if (cfg.smallestScreenWidthDp >= 600 || cfg.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE) return -1
+        val nav = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.windowInsets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom
+        } else {
+            0
+        }
+        val d = service.resources.displayMetrics.density
+        return if ((COMPACT_TOTAL_DP * d).toInt() < rest.height()) nav else -1
     }
 
     private fun applyFlags() {
@@ -520,6 +558,7 @@ class BottomBarOverlay(
                         dimInstant = dimInstant,
                         sunk = sunk,
                         sinkSnap = sinkSnap,
+                        compactNav = compactNav,
                         rise = { risePx },
                         onTap = { kind ->
                             if (kind != TabKind.CREATE) {
@@ -599,6 +638,7 @@ private fun BottomBar(
     dimInstant: Boolean,
     sunk: Boolean,
     sinkSnap: Boolean,
+    compactNav: Int,
     rise: () -> Float,
     onTap: (TabKind) -> Unit,
     onLongPress: () -> Unit,
@@ -705,11 +745,12 @@ private fun BottomBar(
             // Tablet, dunkel: YouTube zeichnet oben eine feine Trennlinie (2 px, #2B2B2B am Galaxy Tab A8 gemessen).
             Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(1.dp).background(Color(0xFF2B2B2B)))
         }
-        if (state.showHandle) {
+        if (state.showHandle || compactNav >= 0) {
+            val handleBottom = if (compactNav >= 0) 5.dp else 10.dp
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 10.dp)
+                    .padding(bottom = handleBottom)
                     // Der Gestenstrich fährt nicht mit herein: Er steht still wie der vom System.
                     .graphicsLayer { translationY = -rise() }
                     .size(width = 108.dp, height = 4.dp)
@@ -719,7 +760,16 @@ private fun BottomBar(
         }
         // Tablet: Die echte Leiste hat enge Spalten (96 dp) als Block in der Mitte; auf dem Handy teilen sich vier
         // gleich breite Spalten die ganze Breite.
-        Row(
+        if (compactNav >= 0) CompactRow(
+            state = state,
+            height = (COMPACT_TOTAL_DP - COMPACT_HANDLE_DP).dp,
+            modifier = Modifier.graphicsLayer {
+                scaleX = duck
+                scaleY = duck
+                translationY = sink.value * size.height * 0.85f
+                alpha = 1f - sink.value
+            },
+        ) else Row(
             modifier = Modifier.fillMaxWidth().height(barHeight).graphicsLayer {
                 scaleX = duck
                 scaleY = duck
@@ -841,6 +891,65 @@ private fun BottomBar(
     }
 }
 
+/**
+ * Handy quer: flache Leiste. Vier gleich breite Spalten, in jeder Symbol und Text nebeneinander (Platz ist quer genug
+ * da), Symbole etwas kleiner (22 dp), Plus-Kreis 30 dp.
+ */
+@Composable
+private fun CompactRow(state: BarUiState, height: androidx.compose.ui.unit.Dp, modifier: Modifier) {
+    val style = state.style
+    Row(modifier = modifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
+        val slot = Modifier.weight(1f).fillMaxHeight()
+        Row(slot, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            TabIcon(if (state.selected == TabKind.HOME) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content, 22.dp)
+            Spacer(Modifier.width(8.dp))
+            Label(text = state.labels[TabKind.HOME] ?: "Home", color = style.content)
+        }
+        Row(slot, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            TabIcon(
+                if (state.selected == TabKind.SUBSCRIPTIONS) Icons.Filled.FilledSubscriptions else Icons.Outlined.OutlinedSubscriptions,
+                style.content,
+                22.dp,
+            )
+            Spacer(Modifier.width(8.dp))
+            Label(text = state.labels[TabKind.SUBSCRIPTIONS] ?: "Subscriptions", color = style.content)
+        }
+        Row(slot, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            val avatar = style.avatar
+            if (avatar != null) {
+                val ring = if (state.selected == TabKind.YOU) Modifier.border(1.5.dp, style.content, CircleShape) else Modifier
+                Box(Modifier.size(24.dp).then(ring), contentAlignment = Alignment.Center) {
+                    Image(
+                        bitmap = avatar,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(21.dp).clip(CircleShape),
+                    )
+                }
+            } else {
+                TabIcon(Icons.Filled.AccountCircle, style.content, 22.dp)
+            }
+            Spacer(Modifier.width(8.dp))
+            Label(text = state.labels[TabKind.YOU] ?: "You", color = style.content)
+        }
+        Box(slot, contentAlignment = Alignment.Center) {
+            if (state.hasCreate) {
+                Box(
+                    modifier = Modifier.size(30.dp).clip(CircleShape).background(style.plusBackground),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val color = style.content
+                    Canvas(Modifier.size(15.dp)) {
+                        val stroke = 2.dp.toPx()
+                        drawLine(color, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), stroke, StrokeCap.Round)
+                        drawLine(color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), stroke, StrokeCap.Round)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun TabSlot(
     modifier: Modifier,
@@ -923,6 +1032,11 @@ private const val INK_IN_MS = 480
 private const val INK_OUT_MS = 380
 /** Plus: Knöpfe sinken nach unten weg (ms), die Fläche bleibt stehen, bis die Kamera darüber ist. */
 private const val SINK_MS = 150
+/** Handy quer: Höhe der flachen Leiste (ganz) und davon unten der Streifen für den Gestenstrich. */
+private const val COMPACT_TOTAL_DP = 40f
+private const val COMPACT_HANDLE_DP = 12f
+
+
 
 private const val RISE_MS = 260
 /** Hereinfahren nach "Video verlassen": Abkling-Stärke der Kurve (5 = nach 1/5 der Zeit ist noch ~1/3 übrig). */
