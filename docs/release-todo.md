@@ -1,4 +1,4 @@
-Neuster getesteter Stand: 4ed7d46, Build 187 (Terminal-Test am Pixel 9, 08.11.2026; danach nur Doku-Commits)
+Neuster getesteter Stand: Terminal-Test am Pixel 9 (Benutzer Leon, YouTube 21.45), 15.11.2026, siehe CLAUDE.md Abschnitt "15.11.2026 (Terminal, am Pixel getestet)"; davor 4ed7d46, Build 187 (08.11.2026)
 
 # F*ck Shorts – To-do bis zum Release
 

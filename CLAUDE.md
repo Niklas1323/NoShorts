@@ -959,3 +959,98 @@ ElevenLabs: Gratis-Konto meldete am 08.11. "Free Tier disabled" (eine Aufnahme g
   - Abos von You: Neues Design hat Abos nur als Reiter oben auf der Startseite → erst Startseite, dann Reiter. Jetzt Reiter
     jedes Bild suchen (`TOP_TAB_POLL_MS` 16 statt 50 ms). Ganz direkt ginge nur per Link (youtube.com/feed/subscriptions),
     ungetestet, darum nicht eingebaut.
+
+### 15.11.2026 (Terminal, am Pixel getestet)
+Pixel 9, Android 17, **Benutzer Leon (u0)** – Niklas will die Tests dort, NICHT auf Niklas (u10); nie `am switch-user`.
+YouTube **21.45.82**, Deutsch, neues Design, dunkel und hell geprüft. Start: Build 217, Ende: Stand dieses Commits (lokal
+gebaut, `adb install -r -d`). Leons YouTube ist anders als im Auftrag: Profilbild pink "L" (194,23,91), Systemschrift 130 %,
+echte Leiste `pivot_bar` [0,2217][1080,2424] (207 px), **durchsichtig ("Glas")**, 4 Knöpfe ohne Text; **quer gibt es gar
+keine Leiste**. Bedienungshilfen dort: F*ck Shorts + Auto Clicker.
+
+| Test | vorher (Build 217) | nachher | behoben? |
+|---|---|---|---|
+| Video verlassen: Zurück-Taste (dunkel 6×, hell 2×) | 0 Bilder echte, aber unsere sprang ohne Animation hinein | 0 Bilder, unsere fährt in ~0,2 s von unten herein | ja |
+| Video verlassen: Zurück-Geste (dunkel 6×, hell 1×) | 0 Bilder, ohne Animation | 0 Bilder, mit Animation | ja |
+| Video verlassen: schnell runterwischen (dunkel 15×, hell 1×) | 2 von 5 Läufen 1–3 Bilder Oberkante der echten Symbole | 0 Bilder in 16 von 16 | ja |
+| Video verlassen: langsam runterziehen (3×) | – | 0 Bilder | ok |
+| Video mit **Hochkant-Werbung** vorneweg | "Video verlassen" fälschlich nach 0,5 s: unsere 0,76 s ÜBER der Werbung; beim echten Verlassen kam die echte zuerst | unsere bleibt weg, Verlassen 0 Bilder | ja |
+| Video mit Werbung + Blatt "Gesponsert … Zur Website" (5×, hell 1×) | – | 0 Bilder; erster Zurück schliesst nur das Blatt | ok |
+| Erstes Verlassen nach App-Update (Video lief) | 33 Bilder (0,53 s) echte Leiste | Fenster wird beim Dienst-Start angelegt (nicht nochmals gemessen) | vermutlich |
+| Mini-Player aufklappen | 1 von 6: unsere blitzt 4 Bilder nochmals auf | 0 von 12 | ja |
+| Plus tippen | Knöpfe sanken gar nicht sichtbar; unsere ~8 Bilder über der Kamera | Knöpfe sinken sichtbar (150 ms), Fläche ≤ 3 Bilder über der Kamera, echte 0 | ja |
+| Fotos-Frage nach Plus mit Zurück schliessen | unsere blitzte 5–8 Bilder über der Kamera | kein Blitzen (6×) | ja |
+| Kamera zu: Zurück-Taste (4×) / Geste (2×) | 4 Bilder echte Leiste (fährt mit der Seite seitlich herein) | 0 Bilder; unsere ~4 Bilder vorher schon über der Kamera | ja |
+| Kamera zu: X (5×) | 0 Bilder | 0 Bilder | ok |
+| ⋮-Menü abdunkeln | – | auf ~280 ms, zu ~200 ms, kein Sprung (höchstens 12 Helligkeitsstufen pro Bild) | ok |
+| ⋮ bei Werbung ("Mein Anzeigen-Center") | – | echte nie; beim Zugehen 3 Bilder gar keine Leiste (Startseite war gescrollt) | ok |
+| Abos von Mein YouTube | Startseite blitzt ~0,15 s auf | kein Blitz (Vorhang), Tipp → Abos ~0,6 s, 5 von 5 "ausgewählt" (dunkel 4×, hell 1×) | ja |
+| Tabs (9 Tipps mit Mini-Player, dazu 5× Abos von Startseite/gescrollt) | – | alle "ausgewählt" | ok |
+| Scrollen Startseite 56 s (2120 Bilder) | – | unsere in jedem Bild, echte nie | ok |
+| Suche (Lupe, Text, "Suchen", Zurück) | – | echte nie | ok |
+| Drehen quer → hoch | 9–20 Bilder echte; einmal Lage 71 px zu hoch gelernt (unsere blieb zu hoch) | 3 Bilder (Androids Dreh-Bild), Lage bleibt richtig (5×) | grösstenteils |
+| Bildschirm aus/an, Benachrichtigungen auf/zu, Home-Taste und zurück | – | unsere danach sofort da, echte nicht gesehen | ok |
+| App-Übersicht → zurück | – | 8 Bilder Zoom (Systembild) + 13 Bilder echte | nein (siehe unten) |
+| Einstellungen auf/zu, Kanal-Seite | – | unsere nie über den Einstellungen, beim Zurück sofort da | ok |
+| Abos-Regal | – | alle Karten einzeln "Ausblenden", nur "Shorts >" bleibt | ok |
+| Short antippen (Raster "Shorts" auf Abos) | – | geht in ~0,1 s zu, unsere bleibt | ok |
+
+**Was geändert wurde (alles nur Handy, Tablet-Wege unverändert ausser wo genannt):**
+- **Hereinfahren** (`BottomBarOverlay.showRising`, `showAfterVideo`): Die Leiste fährt nach "Video verlassen" abklingend
+  von unten herein (`RISE_MS` 240, jedes Bild ~2/3 des Rests, Gestenstrich bleibt stehen). Strecke je nach Erkennung:
+  Player erst wenig gerutscht = 60 dp, schon weit = 18 dp (`RISE_MAX_DP`/`RISE_MIN_DP`). Gemessen ohne unsere App
+  (`supp an`): YouTubes eigene Leiste fährt bei Zurück in ~0,3 s von ganz unten hoch (141, 119, 97, 79, 65, 51, 41, 33 …
+  px unter der Ruhelage) und beginnt etwa dann, wenn wir das Verlassen erkennen; beim Runterziehen folgt sie dem Finger.
+  Unsere beginnt höher und bremst stärker → in jedem Bild über der echten.
+- **Animationen brauchen einen freien Haupt-Thread.** Jede Abfrage an YouTube hält ihn 50–300 ms an; darum sank bei Plus
+  nichts sichtbar. Während `isRising`/`isSinking` keine Scans/Abfragen (`drawPending`, `scanRunnable`). Plus klickt den
+  echten Knopf im Hintergrund-Thread (`clicker`).
+- **Frühestes Zeichen beim Verlassen:** `TYPE_WINDOW_STATE_CHANGED` mit PANE_APPEARED, Titel "YouTube" (die Startseite
+  meldet sich). Kommentare und Beschreibung auf der Video-Seite schicken KEIN STATE_CHANGED (geprüft). Die Player-Lage
+  ändert sich oft erst ein paar ms danach → danach 250 ms lang alle 5 ms nachsehen (`paneBurstUntil`). Pro Bild nur noch
+  EINE Abfrage an YouTube (vorher drei: Popup-Prüfung, Drehen, Player) – das war der Grund für die 1–3 Bilder beim
+  schnellen Wegwischen.
+- **Hochkant-Werbung:** Der Player wird ~80 % hoch. `isLargePlayer` hatte 70 % als Obergrenze → galt als "verlassen".
+  Obergrenze entfernt. Baut YouTube den Player neu (Werbung → Video), wird er neu gesucht statt "verlassen".
+- **Aufbau Werbe-Seite:** normale Video-Seite (`watch_player` oben), darunter ein Blatt "Gesponsert … Zur Website /
+  Download" (teils "Wischen, um Website aufzurufen" – dort nie nach oben wischen). Erster Zurück schliesst nur das Blatt.
+  Die Seite gilt jetzt durchgehend als "Video offen".
+- **Kamera über Fenster-Meldungen** (`onWindowSignal`): Plus → nach ~100 ms meldet sich `CreationModesActivity` (eigenes
+  Fenster), dann ist sie schon über der Leiste (fährt von unten hoch, kein Zoom) → unsere sofort weg. Kamera zu: zuerst
+  `TYPE_WINDOWS_CHANGED` REMOVED für ihr Fenster, ~40 ms später STATE_CHANGED `MainActivity`; der Scan zeigte erst
+  ~130 ms nach der ersten Meldung. Jetzt beim REMOVED sofort zeigen (kurzes Hereinfahren, `CLOSE_RISE_DP`). Achtung:
+  Androids Fotos-Frage über der Kamera meldet die Kamera auch als "entfernt" – dann steht aber ein anderes App-Fenster
+  in der Liste (wird geprüft). Gilt genauso für die Einstellungen.
+- **Abos direkt:** Link `youtube.com/feed/subscriptions` (per `am start -a VIEW`) öffnet Abos ohne Startseite, **legt die
+  Abos-Seite aber auf den Stapel des offenen Tabs**: danach zeigte "Mein YouTube" die Abos-Seite, Zurück führte zur
+  Startseite. Verworfen. Stattdessen `PageCurtain`: Fläche in Seitenfarbe über dem Inhalt, 45 ms vor dem Klick auf
+  Startseite, weg 120 ms nach dem Klick auf den Reiter (spätestens nach 1,2 s). Berührungen gehen durch.
+- **Drehen:** YouTube meldet die Leiste beim Zurückdrehen kurz 71 px zu hoch → wurde als Ruhelage gelernt. Höhere
+  Unterkante gilt erst nach 1,5 s (`higherRest`); steht die ganze Leiste am unteren Rand tiefer als gemerkt, wird neu
+  gelernt. Zurück im Hochformat kommt unsere sofort an die bekannte Stelle (`shownWhenLeft`); 0,8 s nach dem Drehen
+  keine Splitscreen-Erkennung (Android meldet YouTubes Fenster noch in alter Grösse).
+- Mini-Player aufklappen: `videoSlideAt` – nach dem Wegfahren für ein Video gilt "Liste noch da" nicht als Scrollen.
+- Test-Protokoll: `adb shell setprop log.tag.FShortsTrace VERBOSE` schreibt jede Fenster-/Klick-Meldung und jedes
+  Nachführen ins Logcat (nur Test-Versionen, bis zum Neustart des Handys).
+
+**Offen / nicht lösbar:**
+- App-Übersicht → zurück: Androids Zoom zeigt 8 Bilder die echte Leiste (Systembild), danach noch 13 Bilder, bis Android
+  das Fenster in voller Grösse meldet (340 ms nach "Fenster hinzugefügt"). Ein Zeitgeber wäre geraten und stünde beim
+  normalen App-Start falsch. Drehen: 3 Bilder Dreh-Bild von Android.
+- **⋮-Popup: YouTube dunkelt dort gar nichts ab** (echte Leiste mit und ohne Menü Pixel für Pixel gleich). Unsere wird
+  dunkel (Wunsch: animiert). Mit Niklas klären, ob sie hell bleiben soll.
+- Nicht getestet: Kamera mit Aufnahme (Leon hat der Kamera keine Berechtigung gegeben, keine erteilt), Suchfilter-Dialog,
+  Short per Link, Startseiten-Regal (keins gekommen), Tablet mit diesem Stand.
+- Fehler beim Testen: Ein Tipp auf den Mini-Player, während darin Werbung lief ("Gesponsert"), öffnete das
+  Google-Play-Blatt des Werbers (mit Zurück geschlossen, nichts installiert). "Überspringen" im Mini-Player ist harmlos.
+
+**Test-Fallen (neu):**
+- Zurück bei einem per Link (`am start -a VIEW …watch?v=`) geöffneten Video verlässt YouTube ganz. Zum Testen Videos aus
+  der Liste öffnen oder den Mini-Player aufklappen.
+- **Nie auf einen Mini-Player tippen, in dem Werbung läuft.** Nach oben wischen klappt ihn nicht auf, sondern verschiebt ihn.
+- `focus()` aus `phone.sh` liefert mit zwei Benutzern "null" (erste `mCurrentFocus`-Zeile). Neu: `tools/pixel-test/leon.sh`
+  (= Sitzungs-Hilfen: `av` Profilbild-Erkennung echt/unsere, `rtop` Lage pro Bild, `lum` Helligkeit, `vl` Mini-Player
+  aufklappen + verlassen, `plus`, `fv`, `supp an|aus` legt unseren Dienst über `uiautomator events` still, um YouTube
+  ohne uns aufzunehmen). Pfade darin gelten für den Arbeits-PC (`C:\Users\A023985\ptest`).
+- Die PIN-Eingabe des Sperrbildschirms ist auf Bildschirmfotos schwarz; ob sie offen ist, zeigt
+  `dumpsys activity service com.android.systemui/.SystemUIService | grep -i bouncer`.
+- Lokale Builds: `./gradlew assembleDebug --offline` mit `JAVA_HOME=/c/Users/A023985/tools/jdk-17.0.20.1+1`.
