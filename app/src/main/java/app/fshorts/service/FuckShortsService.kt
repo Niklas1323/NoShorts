@@ -210,6 +210,9 @@ class FuckShortsService : AccessibilityService() {
 
     private var higherRest: Rect? = null
     private var higherRestSince = 0L
+    /** Kamera mit X geschlossen (siehe onBarlessWindowGone). */
+    private var xCloseAt = 0L
+    private var xDelayed = false
     /** Fenster der Kamera nach Plus (meldet sich selbst, siehe onWindowSignal). -1 = keins. */
     private var cameraWindowId = -1
     /** YouTube ging nach hinten, während eine Seite ohne Leiste offen war (nur Tablet, siehe scanInternal). */
@@ -557,6 +560,19 @@ class FuckShortsService : AccessibilityService() {
         val state = lastUiState ?: return
         if (barlessWindowId == -1 || barlessWindowId == barWindowId || watchPageOpen || overlay.isShowing) return
         if (!youTubeActive || menuFront || menuOverBarless) return
+        // Mit X geschlossen: Android meldet das Fenster sofort als entfernt, die Kamera ist aber noch ~130 ms ganz zu
+        // sehen (gemessen 15.11.). Etwas später zeigen, sonst stand unsere ~8 Bilder über der Kamera.
+        if (SystemClock.uptimeMillis() - xCloseAt < X_CLOSE_WINDOW_MS && !xDelayed) {
+            xDelayed = true
+            handler.postDelayed({
+                onBarlessWindowGone(why)
+                xDelayed = false
+                xCloseAt = 0L
+            }, X_CLOSE_DELAY_MS)
+            return
+        }
+        xDelayed = false
+        xCloseAt = 0L
         reason("Seite ohne Leiste geht zu ($why), unsere vorab zeigen")
         preShownAt = SystemClock.uptimeMillis()
         hiddenByScroll = false
@@ -982,7 +998,15 @@ class FuckShortsService : AccessibilityService() {
             reason("Kamera mit Aufnahme: X öffnet ein Blatt, unsere nicht vorab")
             return
         }
+        // Handy: nicht schon beim Tipp auf X zeigen (die Kamera stand danach noch ~8 Bilder, unsere darüber), sondern
+        // wenn Android ihr Fenster entfernt (onWindowSignal, wie bei der Zurück-Geste: ~4 Bilder früher, echte nie).
+        if (!isTablet) {
+            reason("Kamera wird geschlossen (X), unsere bei Fenster-Meldung")
+            xCloseAt = SystemClock.uptimeMillis()
+            return
+        }
         reason("Kamera wird geschlossen, unsere vorab zeigen")
+
         preShownAt = SystemClock.uptimeMillis()
         hiddenByScroll = false
         overlay.show(rest.top, rest, state.copy(style = currentStyle()))
@@ -1313,7 +1337,13 @@ class FuckShortsService : AccessibilityService() {
         // Zurück aus einem YouTube-Fenster ohne Leiste (z. B. Kamera nach Plus): Sobald ein anderes Fenster vorne
         // ist, kommt die Seite mit der Leiste zurück. Sofort zeigen, die Suche danach kostet sonst 2 Bilder.
         val barless = barlessWindowId
+        // Kamera eben mit X geschlossen: Das Zeigen macht onBarlessWindowGone etwas verzögert (Kamera noch sichtbar).
+        if (barless != -1 && now - xCloseAt < X_CLOSE_DELAY_MS + 40) {
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return
+        }
         if (barless != -1 && (foreground.windowId != barless || root.windowId != barless)) {
+
             barlessWindowId = -1
             // Vielleicht wurde dort YouTube auf hell/dunkel umgestellt (Einstellungen).
             sampler.recheckSoon()
@@ -3079,7 +3109,10 @@ class FuckShortsService : AccessibilityService() {
         private const val CREATE_SLIDE_HOLD_MS = 1_200L
         private const val CREATE_SINK_RESTORE_MS = 1_500L
         /** Meldet sich die Kamera, ist sie schon über der Leiste (gemessen 15.11.). Ein Bild Sicherheit. */
-        private const val CAMERA_COVER_MS = 0L
+        private const val CAMERA_COVER_MS = 40L
+        private const val X_CLOSE_WINDOW_MS = 300L
+        private const val X_CLOSE_DELAY_MS = 80L
+
 
 
 

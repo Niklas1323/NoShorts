@@ -1110,7 +1110,7 @@ private const val INK_OUT_MS = 380
 private const val SINK_MS = 260
 /** Plus getippt: Knopf wird so viel grösser, dreht sich so weit (Grad, 45 = "×") und hellt so stark auf. */
 private const val PLUS_GROW = 0.18f
-private const val PLUS_TURN = 135f
+private const val PLUS_TURN = 45f
 private const val PLUS_LIGHTEN = 0.18f
 /** Handy quer: Höhe der flachen Leiste (ganz) und davon unten der Streifen für den Gestenstrich. */
 private const val COMPACT_TOTAL_DP = 40f
