@@ -356,9 +356,13 @@ class FuckShortsService : AccessibilityService() {
         }
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return
+        if (app.fshorts.BuildConfig.DEBUG && event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+            Log.d(TAG, "Scroll dy=${event.scrollDeltaY} ${event.className}")
+        }
         if (app.fshorts.BuildConfig.DEBUG && event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED && Log.isLoggable(TRACE_TAG, Log.VERBOSE) &&
             event.eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED
         ) {
+
             Log.d(TAG, "Ereignis ${AccessibilityEvent.eventTypeToString(event.eventType)} $pkg w=${event.windowId} " +
                 "ch=${event.contentChangeTypes} wch=${event.windowChanges} ${event.className} " +
                 "\"${(event.contentDescription ?: event.text.firstOrNull())?.toString()?.take(30)}\"")
@@ -2024,7 +2028,11 @@ class FuckShortsService : AccessibilityService() {
         }
         // Andere Seiten: Mini-Player offen oder Video geöffnet -> mit der echten Leiste mitfahren
         // (YouTube setzt den Mini-Player direkt über seine Leiste). Sonst stehen bleiben.
-        val follow = videoOpening || miniPlayerOpen
+        // Früher fuhr unsere hier mit, wenn ein Mini-Player offen war (damit er frei bleibt). Gemessen 15.11. (Abos,
+        // Mini-Player, schnell wischen): unsere fuhr mit runter und sprang dann bei "weggescrollt und entfernt" wieder
+        // hoch – das "Herunterfahren ohne Grund", das Niklas sah. Jetzt bleibt sie wie auf der Startseite einfach stehen.
+        val follow = videoOpening
+
         if (observedTop <= rest.top + 2) {
             hiddenByScroll = false
         } else if (!follow && overlay.isShowing) {
