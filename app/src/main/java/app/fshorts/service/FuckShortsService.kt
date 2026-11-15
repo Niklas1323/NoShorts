@@ -61,6 +61,11 @@ class FuckShortsService : AccessibilityService() {
     private var tapProbeUntil = 0L
     /** Zuletzt die graue Lade-Seite eines Videos gesehen (unsere ist dann weg). */
     private var loadingPageAt = 0L
+    /** Video offen und die Startseite hat sich gemeldet (PANE_APPEARED): bis dann den Player ganz dicht nachsehen. */
+    private var paneBurstUntil = 0L
+    /** Zuletzt ist unsere weggefahren, weil nach einem Tipp die echte Leiste ganz hinausfuhr (Video geht auf). */
+    private var videoSlideAt = 0L
+
     private var debugDumpWanted = false
     private var nightMode = 0
     private var screen = Rect()
@@ -283,7 +288,7 @@ class FuckShortsService : AccessibilityService() {
             } catch (e: Exception) {
                 Log.w(TAG, "Nachführen fehlgeschlagen", e)
             }
-            handler.postDelayed(this, POLL_MS)
+            handler.postDelayed(this, if (watchPageOpen && now < paneBurstUntil) PANE_BURST_POLL_MS else POLL_MS)
         }
     }
 
@@ -347,7 +352,9 @@ class FuckShortsService : AccessibilityService() {
             event.eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED
         ) {
             Log.d(TAG, "Ereignis ${AccessibilityEvent.eventTypeToString(event.eventType)} $pkg w=${event.windowId} " +
-                "ch=${event.contentChangeTypes} wch=${event.windowChanges} ${event.className}")
+                "ch=${event.contentChangeTypes} wch=${event.windowChanges} ${event.className} " +
+                "\"${(event.contentDescription ?: event.text.firstOrNull())?.toString()?.take(30)}\"")
+
         }
         // Tipp in YouTube öffnet eine andere App (Werbung → Chrome Custom Tab): Deren Fenster ist sofort undurchsichtig.
         // Nicht auf den nächsten Scan warten (unsere stand sonst ~0,2 s über dem Tab).
@@ -471,7 +478,6 @@ class FuckShortsService : AccessibilityService() {
             }
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
                 if (event.windowChanges and AccessibilityEvent.WINDOWS_CHANGE_REMOVED == 0 || wid == -1) return
-                if (wid == cameraWindowId) cameraWindowId = -1
                 // Legt sich nur ein anderes Fenster darüber (z. B. Androids Fotos-Frage über der Kamera), meldet
                 // Android die Kamera auch als "entfernt": Dann ist aber ein anderes App-Fenster in der Liste.
                 if (wid == barlessWindowId && wid != barWindowId &&
@@ -635,21 +641,25 @@ class FuckShortsService : AccessibilityService() {
             // sonst stand unsere ~0,3 s über dem Video. Nach Zurück ist keiner mehr da.
             // Handy genauso: Beim Wechsel Werbung → Video kann der Player neu gebaut werden.
 
-            val again = youTubeMainRoot()?.let { scanner.findWatchPlayer(it, screen) } ?: return false
+            val again = youTubeMainRoot()?.let { scanner.findWatchPlayer(it, screen) }
+                // null = gerade gedreht, YouTube hat den Player neu gebaut: der volle Scan sucht ihn neu.
+                ?: return if (now < watchRelearnUntil) null else false
             watchNode = again
             watchTop = scanner.topOf(again)
             return true
         }
-        if (playerRotating(node)) watchRelearnUntil = now + WATCH_RELEARN_MS
+        // Ab hier keine weitere Abfrage: Jede kostet 20–50 ms, während YouTube die Seite wegschiebt (vorher drei
+        // pro Bild – beim schnellen Runterwischen kam "Video verlassen" so ~0,1 s zu spät, 1–3 Bilder echte Leiste).
+        val b = Rect().also { node.getBoundsInScreen(it) }
+        if (kotlin.math.abs(b.width() - screen.width()) > 4 && kotlin.math.abs(b.width() - screen.height()) <= 4) {
+            watchRelearnUntil = now + WATCH_RELEARN_MS
+        }
         if (now < watchRelearnUntil) {
-            // null = YouTube hat den Player neu gebaut: der volle Scan sucht ihn neu.
-            if (!node.refresh()) return null
-            val top = scanner.topOf(node)
             // Während der Dreh-Animation meldet YouTube unsinnige Lagen (z. B. -740): nur sinnvolle lernen.
-            if (top >= 0 && top < screen.height() * 0.35f) watchTop = top
+            if (b.top >= 0 && b.top < screen.height() * 0.35f) watchTop = b.top
             return true
         }
-        return scanner.isStillLargePlayer(node, watchTop, screen)
+        return scanner.isStillLargePlayerFresh(node, watchTop, screen)
     }
 
     override fun onDestroy() {
@@ -715,12 +725,20 @@ class FuckShortsService : AccessibilityService() {
         val rest = restBounds ?: return
         val state = lastUiState ?: return
         if (overlay.isShowing || SystemClock.uptimeMillis() < watchRelearnUntil || !node.refresh()) return
-        if (playerRotating(node)) {
+        val b = Rect().also { node.getBoundsInScreen(it) }
+        if (kotlin.math.abs(b.width() - screen.width()) > 4 && kotlin.math.abs(b.width() - screen.height()) <= 4) {
             watchRelearnUntil = SystemClock.uptimeMillis() + WATCH_RELEARN_MS
             return
         }
-        val top = scanner.topOf(node)
-        if (top <= watchTop + 1) return
+        val top = b.top
+        if (Log.isLoggable(TRACE_TAG, Log.VERBOSE)) Log.d(TAG, "Pane: Player top=$top (offen $watchTop)")
+        if (top <= watchTop + 1) {
+            // Die Startseite meldet sich schon, der Player steht aber noch: Gleich rutscht er. Kurz ganz dicht
+            // nachsehen (eine Abfrage alle paar ms), damit unsere beim ersten Rutschen losfährt.
+            paneBurstUntil = SystemClock.uptimeMillis() + PANE_BURST_MS
+            startPolling()
+            return
+        }
         watchPageOpen = false
         watchNode = null
         reason("Video verlassen (Pane, top $watchTop→$top)")
@@ -1278,6 +1296,8 @@ class FuckShortsService : AccessibilityService() {
             lastBar = bar
             rememberRestPosition(bar)
             barWindowId = root.windowId
+            cameraWindowId = -1
+
             // Der Player liegt über der Leiste. Kurz kommt das auch vor, wenn der Mini-Player umbaut (z. B. Werbung
             // startet): Dann nicht verstecken, sonst sah man ~7 Bilder die echte Leiste. Erst wenn es so bleibt.
             if (scanner.isBarCovered(root, bar)) {
@@ -1819,7 +1839,12 @@ class FuckShortsService : AccessibilityService() {
         }
         // Menü vorne: Das regelt der Scan (Lage des Menüs), die Leiste ist nicht abfragbar.
         if (menuFront || panelMinTop != Int.MAX_VALUE || coverWindowId != -1) return
-        if (popupFront(foregroundWindow()?.root) != null) return
+        // Video offen und das Hauptfenster ist das aktive: Dann ist kein Popup vorne. Das sagt die Fensterliste
+        // (Abfrage ans System, schnell); YouTube selbst wird dafür nicht gefragt (langsam, solange es animiert).
+        val mainActive = watchPageOpen && fresh == null && barWindowId != -1 &&
+            windows.firstOrNull { it.isActive }?.id == barWindowId
+        if (!mainActive && popupFront(foregroundWindow()?.root) != null) return
+
         // Unser eigener Tipp aufs Karten-⋮: Das Menü ist gleich wieder zu, unsere bleibt stehen (sonst 0,13 s weg).
         if (shelfMenuOpenedAt != 0L || now - shelfMenuDoneAt < SHELF_MENU_HOLD_MS) return
         // Graue Lade-Seite eines Videos eben gesehen: Das regelt der Scan (sonst zeigte das Nachführen unsere wieder,
@@ -1844,12 +1869,18 @@ class FuckShortsService : AccessibilityService() {
                 scheduleScan()
                 return
             }
-            if (node != null && watchStillOpen(node, now) != false) {
+            val t0 = SystemClock.uptimeMillis()
+            val stillOpen = node != null && watchStillOpen(node, now) != false
+            if (app.fshorts.BuildConfig.DEBUG && now - lastTouchAt < 1500 && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+                Log.d(TAG, "Poll: Player top=${node?.let { scanner.topOf(it) }} in ${SystemClock.uptimeMillis() - t0} ms")
+            }
+            if (node != null && stillOpen) {
                 watchTop = minOf(watchTop, scanner.topOf(node))
                 reason("Video offen")
                 hideSmooth()
                 return
             }
+
             val moved = node?.let { scanner.topOf(it) - watchTop } ?: Int.MAX_VALUE / 2
             watchPageOpen = false
             watchNode = null
@@ -1945,6 +1976,7 @@ class FuckShortsService : AccessibilityService() {
         if (onHome) {
             if (observedTop <= rest.top + 2) hiddenByScroll = false
             if (videoOpening && fullyGone) {
+                videoSlideAt = now
                 hideSmooth()
             } else {
                 if (!fullyGone || overlay.isShowing) hiddenByScroll = observedTop > rest.top + 2
@@ -1977,6 +2009,14 @@ class FuckShortsService : AccessibilityService() {
             if (hiddenByScroll && goneFeed != null) feedBeforeVideo = goneFeed
             goneFeed = null
             keepFail = "Video offen"
+            return false
+        }
+        // Eben für ein Video weggefahren (z. B. Mini-Player aufgeklappt) und seither nicht gescrollt: YouTube entfernt
+        // jetzt seine Leiste, die Liste dahinter gibt es noch. Das ist kein Scrollen – sonst blitzte unsere ~4 Bilder
+        // über der Video-Seite auf, bis der Player erkannt war (gemessen 14.11., 1 von 6 Läufen).
+        if (now - videoSlideAt < TAP_PROBE_MS && lastScrollAt < videoSlideAt) {
+            goneFeed = null
+            keepFail = "Video geht auf"
             return false
         }
         feedBeforeVideo?.let { before ->
@@ -2786,6 +2826,9 @@ class FuckShortsService : AccessibilityService() {
         private const val RISE_EARLY_DP = 24f
         private const val RISE_LATE_DP = 140f
         private const val RISE_MS = 240L
+        private const val PANE_BURST_MS = 250L
+        private const val PANE_BURST_POLL_MS = 5L
+
         private const val NAV_HOLD_MS = 800L
         private const val THEME_HOLD_MS = 1_500L
         private const val SHADE_GAP_MS = 600L

@@ -150,7 +150,12 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
         return node.bounds().top <= openTop + 4 * density
     }
 
+    /** Wie [isStillLargePlayer], aber ohne neue Abfrage: [node] wurde eben schon aufgefrischt. */
+    fun isStillLargePlayerFresh(node: AccessibilityNodeInfo, openTop: Int, screen: Rect): Boolean =
+        isLargePlayer(node, screen) && node.bounds().top <= openTop + 4 * density
+
     fun topOf(node: AccessibilityNodeInfo): Int = node.bounds().top
+
 
     /**
      * Video-Seite geht gerade auf, der Player ist aber noch nicht da (graue Lade-Seite, YouTube 21.44): Die Seite unter
