@@ -57,6 +57,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
+
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -119,6 +121,8 @@ class BottomBarOverlay(
     private var sunk by mutableStateOf(false)
     /** Versteckt: Knöpfe beim nächsten Zeigen sofort wieder oben, ohne Animation. */
     private var sinkSnap by mutableStateOf(false)
+    /** Ein Panel liegt ab dieser Höhe (px ab Oberkante unserer Leiste) über ihr: darunter nichts zeichnen. */
+    private var coverFromPx by mutableFloatStateOf(Float.MAX_VALUE)
     /** Dauer, mit der sich die Tinte beim Abdunkeln ausbreitet (⋮-Menü: INK_IN_MS, Google Play: schneller). */
     private var inkInMs by mutableStateOf(INK_IN_MS)
     /** Handy quer: flache Leiste, Wert = Höhe der Gestenleiste darunter. -1 = normale Leiste. */
@@ -184,6 +188,18 @@ class BottomBarOverlay(
         if (isSlidingAway || SystemClock.uptimeMillis() < holdHiddenUntil) return
         underMenu = false
         place(top, rest, state.copy(dim = 0f, hole = null, veil = null))
+    }
+
+    /**
+     * Ein Panel (Werbe-Menü) liegt über dem unteren Teil der Leiste: nur oberhalb von [panelTop] (Bildschirm) zeichnen,
+     * abgedunkelt um [dim] (Tinte breitet sich von der Mitte aus). Berührungen gehen durch.
+     */
+    fun showCoveredBy(rest: Rect, state: BarUiState, dim: Float, panelTop: Int) {
+        underMenu = true
+        val cx = rest.centerX() - rest.left
+        place(rest.top, rest, state.copy(dim = dim, hole = Rect(cx, 0, cx, 0), veil = null))
+        val cover = (panelTop - rest.top).toFloat()
+        if (cover != coverFromPx) coverFromPx = cover
     }
 
     /** Fährt gerade von unten herein ([showRising]). Solange keine Abfragen an YouTube: sie hielten die Animation an. */
@@ -363,6 +379,7 @@ class BottomBarOverlay(
 
     private fun place(top: Int, rest: Rect, state: BarUiState, keepSlide: Boolean = false) {
         if (!keepSlide) stopSlide()
+        if (coverFromPx != Float.MAX_VALUE) coverFromPx = Float.MAX_VALUE
         if (fading) {
             fading = false
             view?.animate()?.cancel()
@@ -599,6 +616,7 @@ class BottomBarOverlay(
                         sinkSnap = sinkSnap,
                         compactNav = compactNav,
                         inkMs = inkInMs,
+                        cover = { coverFromPx },
                         rise = { risePx },
                         onTap = { kind ->
                             if (kind != TabKind.CREATE) {
@@ -680,6 +698,7 @@ private fun BottomBar(
     sinkSnap: Boolean,
     compactNav: Int,
     inkMs: Int,
+    cover: () -> Float,
     rise: () -> Float,
     onTap: (TabKind) -> Unit,
     onLongPress: () -> Unit,
@@ -740,6 +759,15 @@ private fun BottomBar(
     )
     Box(
         modifier = Modifier
+            .drawWithContent {
+                // Panel über dem unteren Teil: nur darüber zeichnen (das Panel "verschluckt" die Leiste).
+                val c = cover()
+                if (c >= size.height) {
+                    drawContent()
+                } else if (c > 0f) {
+                    clipRect(bottom = c) { this@drawWithContent.drawContent() }
+                }
+            }
             .fillMaxSize()
             .graphicsLayer {
                 compositingStrategy = CompositingStrategy.Offscreen

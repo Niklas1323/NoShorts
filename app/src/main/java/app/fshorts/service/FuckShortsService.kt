@@ -61,6 +61,8 @@ class FuckShortsService : AccessibilityService() {
     private var tapProbeUntil = 0L
     /** Zuletzt die graue Lade-Seite eines Videos gesehen (unsere ist dann weg). */
     private var loadingPageAt = 0L
+    /** Das offene Panel ging über einer Seite mit unserer Leiste auf (siehe coverByPanel). */
+    private var panelFromBar = false
     /** Google Play (Werbung) geht über YouTube auf, unsere ist abgedunkelt (siehe dimForSheetApp). 0 = nein. */
     private var sheetAppAt = 0L
     /** Google Play hat (nach dem Werbe-Tipp) zum ersten Mal Inhalt gemeldet: Es ist gezeichnet. */
@@ -284,7 +286,7 @@ class FuckShortsService : AccessibilityService() {
             val now = SystemClock.uptimeMillis()
             // Solange unsere Leiste weg ist, die echte aber noch existiert (z. B. Video offen), weiter nachsehen:
             // So sind wir sofort da, wenn die echte wieder reinfährt.
-            val waitingForBar = !overlay.isShowing && (lastBar != null || watchPageOpen)
+            val waitingForBar = (!overlay.isShowing && (lastBar != null || watchPageOpen)) || panelMinTop != Int.MAX_VALUE
             val probing = now < tapProbeUntil && !watchPageOpen
             if (!connected || !Access.unlocked || !youTubeActive ||
                 (now > pollUntil && !waitingForBar && now > fastUntil && !probing)
@@ -1426,7 +1428,8 @@ class FuckShortsService : AccessibilityService() {
             }
         }
 
-        if (bar == null && !watchPageOpen && handlePanel(root, now)) return
+        // Handy: Panel auch suchen, solange die echte Leiste noch gemeldet wird (das Panel fährt schon darüber hoch).
+        if ((bar == null || (!isTablet && overlay.isShowing)) && !watchPageOpen && handlePanel(root, now)) return
         panelMinTop = Int.MAX_VALUE
         panelNode = null
 
@@ -1792,6 +1795,9 @@ class FuckShortsService : AccessibilityService() {
             return true
         }
         val firstSeen = panelMinTop == Int.MAX_VALUE
+        // Handy: Panel über einer Seite mit unserer Leiste (z. B. ⋮ bei Werbung → "Mein Anzeigen-Center"): Unsere wird
+        // genau an der Kante des Panels abgeschnitten und dunkelt mit YouTube ab (siehe coverByPanel).
+        if (firstSeen) panelFromBar = !isTablet && (overlay.isShowing || now - ourShownAt < PANEL_FROM_BAR_MS)
         panelMinTop = minOf(panelMinTop, top)
         panelNode = scanner.findPanel(root, screen)
         if (firstSeen && app.fshorts.BuildConfig.DEBUG && now - panelDumpedAt > PANEL_DUMP_INTERVAL_MS) {
@@ -1808,6 +1814,11 @@ class FuckShortsService : AccessibilityService() {
         // Grosses Blatt bis weit nach oben (Werbe-Video: "Sponsored … Shop now" unter dem Player) ist eine ganze
         // Seite, kein Menü: Rutscht es ein Stück (z. B. nächste Werbung), darf unsere NICHT darüber erscheinen
         // (Video vom 14.11.). Nur ein kleines Menü-Panel (⋮ bei Werbung) zeigt unsere schon beim Runterfahren.
+        if (panelFromBar && rest != null && state != null) {
+            coverByPanel(rest, state, top, now)
+            handler.postDelayed({ scheduleScan() }, POLL_MS)
+            return true
+        }
         val bigSheet = panelMinTop < screen.top + screen.height() * BIG_SHEET_TOP
         val closing = !bigSheet && top > panelMinTop + CLOSING_DP * resources.displayMetrics.density
         if (rest != null && state != null && (closing || top >= rest.top - 2)) {
@@ -1824,13 +1835,43 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /**
+     * Panel (Werbe-Menü) fährt über unsere Leiste hoch bzw. wieder runter (gemessen 15.11.: hoch in ~4 Bildern, runter
+     * in ~5). Unsere wird nur oberhalb der Panel-Kante gezeichnet, abgedunkelt wie YouTube dahinter (Tinte vom Rand
+     * her). So "verschluckt" das Panel sie beim Öffnen und gibt sie beim Schliessen frei. Vorher: beim Öffnen 4 Bilder
+     * über dem Panel, dann weg; beim Schliessen 4 Bilder gar keine Leiste, dann hell unter dem noch dunklen YouTube.
+     */
+    private fun coverByPanel(rest: Rect, state: BarUiState, top: Int, now: Long) {
+        // Fährt es nach unten (zu)? YouTube meldet die Lage dabei nur alle ~130 ms (es ist mit der Animation
+        // beschäftigt), das Panel ist in Wirklichkeit schon weiter unten: unsere gleich ganz zeigen, abgedunkelt wie
+        // YouTube dahinter. Hell wird sie (Tinte zieht sich zurück), wenn das Panel weg ist.
+        val closing = top > panelMinTop + CLOSING_DP * resources.displayMetrics.density
+        if (closing) {
+            reason("Panel fährt zu (oben=$top), unsere abgedunkelt")
+            preShownAt = now
+            hiddenByScroll = false
+            overlay.showCoveredBy(rest, state.copy(style = currentStyle()), PANEL_DIM, screen.bottom)
+            return
+        }
+        if (top > rest.top + 2) {
+
+            reason("Panel an der Leiste (oben=$top), unsere abgeschnitten")
+            preShownAt = now
+            hiddenByScroll = false
+            overlay.showCoveredBy(rest, state.copy(style = currentStyle()), PANEL_DIM, top)
+        } else {
+            reason("Panel offen (oben=$top)")
+            if (overlay.isShowing) overlay.hide()
+        }
+    }
+
+    /**
      * Panel offen, unsere weg: eine Abfrage pro Bild. Ist das Panel weg (oder unter unsere Leiste gerutscht), sofort
      * zeigen wie "Panel zu" im Scan. Baut YouTube das Panel neu (Knoten ungültig), erst neu suchen, nicht gleich zeigen.
      */
     private fun checkPanelGone(now: Long) {
         val rest = restBounds ?: return
         val state = lastUiState ?: return
-        if (overlay.isShowing) return
+        if (overlay.isShowing && !panelFromBar) return
         var node = panelNode ?: return
         if (!node.refresh() || !node.isVisibleToUser) {
             val again = youTubeMainRoot()?.let { scanner.findPanel(it, screen) }
@@ -1849,6 +1890,10 @@ class FuckShortsService : AccessibilityService() {
             }
         }
         val top = scanner.topOf(node)
+        if (panelFromBar) {
+            coverByPanel(rest, state, top, now)
+            return
+        }
         if (top >= rest.top - 2) {
             reason("Panel unter der Leiste (Nachführen, oben=$top)")
             preShownAt = now
@@ -3059,6 +3104,10 @@ class FuckShortsService : AccessibilityService() {
 
 
         private const val SHEET_APP_REPEAT_MS = 3_000L
+        /** YouTube dunkelt hinter dem Werbe-Menü-Panel auf ~50 % ab (gemessen 57 → 118). */
+        private const val PANEL_DIM = 0.5f
+        private const val PANEL_FROM_BAR_MS = 500L
+
 
 
 
