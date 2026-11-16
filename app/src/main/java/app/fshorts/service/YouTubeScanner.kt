@@ -522,8 +522,32 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
      * Die grosse senkrechte Liste der aktuellen Seite (Startseite, Abos ...). Solange es sie noch gibt, sind wir
      * auf derselben Seite, auch wenn YouTube seine Leiste beim Scrollen ganz entfernt hat.
      */
+    /** Ein Element der Liste ungefähr in der Mitte des Bildschirms (für die Wischrichtung). */
+    fun pickFeedChild(feed: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
+        if (!feed.refresh()) return null
+        val r = Rect()
+        for (i in 0 until feed.childCount) {
+            val c = feed.getChild(i) ?: continue
+            c.getBoundsInScreen(r)
+            if (r.height() > 0 && r.top > screen.top + screen.height() / 6 && r.top < screen.bottom - screen.height() / 3) return c
+        }
+        return null
+    }
+
+    /** Nur über die bekannten IDs (eine Abfrage je ID, kein Durchsuchen des Baums): schnell genug fürs Wischen. */
+
+    fun findFeedQuick(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
+        for (id in sel.feedIds) {
+            for (node in root.findAccessibilityNodeInfosByViewId(sel.fullId(id))) {
+                if (isFeed(node, screen)) return node
+            }
+        }
+        return null
+    }
+
     fun findFeed(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
         for (id in sel.feedIds) {
+
             for (node in root.findAccessibilityNodeInfosByViewId(sel.fullId(id))) {
                 if (isFeed(node, screen)) return node
             }

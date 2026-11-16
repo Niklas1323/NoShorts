@@ -117,3 +117,47 @@ scrolllong() { local n=$1; ytfront || return 1; live $n; recstart 70; sleep 0.5
 vt2() { local n=$1 m=$2 x=$3 y=$4; ytfront || return 1; adb exec-out screencap -p > rec/${n}_r.png; live $n; recstart 13; sleep 0.5; tapif ${n}_r $x $y || { recpull $n >/dev/null; return 1; }; sleep 5; ytfront || return 1
   case $m in back) adb shell input keyevent KEYCODE_BACK;; edge) adb shell input swipe 3 1300 600 1300 150;; down) adb shell input swipe 540 450 540 1800 200;; esac
   sleep 3.5; recpull $n >/dev/null; local e=$(avs $n | grep '^E'); echo "$n $m: ${e:-keine echte Leiste}"; }
+# fastmix NAME: 6× schnell runter/hoch im Wechsel
+fastmix() { local n=$1; ytfront || return 1; live $n; recstart ${2:-14}; sleep 0.5; for i in 1 2 3 4 5 6; do adb shell input swipe 120 1700 120 900 120; sleep ${3:-0.45}; adb shell input swipe 120 900 120 1600 120; sleep ${3:-0.45}; done; sleep 2; recpull $n >/dev/null; local e=$(avs $n | grep '^E' | tr '\n' '|'); echo "$n: ${e:-keine echte Leiste}"; }
+# rbar NAME: sucht in jedem Bild den Plus-Knopf der ECHTEN Leiste (Kreis r=28 px + Kreuz bei x=675), auch beim Hochfahren
+#  (Mitte y 2309..2410). Hell und dunkel (Kontrast zum Hintergrund). Ausgabe: Abschnitte mit echter Leiste + Lage.
+rbar() { local n=$1
+  ffmpeg -loglevel fatal -i rec/$n.mp4 -fps_mode passthrough -vf "format=gray,crop=110:207:620:2217" -f rawvideo - | od -An -v -tu1 -w22770 | awk '
+  function px(x,y){ return $( (y-2217)*110 + (x-620) + 1 ) }
+  { found=0; best=""
+    for (cy=2309; cy<=2414; cy++) {
+      bg=px(675+42, cy); if (bg=="") continue
+      ok=1; c=0
+      # Ring (8 Punkte), Kreuz (5 Punkte): deutlich anders als Hintergrund
+      split("28 0,-28 0,0 28,0 -28,20 20,-20 20,20 -20,-20 -20,0 0,9 0,-9 0,0 9,0 -9", P, ",")
+      for (i in P) { split(P[i], q, " "); y=cy+q[2]; if (y>2423) continue; v=px(675+q[1], y); d=v-bg; if (d<0) d=-d; if (d<70) {ok=0; break} c++ }
+      if (!ok || c<8) continue
+      # Lücken zwischen Ring und Kreuz: wie Hintergrund
+      split("14 14,-14 14,14 -14,-14 -14", G, ",")
+      for (i in G) { split(G[i], q, " "); y=cy+q[2]; if (y>2423) continue; v=px(675+q[1], y); d=v-bg; if (d<0) d=-d; if (d>45) {ok=0; break} }
+      if (ok) { found=1; best=cy; break }
+    }
+    f=NR-1
+    if (found && !on) { on=1; st=f; y0=best }
+    if (!found && on) { printf "ECHT Bilder %d-%d (%d) Plus-Mitte erst y=%d\n", st, f-1, f-st, y0; on=0; cnt++ }
+  }
+  END { if (on) { printf "ECHT Bilder %d-%d (%d) Plus-Mitte erst y=%d\n", st, NR-1, NR-st, y0; cnt++ } printf "Bilder %d, Abschnitte mit echter Leiste: %d\n", NR, cnt+0 }'; }
+# rbar NAME: echte Leiste am Plus-Knopf erkennen (Kreis + Kreuz bei x=675), Mitte y 2300..2414, Grösse 45..100 %.
+rbar() { local n=$1
+  ffmpeg -loglevel fatal -i rec/$n.mp4 -fps_mode passthrough -vf "format=gray,crop=110:207:620:2217" -f rawvideo - | od -An -v -tu1 -w22770 | awk '
+  function px(x,y){ if (y>2423 || y<2217) return ""; return $( (y-2217)*110 + (x-620) + 1 ) }
+  function test(cy, s,   bg, i, q, v, d, c, ok) {
+    bg=px(675+int(42*s+0.5), cy); if (bg=="") return 0
+    c=0
+    for (i=1;i<=13;i++) { split(P[i], q, " "); v=px(675+int(q[1]*s+(q[1]<0?-0.5:0.5)), cy+int(q[2]*s+(q[2]<0?-0.5:0.5))); if (v=="") continue; d=v-bg; if (d<0) d=-d; if (d<60) return 0; c++ }
+    if (c<8) return 0
+    for (i=1;i<=4;i++) { split(G[i], q, " "); v=px(675+int(q[1]*s+(q[1]<0?-0.5:0.5)), cy+int(q[2]*s+(q[2]<0?-0.5:0.5))); if (v=="") continue; d=v-bg; if (d<0) d=-d; if (d>45) return 0 }
+    return 1 }
+  BEGIN { split("28 0,-28 0,0 28,0 -28,20 20,-20 20,20 -20,-20 -20,0 0,9 0,-9 0,0 9,0 -9", P, ","); split("14 14,-14 14,14 -14,-14 -14", G, ","); ns=split("1 0.9 0.8 0.7 0.6 0.5", S, " ") }
+  { found=0
+    for (k=1;k<=ns && !found;k++) for (cy=2300; cy<=2414 && !found; cy++) if (test(cy, S[k])) { found=1; fy=cy; fs=S[k] }
+    f=NR-1
+    if (found && !on) { on=1; st=f; y0=fy; s0=fs }
+    if (!found && on) { printf "ECHT Bilder %d-%d (%d) erst y=%d Grösse %s\n", st, f-1, f-st, y0, s0; on=0; cnt++ }
+  }
+  END { if (on) { printf "ECHT Bilder %d-%d (%d) erst y=%d Grösse %s\n", st, NR-1, NR-st, y0, s0; cnt++ } printf "Bilder %d, Abschnitte mit echter Leiste: %d\n", NR, cnt+0 }'; }

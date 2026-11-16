@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.graphics.Path
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -68,13 +69,29 @@ class FuckShortsService : AccessibilityService() {
     private var dirUntil = 0L
     @Volatile
     private var probeGen = 0
+    // Zwei eigene Threads: Richtung (beim Fingerauflegen) und Rückkehr der echten Leiste. Im selben Thread warteten sie
+    // aufeinander (gemessen 16.11.: Richtung erst nach 216 ms statt ~50 ms erkannt).
     private val probeThread = android.os.HandlerThread("fshorts-richtung").also { it.start() }
     private val probeHandler = Handler(probeThread.looper)
+    /** Liste der Seite suchen (kann beim Wischen lange dauern): eigener Thread, damit die Richtung nicht darauf wartet. */
+    private val feedThread = android.os.HandlerThread("fshorts-liste").also { it.start() }
+    private val feedHandler = Handler(feedThread.looper)
+    private val presenceThread = android.os.HandlerThread("fshorts-rueckkehr").also { it.start() }
+    private val presenceHandler = Handler(presenceThread.looper)
+    /** Seit wann die echte Leiste weg ist (entfernt oder ganz unten). 0 = sie ist zu sehen. */
+    private var realGoneSince = 0L
     @Volatile
     private var presenceRunning = false
+    /** Seit wann unsere weggescrollt ist (für die Rückkehr-Prüfung). */
+    @Volatile
+    private var awaySince = 0L
     /** Liste der Seite, im Hintergrund gemerkt, wenn unsere wegfährt (die echte ist dann oft nicht entfernt). */
     @Volatile
     private var probeFeed: AccessibilityNodeInfo? = null
+    /** Ein Element der Liste (Mitte des Bildschirms), dessen Lage beim Fingerauflegen die Wischrichtung verrät. */
+    @Volatile
+    private var probeChild: AccessibilityNodeInfo? = null
+
     /** Die echte Leiste wurde beim Scrollen aus der Oberfläche genommen (unsere ist dann weggefahren). */
     private var realGoneByScroll = false
     /** Das offene Panel ging über einer Seite mit unserer Leiste auf (siehe coverByPanel). */
@@ -117,8 +134,10 @@ class FuckShortsService : AccessibilityService() {
      * uns die Liste der Seite: Solange es sie gibt, sind wir noch auf derselben Seite und unsere Leiste bleibt.
      */
     private var goneFeed: AccessibilityNodeInfo? = null
+    @Volatile
     private var lastScrollAt = 0L
     private var feedKeptAt = 0L
+    @Volatile
     private var lastTouchAt = 0L
     /** Seit wann die Startseiten-Liste nach dem Scrollen nicht zu finden ist (0 = gefunden). */
     private var feedMissSince = 0L
@@ -150,10 +169,13 @@ class FuckShortsService : AccessibilityService() {
     private var miniPlayerOpen = false
     private var lastMiniCheckAt = 0L
     private var lastMiniWalkAt = 0L
+    @Volatile
     private var lastNavAt = 0L
     private var restSince = 0L
     private var fastUntil = 0L
     private var lastObservedTop = -1
+    /** Wann [lastObservedTop] gemessen wurde (eine Richtung gilt nur zwischen zwei frischen Messungen). */
+    private var lastObservedAt = 0L
     private var pollUntil = 0L
     private var polling = false
     private var savedBarState: String? = null
@@ -294,20 +316,14 @@ class FuckShortsService : AccessibilityService() {
             handler.postDelayed({ scheduleScan() }, QUIET_FULL_SCAN_MS - (nowQuiet - lastScanAt))
             return@Runnable
         }
-        // Handy, unsere beim Scrollen weggefahren, gerade wird gewischt (kein Tipp): keine volle Suche. Sie dauerte beim
-        // Hochwischen bis 0,4 s und hielt das Nachführen auf, die echte war so zuerst oben (gemessen 15.11.).
-        if (!isTablet && overlay.isScrolledAway && youTubeActive && lastNavAt < lastTouchAt &&
-            nowQuiet - lastTouchAt < SCROLL_SCAN_HOLD_MS
+        // Handy, unsere beim Scrollen weggefahren und seither kein Tipp: keine volle Suche. Sie hielt den Haupt-Thread
+        // 0,25–0,4 s auf, genau wenn die echte wiederkam (gemessen 15./16.11.: bis 16 Bilder echte Leiste). Die Rückkehr
+        // merken die zwei Prüfungen im eigenen Thread (Richtung, startPresenceProbe). Nur wenn ein anderes Fenster vorne
+        // ist (Fensterliste vom System, keine Abfrage an YouTube), doch suchen.
+        if (!isTablet && overlay.isScrolledAway && youTubeActive && lastNavAt < lastTouchAt && presenceRunning &&
+            windows.firstOrNull { it.isActive }?.id == barWindowId
         ) {
             handler.postDelayed({ scheduleScan() }, SCROLL_SCAN_RETRY_MS)
-            return@Runnable
-        }
-        // Unsere weggescrollt, niemand berührt: Die Rückkehr der echten merkt die leichte Prüfung im eigenen Thread
-        // (startPresenceProbe). Eine volle Suche hielt hier den Haupt-Thread ~0,3 s auf, genau wenn die echte nach der
-        // Zurück-Taste wiederkam (gemessen 16.11.: 2 von 4 Mal 16 Bilder echte Leiste). Nur wenn ein anderes Fenster
-        // vorne ist (Fensterliste vom System, keine Abfrage an YouTube), doch suchen.
-        if (scrolledAwayIdle(nowQuiet) && windows.firstOrNull { it.isActive }?.id == barWindowId) {
-            handler.postDelayed({ scheduleScan() }, IDLE_SCAN_RETRY_MS)
             return@Runnable
         }
         lastScanAt = nowQuiet
@@ -335,7 +351,7 @@ class FuckShortsService : AccessibilityService() {
             // Unsere ist weggescrollt und die Richtung wird gerade im eigenen Thread geprüft (oder niemand berührt, dann
             // prüft startPresenceProbe): hier keine Abfragen (sie hielten den Haupt-Thread auf, das Hereinfahren kam
             // dann zu spät).
-            if (overlay.isScrolledAway && (now < dirUntil || scrolledAwayIdle(now))) {
+            if (overlay.isScrolledAway && presenceRunning) {
                 handler.postDelayed(this, POLL_MS)
                 return
             }
@@ -965,7 +981,8 @@ class FuckShortsService : AccessibilityService() {
             reason("Hochwischen, unsere fährt herein")
             overlay.scrollBack(SCROLL_BACK_MS)
         }
-        if (youTubeActive && !(overlay.isScrolledAway && lastScrollAt < dirUntil)) updateBar(SystemClock.uptimeMillis(), null)
+        // Weggescrollt: Die Rückkehr merken die Hintergrund-Prüfungen; eine Abfrage hier hielt beim Wischen alles auf.
+        if (youTubeActive && !(overlay.isScrolledAway && presenceRunning)) updateBar(SystemClock.uptimeMillis(), null)
         startPolling()
     }
 
@@ -989,26 +1006,35 @@ class FuckShortsService : AccessibilityService() {
      * Abfragen beschäftigt, so kam die Erkennung zu spät (gemessen 15.11.: bis 14 Bilder echte Leiste).
      */
     private fun runDirectionProbe(gen: Int, feedIn: AccessibilityNodeInfo?, scr: Rect, trace: Boolean) {
-        val feed = feedIn?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { scanner.findFeed(it, scr) } ?: return
         val r = Rect()
+        // Schnellster Weg: das schon beim Wegfahren gemerkte Element der Liste (eine Abfrage pro Messung). Sonst wie
+        // früher die Liste holen und ein Element wählen (mehrere Abfragen, beim Wischen bis 100 ms und mehr).
         fun pick(): Pair<AccessibilityNodeInfo, Int>? {
-            if (!feed.refresh()) return null
-            for (i in 0 until feed.childCount) {
-                val c = feed.getChild(i) ?: continue
-                c.getBoundsInScreen(r)
-                if (r.height() > 0 && r.top > scr.top + scr.height() / 6 && r.top < scr.bottom - scr.height() / 3) return c to r.top
-            }
-            return null
+            val feed = feedIn?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { scanner.findFeedQuick(it, scr) } ?: return null
+            val c = scanner.pickFeedChild(feed, scr) ?: return null
+            c.getBoundsInScreen(r)
+            return c to r.top
         }
-        var picked = pick()
+        // Das gemerkte Element nur nehmen, wenn es noch sichtbar in der Mitte steht: Ist es beim Weiterscrollen aus dem
+        // Bild gerutscht, bewegt es sich nicht mehr (gemessen 16.11.: bis 250 ms "0 px", obwohl die Liste lief).
+        var picked: Pair<AccessibilityNodeInfo, Int>? = probeChild?.takeIf { it.refresh() && it.isVisibleToUser }?.let { c ->
+            c.getBoundsInScreen(r)
+            if (r.height() > 0 && r.top > scr.top + scr.height() / 8 && r.top < scr.bottom - scr.height() / 4) c to r.top else null
+        } ?: pick()
         val step = DIR_PROBE_DP * resources.displayMetrics.density
         while (gen == probeGen && SystemClock.uptimeMillis() < dirUntil) {
             val p = picked
-            if (p == null || !p.first.refresh()) {
+            if (p == null || !p.first.refresh() || !p.first.isVisibleToUser) {
                 picked = pick()
             } else {
                 p.first.getBoundsInScreen(r)
                 val moved = r.top - p.second
+                if (kotlin.math.abs(moved) > scr.height() / 2) {
+                    // Element wurde für einen anderen Eintrag wiederverwendet: neuer Ausgangspunkt.
+                    picked = p.first to r.top
+                    SystemClock.sleep(DIR_PROBE_STEP_MS)
+                    continue
+                }
                 if (trace) Log.d(TAG, "Richtung: $moved px, ${SystemClock.uptimeMillis() - lastTouchAt} ms nach Finger")
                 if (moved > step) {
                     handler.postAtFrontOfQueue {
@@ -1043,8 +1069,12 @@ class FuckShortsService : AccessibilityService() {
         if (!overlay.isScrolledAway) {
             val known = goneFeed
             val scr = Rect(screen)
-            probeHandler.post {
-                probeFeed = known?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { scanner.findFeed(it, scr) }
+            feedHandler.post {
+                val feed = known?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { r ->
+                    scanner.findFeedQuick(r, scr) ?: scanner.findFeed(r, scr)
+                }
+                probeFeed = feed
+                probeChild = feed?.let { scanner.pickFeedChild(it, scr) }
             }
         }
         overlay.scrollAway(SCROLL_AWAY_MS)
@@ -1052,44 +1082,77 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /**
-     * Unsere ist weggescrollt. Kommt die echte ohne Wischen zurück (z. B. Zurück-Taste → andere Seite), meldet YouTube
-     * nichts Brauchbares; die volle Suche fand sie erst nach ~0,25 s (gemessen 16.11.: 13–15 Bilder echte Leiste). Darum im
-     * eigenen Thread alle [PRESENCE_STEP_MS] nur nach der Leiste fragen (eine Abfrage), solange gerade nicht gewischt wird.
+     * Unsere ist weggescrollt: Im eigenen Thread laufend (beim Wischen jedes Bild) nur die echte Leiste abfragen, solange
+     * unsere weg ist. Taucht sie auf oder fährt sie hoch (Hochwischen, Zurück-Taste, Seitenwechsel), kommt unsere sofort.
+     * Fährt sie nur weiter raus, bleibt unsere unten (darum zählt die erste Messung nur als Ausgangslage). Geht eine
+     * Video-Seite auf (die echte liegt dahinter), nie zurückkommen, nur den Scan anstossen.
+     * Vorher lief das nur ohne Berührung (gemessen 16.11.: beim schnellen Hoch-und-runter 5–15 Bilder echte Leiste).
      */
     private fun startPresenceProbe() {
         if (presenceRunning) return
         presenceRunning = true
+        awaySince = SystemClock.uptimeMillis()
         val scr = Rect(screen)
+        val restTop = restBounds?.top ?: return run { presenceRunning = false }
         val ids = selectors.barIds.map(selectors::fullId)
-        probeHandler.post(object : Runnable {
+        val trace = app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)
+        presenceHandler.post(object : Runnable {
+            var hasSample = false
+            var prevTop: Int? = null
             override fun run() {
                 if (!connected || !overlay.isScrolledAway || !youTubeActive) {
                     presenceRunning = false
                     return
                 }
                 val now = SystemClock.uptimeMillis()
-                if (now - lastScrollAt > PRESENCE_IDLE_MS && now - lastTouchAt > PRESENCE_IDLE_MS) {
-                    val root = youTubeMainRoot()
-                    val r = Rect()
-                    val bar = root?.let { rt -> ids.asSequence().flatMap { rt.findAccessibilityNodeInfosByViewId(it).asSequence() }.firstOrNull { it.isVisibleToUser } }
-                    bar?.getBoundsInScreen(r)
-                    if (bar != null && !r.isEmpty && r.top < scr.bottom - 2) {
-                        val top = r.top
-                        handler.postAtFrontOfQueue {
-                            if (!overlay.isScrolledAway) return@postAtFrontOfQueue
-                            val rest = restBounds ?: return@postAtFrontOfQueue
-                            realGoneByScroll = false
-                            val instant = top <= rest.top + SCROLL_OUT_PX
-                            reason("echte wieder da ohne Wischen (top=$top), unsere ${if (instant) "sofort" else "fährt herein"}")
-                            overlay.scrollBack(if (instant) 0L else SCROLL_BACK_MS)
-                            scheduleScan()
-                        }
-                        presenceRunning = false
-                        return
-                    }
+                // Während die Richtung geprüft wird (gleich nach dem Fingerauflegen), YouTube nicht zusätzlich abfragen:
+                // Zu viele Abfragen auf einmal liessen die Antworten an die Richtungserkennung bis 100 ms warten
+                // (gemessen 16.11.: dann 1 Bild echte Leiste).
+                if (now < dirUntil) {
+                    presenceHandler.postDelayed(this, PRESENCE_BUSY_STEP_MS)
+                    return
                 }
-                // Die ersten Sekunden ohne Berührung sehr oft (die Zurück-Taste kommt meist bald), danach seltener (Akku).
-                probeHandler.postDelayed(this, if (now - lastTouchAt < PRESENCE_FAST_FOR_MS) PRESENCE_STEP_MS else PRESENCE_SLOW_STEP_MS)
+                val root = youTubeMainRoot()
+                // Eine Video-Seite geht nur nach einem Tipp auf (Klick-Meldung). Sonst nicht danach suchen (spart Abfragen).
+                if (root != null && lastNavAt > awaySince && scanner.findWatchPlayer(root, scr) != null) {
+                    // Video-Seite: Die echte liegt dahinter in Ruhe, das ist keine Rückkehr.
+                    handler.post { scheduleScan() }
+                    hasSample = false
+                    presenceHandler.postDelayed(this, PRESENCE_SLOW_STEP_MS)
+                    return
+                }
+                val r = Rect()
+                val bar = root?.let { rt -> ids.asSequence().flatMap { rt.findAccessibilityNodeInfosByViewId(it).asSequence() }.firstOrNull { it.isVisibleToUser } }
+                bar?.getBoundsInScreen(r)
+                val top = if (bar != null && !r.isEmpty && r.top < scr.bottom - 2) r.top else null
+                val calm = now - lastTouchAt > PRESENCE_IDLE_MS && now - lastScrollAt > PRESENCE_IDLE_MS
+                val atRest = top != null && top <= restTop + SCROLL_OUT_PX
+                val back = top != null && if (!hasSample) atRest && calm else (prevTop == null || top < prevTop!! - 2 || (atRest && top == prevTop))
+                if (trace && top != prevTop) Log.d(TAG, "Rückkehr-Prüfung: echte=${top ?: "weg"} (vorher ${prevTop ?: "weg"})")
+                hasSample = true
+                prevTop = top
+                if (back) {
+                    val t = top!!
+                    handler.postAtFrontOfQueue {
+                        if (!overlay.isScrolledAway) return@postAtFrontOfQueue
+                        val rest = restBounds ?: return@postAtFrontOfQueue
+                        realGoneByScroll = false
+                        realGoneSince = 0L
+                        val instant = t <= rest.top + SCROLL_OUT_PX
+                        reason("echte kommt zurück (top=$t), unsere ${if (instant) "sofort" else "fährt herein"}")
+                        overlay.scrollBack(if (instant) 0L else SCROLL_BACK_MS)
+                        scheduleScan()
+                    }
+                    presenceRunning = false
+                    return
+                }
+                // Beim Wischen und kurz danach jedes Bild, dann ein paar Sekunden oft (Zurück-Taste), danach seltener.
+                val busy = now - lastTouchAt < PRESENCE_BUSY_MS || now - lastScrollAt < PRESENCE_BUSY_MS
+                presenceHandler.postDelayed(this, when {
+                    busy -> PRESENCE_BUSY_STEP_MS
+                    now - lastTouchAt < PRESENCE_FAST_FOR_MS -> PRESENCE_STEP_MS
+                    else -> PRESENCE_SLOW_STEP_MS
+                })
             }
         })
     }
@@ -2430,6 +2493,11 @@ class FuckShortsService : AccessibilityService() {
         if (overlay.isScrolledAway && app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
             Log.d(TAG, "Weg-Nachführen: echte=${observedTop ?: "keine"} frisch=${fresh != null} gemerkt=${lastBar != null}")
         }
+        if (observedTop == null || observedTop >= screen.bottom - 2) {
+            if (realGoneSince == 0L) realGoneSince = now
+        } else {
+            realGoneSince = 0L
+        }
         if (observedTop == null) {
 
             // Handy: Gleich nach einer Berührung ist die echte weg. Vielleicht geht gerade das Werbe-Menü auf (YouTube
@@ -2455,7 +2523,10 @@ class FuckShortsService : AccessibilityService() {
                 // Handy, Startseite/Abos/Mein YouTube: Beim schnellen Runterwischen nimmt YouTube (21.45) seine Leiste
                 // ~3 Bilder nach Beginn weg und zeigt sie erst beim Hochwischen wieder (gemessen 15.11. mit unsichtbarer
                 // eigener Leiste). Unsere fährt dann wie das Original nach unten weg.
-                if (scrollFollowPage() && touchScrollNow(now)) {
+                // Nur wenn die echte in DIESER Berührung verschwunden ist. War sie schon vorher weg (unsere blieb stehen),
+                // ist ein neues Fingerauflegen oft ein Hochwischen: Unsere fuhr sonst weg, und die echte kam zuerst
+                // (gemessen 16.11.: 9 Bilder echte Leiste beim schnellen Hoch-und-runter).
+                if (scrollFollowPage() && touchScrollNow(now) && realGoneSince >= lastTouchAt - GONE_TOUCH_SLACK_MS) {
                     realGoneByScroll = true
                     if (!overlay.isScrolledAway) reason("echte beim Scrollen weg, unsere fährt runter")
                     followAway()
@@ -2522,9 +2593,10 @@ class FuckShortsService : AccessibilityService() {
                 }
 
             }
-        } else if (scrollFollowPage() && realOut && (previousTop < 0 || observedTop > previousTop) &&
-            touchScrollNow(now) && overlay.isShowing
+        } else if (scrollFollowPage() && realOut && previousTop >= 0 && observedTop > previousTop &&
+            now - lastObservedAt < FRESH_OBSERVATION_MS && touchScrollNow(now) && overlay.isShowing
         ) {
+
             // Die echte fährt (noch in der Oberfläche) nach unten raus: unsere hinterher.
             reason("echte fährt beim Scrollen raus (top=$observedTop), unsere mit")
             followAway()
@@ -2534,6 +2606,7 @@ class FuckShortsService : AccessibilityService() {
         val appearing = visibleNow && wasHidden
         val movingUp = visibleNow && lastObservedTop >= 0 && observedTop < lastObservedTop - 1
         lastObservedTop = observedTop
+        lastObservedAt = now
         if (appearing || movingUp) {
             reason("echte taucht auf (top=$observedTop)")
             hiddenByScroll = false
@@ -3468,6 +3541,14 @@ class FuckShortsService : AccessibilityService() {
         private const val DIR_PROBE_DP = 6f
         private const val DIR_PROBE_STEP_MS = 8L
         private const val PRESENCE_STEP_MS = 25L
+        private const val PRESENCE_BUSY_STEP_MS = 16L
+
+        private const val PRESENCE_BUSY_MS = 1_500L
+        private const val GONE_TOUCH_SLACK_MS = 100L
+        private const val FRESH_OBSERVATION_MS = 120L
+
+
+
         private const val PRESENCE_SLOW_STEP_MS = 60L
         private const val PRESENCE_FAST_FOR_MS = 10_000L
 
