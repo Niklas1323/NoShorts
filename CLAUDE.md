@@ -1126,3 +1126,8 @@ echte nie sehen").
   Werbung (Chrome ging auf, mit Zurück geschlossen) → Wischer am Rand (x 120–300).
 - Bekannt (vorher verworfen, jetzt gelöst): YouTube zeigt seine Leiste manchmal ohne Wischen wieder (z. B. Zurück-Taste,
   Seitenwechsel). Das merkt jetzt `startPresenceProbe`.
+
+**Nachtest nach Abbruch (16.11., lange Aufnahmen je ~65 s mit Stillstehen, Videos in der Liste laufen an):** Startseite,
+Abos, Mein YouTube, dazu Startseite und Abos mit Mini-Player (Werbung lief darin): **0 Bilder echte Leiste**; unsere fuhr
+nur bei den schnellen Wischern runter (je 4/4), bei langsamen nie; Mini-Player rutscht mit. Zurück-Taste bei
+weggescrollter Leiste 4/4 sauber. Scrollen wie das Original bleibt drin.
