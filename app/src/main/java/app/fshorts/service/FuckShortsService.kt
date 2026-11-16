@@ -346,6 +346,9 @@ class FuckShortsService : AccessibilityService() {
             val measure = app.fshorts.BuildConfig.DEBUG && Log.isLoggable("FShortsMeasure", Log.VERBOSE)
             val g = app.fshorts.BuildConfig.DEBUG && Log.isLoggable("FShortsGhost", Log.VERBOSE)
             if (g != BottomBarOverlay.ghost) BottomBarOverlay.ghost = g
+            val mt = app.fshorts.BuildConfig.DEBUG && Log.isLoggable("FShortsMirror", Log.VERBOSE)
+            if (mt != BottomBarOverlay.mirrorTest) BottomBarOverlay.mirrorTest = mt
+
 
             if (measure && connected && youTubeActive) measureRealBar()
             // Unsere ist weggescrollt und die Richtung wird gerade im eigenen Thread geprüft (oder niemand berührt, dann
@@ -398,6 +401,10 @@ class FuckShortsService : AccessibilityService() {
         selectors = Selectors.load(this)
         scanner = YouTubeScanner(selectors, resources.displayMetrics.density, isTablet)
         overlay = BottomBarOverlay(this, ::onTabTapped, ::onBarLongPressed)
+        // YouTubes Hauptfenster vorne (nicht Kamera o. Ä. von YouTube darüber): Dann darf der Spiegel nicht ewig stehen.
+        overlay.youTubeFront = { youTubeActive && barlessWindowId == -1 && cameraWindowId == -1 }
+
+
         dumper = TreeDumper(this)
         sampler = BarStyleSampler(this)
         touchWatcher = TouchWatcher(this) {
@@ -500,7 +507,7 @@ class FuckShortsService : AccessibilityService() {
         ) {
             if (pkg == PLAY_STORE_PKG && !isTablet) dimForSheetApp() else {
                 reason("Andere App geöffnet ($pkg), unsere sofort weg")
-                hideAll()
+                hideAll(keepMirror = true)
             }
         }
         if (app.fshorts.BuildConfig.DEBUG && (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
@@ -642,7 +649,9 @@ class FuckShortsService : AccessibilityService() {
             lastBar = null
             lastObservedTop = -1
             barlessWindowId = windowId
-            overlay.hide()
+            // Spiegel bleibt unter der Kamera (normal, ohne gedrehtes Plus): Fährt sie wieder runter, sieht man darunter
+            // unsere statt der echten.
+            overlay.hideKeepMirror(showMirror = true)
             scheduleScan()
         }, CAMERA_COVER_MS)
     }
@@ -669,7 +678,18 @@ class FuckShortsService : AccessibilityService() {
         }
         xDelayed = false
         xCloseAt = 0L
+        // Der Spiegel liegt unter der Kamera (an YouTubes Fenster geheftet): Er zeigt unsere Leiste, während die Kamera
+        // wegfährt. Unsere eigene kommt erst, wenn YouTubes Fenster wieder vorne ist (vorher stand sie ~4 Bilder über der
+        // noch sichtbaren Kamera).
+        if (overlay.mirrorCovering) {
+            reason("Seite ohne Leiste geht zu ($why), Spiegel liegt darunter")
+            preShownAt = SystemClock.uptimeMillis()
+            hiddenByScroll = false
+            continueScanSoon()
+            return
+        }
         reason("Seite ohne Leiste geht zu ($why), unsere vorab zeigen")
+
         preShownAt = SystemClock.uptimeMillis()
         hiddenByScroll = false
         // Die Kamera ist noch ~4 Bilder ganz zu sehen, dann blendet die Seite mit der echten Leiste ein. Unsere fährt
@@ -692,7 +712,7 @@ class FuckShortsService : AccessibilityService() {
         val state = lastUiState
         if (rest == null || state == null || !overlay.isShowing) {
             reason("Andere App geöffnet ($PLAY_STORE_PKG), unsere sofort weg")
-            hideAll()
+            hideAll(keepMirror = true)
             return
         }
         sheetAppAt = SystemClock.uptimeMillis()
@@ -723,7 +743,8 @@ class FuckShortsService : AccessibilityService() {
                 reason(if (covered) "Play-Blatt über der Leiste, unsere blendet aus (${now - sheetAppAt} ms)" else "Play-Blatt kam nicht, unsere weg")
                 sheetAppAt = 0L
                 sheetAppLeftAt = now
-                overlay.hide()
+                // Unter dem Play-Blatt liegt YouTube mit seiner Leiste: dort den Spiegel (Play dunkelt ihn selbst ab).
+                overlay.hideKeepMirror(showMirror = true)
                 scheduleScan()
                 return
             }
@@ -1346,10 +1367,17 @@ class FuckShortsService : AccessibilityService() {
         if (youTubeActive && !overlay.isShowing && (lastBar != null || watchPageOpen)) startPolling()
     }
 
-    private fun hideAll() {
+    /** [keepMirror]: YouTube wird nur verdeckt oder verlassen, seine Leiste bleibt darunter (siehe Spiegel im Overlay). */
+    private fun hideAll(keepMirror: Boolean = false) {
         // Fährt gerade sanft weg (Tastatur, Video): fertig fahren lassen, danach ist sie ohnehin weg.
         if (overlay.isSlidingAway) return
-        overlay.hide()
+        if (keepMirror) overlay.hideKeepMirror() else overlay.hide()
+    }
+
+    /** Spiegel unserer Leiste an YouTubes Hauptfenster heften (Handy, nicht im Splitscreen). */
+    private fun updateMirrorWindow() {
+        if (isTablet) return
+        overlay.mirrorWindow(if (splitBounds != null) -1 else barWindowId)
     }
 
     /** Sanft wegfahren statt verschwinden (Tastatur geht auf, Video wird geöffnet). Sonst wie [hideAll]. */
@@ -1457,7 +1485,7 @@ class FuckShortsService : AccessibilityService() {
             menuOpen = false
             youTubeSince = 0L
             if (keyboard) overlay.releaseHold()
-            if (keyboard) hideSmooth() else hideAll()
+            if (keyboard) hideSmooth() else hideAll(keepMirror = true)
             return
         }
         // "Suchen": Die Ergebnisse haben eine Leiste, die gleich hinter der ausblendenden Tastatur hervorkommt.
@@ -1797,6 +1825,7 @@ class FuckShortsService : AccessibilityService() {
             lastBar = bar
             rememberRestPosition(bar)
             barWindowId = root.windowId
+            updateMirrorWindow()
             cameraWindowId = -1
 
             // Der Player liegt über der Leiste. Kurz kommt das auch vor, wenn der Mini-Player umbaut (z. B. Werbung
@@ -1848,8 +1877,10 @@ class FuckShortsService : AccessibilityService() {
             }
             reason("keine Leiste gefunden ($keepFail)")
             barlessWindowId = root.windowId
-            // Video geht auf: sanft wegfahren (die Video-Seite deckt die echte Leiste ab).
-            if (watchPageOpen) hideSmooth() else hideAll()
+            // Video geht auf: sanft wegfahren (die Video-Seite deckt die echte Leiste ab). Liegt nur ein anderes Fenster
+            // vorne (Kamera), bleibt der Spiegel darunter.
+            if (watchPageOpen) hideSmooth() else hideAll(keepMirror = keepFail == "anderes Fenster vorne")
+
             val stuck = !barSeenOnce && now - youTubeSince > AUTO_DUMP_AFTER_MS
             if (stuck && now - lastAutoDumpAt > AUTO_DUMP_INTERVAL_MS) {
                 lastAutoDumpAt = now

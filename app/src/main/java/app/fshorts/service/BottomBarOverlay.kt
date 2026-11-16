@@ -133,7 +133,10 @@ class BottomBarOverlay(
     private var topExtra by mutableStateOf(0)
     /** Handy quer: flache Leiste, Wert = Höhe der Gestenleiste darunter. -1 = normale Leiste. */
     private var compactNav by mutableStateOf(-1)
-    private val restoreSink = Runnable { sunk = false }
+    private val restoreSink = Runnable {
+        sunk = false
+        syncMirror()
+    }
     /** Plus getippt: bis dann sinken die Knöpfe (so lange keine Abfragen an YouTube, sie hielten die Animation an). */
     private var sinkUntil = 0L
     /** Video verlassen: Die Leiste fährt von unten herein. So viele Pixel steht sie gerade noch zu tief. */
@@ -283,6 +286,7 @@ class BottomBarOverlay(
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     if (scroller === animation) scroller = null
+                    syncMirror()
                 }
             })
             start()
@@ -327,6 +331,7 @@ class BottomBarOverlay(
                         if (riser !== animation) return
                         riser = null
                         risePx = 0f
+                        syncMirror()
                     }
                 })
                 start()
@@ -394,6 +399,7 @@ class BottomBarOverlay(
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     if (slide === animation) slide = null
+                    syncMirror()
                 }
             })
             start()
@@ -467,6 +473,15 @@ class BottomBarOverlay(
 
     private fun place(top: Int, rest: Rect, state: BarUiState, keepSlide: Boolean = false) {
         if (!keepSlide) stopSlide()
+        // Unsere zeigt wieder selbst: Spiegel folgt ihr wieder. War sie versteckt (YouTube weg, Kamera ...), hat Android
+        // YouTubes Fenster oft neu aufgebaut (neue Fläche, gemessen 17.11.: Spiegel danach weg) → neu anheften.
+        val reattach = mirrorFrozen || !isShowing || view?.alpha == 0f
+        if (mirrorFrozen) {
+            mirrorFrozen = false
+            view?.removeCallbacks(mirrorWatch)
+        }
+        if (reattach && mirrorWindowId >= 0) view?.post { reattachMirror() }
+
         if (coverFromPx != Float.MAX_VALUE) coverFromPx = Float.MAX_VALUE
         if (fading) {
             fading = false
@@ -510,7 +525,9 @@ class BottomBarOverlay(
             appliedFlags = params.flags
             windowManager.updateViewLayout(v, params)
         }
+        syncMirror()
     }
+
 
     /**
      * Lage des Fensters. Handy quer: YouTube zeigt dort gar keine eigene Leiste (21.45 gemessen), unsere ist allein und
@@ -564,6 +581,8 @@ class BottomBarOverlay(
     private fun applyFlags() {
         val v = view ?: return
         val flags = currentFlags()
+        // Spiegel zuerst aus, wenn unsere gleich Berührungen durchlässt (sonst finge er sie statt YouTube).
+        syncMirror()
         if (flags == appliedFlags) return
         params.flags = flags
         appliedFlags = flags
@@ -605,6 +624,16 @@ class BottomBarOverlay(
     val isFading: Boolean get() = fading
 
     fun hide() {
+        // YouTube selbst zeigt etwas ohne Leiste (Video, Tastatur ...): Spiegel auch weg.
+        if (mirrorFrozen) {
+            mirrorFrozen = false
+            view?.removeCallbacks(mirrorWatch)
+        }
+        setMirrorShown(false)
+        hideInternal()
+    }
+
+    private fun hideInternal() {
         val v = view ?: return
         if (fading) {
             fading = false
@@ -637,6 +666,7 @@ class BottomBarOverlay(
         // Fenster-Flags erst im nächsten Bild umstellen: Das Umstellen richtet das Fenster neu ein, und Android zeigte
         // das Ausblenden erst danach (gemessen 15.11.: unsere stand so noch 3 Bilder über dem Werbe-Menü).
         v.post { if (!isShowing) applyFlags() }
+        syncMirror()
     }
 
     /**
@@ -651,6 +681,13 @@ class BottomBarOverlay(
     }
 
     fun destroy() {
+        mirrorSurface?.let { sc -> runCatching { android.view.SurfaceControl.Transaction().reparent(sc, null).apply() } }
+        runCatching { mirrorCanvasSurface?.release() }
+        runCatching { mirrorSurface?.release() }
+        mirrorCanvasSurface = null
+        mirrorSurface = null
+        mirrorBitmap = null
+        mirrorWindowId = -1
         view?.let { runCatching { windowManager.removeViewImmediate(it) } }
         lifecycleOwner?.destroy()
         view = null
@@ -684,63 +721,302 @@ class BottomBarOverlay(
         return true
     }
 
-    private fun create(): ComposeView {
-        val owner = OverlayLifecycleOwner().also { it.start() }
-        lifecycleOwner = owner
-        return ComposeView(service).apply {
-            setViewTreeLifecycleOwner(owner)
-            setViewTreeSavedStateRegistryOwner(owner)
-            viewTreeObserver.addOnDrawListener { drawnAt = SystemClock.uptimeMillis() }
-            // Berührungen selbst auswerten statt über Compose: einfacher und zuverlässiger in einem Overlay.
-            // Die Leiste hat vier gleich breite Spalten: Startseite, Abos, Mein YouTube, Plus.
-            setOnTouchListener(TapHandler(onTap = tap@{ x, width ->
-                if (SystemClock.uptimeMillis() < ignoreTapsUntil) return@tap
-                val column = if (uiState?.style?.tablet == true) {
-                    // Tablet: enger Block in der Mitte (4 Spalten à 96 dp). Ausserhalb: kein Knopf.
-                    val slot = TABLET_SLOT_DP * resources.displayMetrics.density
-                    val start = (width - slot * 4) / 2f
-                    val c = Math.floor(((x - start) / slot).toDouble()).toInt()
-                    if (c !in 0..3) return@tap
-                    c
-                } else {
-                    (x / width * 4).toInt().coerceIn(0, 3)
+    // ---------------------------------------------------------------------------------------------------------------
+    // Spiegel: eine zweite, gleich gezeichnete Leiste, an YouTubes Fenster geheftet (ab Android 14,
+    // attachAccessibilityOverlayToWindow). Sie bewegt sich mit YouTubes Fenster, wenn Android es animiert (App wechseln
+    // per Gestenleiste, App-Übersicht): Dann steht unser eigenes Fenster fest bzw. ist weg, und man sah im
+    // wegrutschenden YouTube die echte Leiste (gemessen 16.11.: 4 Bilder beim Wegwischen, 10 beim Zurückwischen).
+    // Sonst liegt der Spiegel genau unter unserer Leiste (gleiche Lage, gleicher Inhalt) und ist nicht zu sehen. Er ist
+    // nur an, solange unsere Leiste ganz normal steht; beim Verlassen von YouTube bleibt er, wie er war ("eingefroren").
+    // ---------------------------------------------------------------------------------------------------------------
+    private var mirrorSurface: android.view.SurfaceControl? = null
+    private var mirrorCanvasSurface: android.view.Surface? = null
+    private var mirrorBitmap: android.graphics.Bitmap? = null
+    private var mirrorWindowId = -1
+    private var mirrorShown = false
+    private val mirrorRect = Rect()
+    /** Inhalt neu malen, sobald unsere Leiste normal steht (nach jedem Zeichnen unserer Leiste). */
+    private var mirrorDirty = true
+    private var mirrorDrawPosted = false
+    /** YouTube ist nicht vorne (andere App, Kamera ...): Spiegel bleibt, wie er beim Verlassen war. */
+    private var mirrorFrozen = false
+    private var mirrorFrozenFrontSince = 0L
+    /** Vom Dienst gesetzt: Ist YouTubes Hauptfenster vorne? (Eingefrorener Spiegel darf dann nicht ewig stehen bleiben.) */
+    var youTubeFront: () -> Boolean = { false }
+
+    /** Der Spiegel steht eingefroren und sichtbar unter einem anderen Fenster (Kamera, Google Play ...). */
+    val mirrorCovering: Boolean get() = mirrorFrozen && mirrorShown && mirrorWindowId >= 0
+
+    /** Spiegel an YouTubes Hauptfenster [windowId] heften (-1 = keiner, z. B. Splitscreen, Bild-in-Bild). */
+
+    fun mirrorWindow(windowId: Int) {
+        if (Build.VERSION.SDK_INT < 34 || windowId == mirrorWindowId) return
+        if (windowId < 0) {
+            mirrorWindowId = -1
+            mirrorFrozen = false
+            setMirrorShown(false)
+            return
+        }
+        if (view == null) return
+        val sc = mirrorSurface ?: createMirror() ?: return
+        try {
+            service.attachAccessibilityOverlayToWindow(windowId, sc)
+            mirrorWindowId = windowId
+            android.util.Log.d("FuckShorts", "Spiegel an YouTubes Fenster $windowId geheftet")
+        } catch (e: Exception) {
+            android.util.Log.w("FuckShorts", "Spiegel anheften ging nicht", e)
+            mirrorWindowId = -1
+            return
+        }
+        // Neues Fenster: erst zeigen, wenn unsere Leiste normal steht.
+        mirrorFrozen = false
+        mirrorShown = true
+        setMirrorShown(false)
+        mirrorDirty = true
+        syncMirror()
+    }
+
+    /** Nochmals an dasselbe Fenster heften (dessen Fläche kann neu sein), sofort und zur Sicherheit etwas später. */
+    private fun reattachMirror() {
+        val sc = mirrorSurface ?: return
+        if (mirrorWindowId < 0 || Build.VERSION.SDK_INT < 34) return
+        val id = mirrorWindowId
+        val attach = Runnable {
+            if (mirrorWindowId != id || mirrorSurface !== sc) return@Runnable
+            runCatching { service.attachAccessibilityOverlayToWindow(id, sc) }
+                .onFailure { android.util.Log.w("FuckShorts", "Spiegel neu anheften ging nicht", it) }
+            if (app.fshorts.BuildConfig.DEBUG && android.util.Log.isLoggable("FShortsTrace", android.util.Log.VERBOSE)) {
+                android.util.Log.d("FuckShorts", "Spiegel neu angeheftet ($id), zeigt=$mirrorShown")
+            }
+            // Sichtbarkeit und Lage neu setzen (gilt für die neue Fläche).
+            val shown = mirrorShown
+            mirrorShown = !shown
+            setMirrorShown(shown)
+            if (!mirrorRect.isEmpty) android.view.SurfaceControl.Transaction()
+                .setPosition(sc, mirrorRect.left.toFloat(), mirrorRect.top.toFloat()).apply()
+        }
+        attach.run()
+        view?.postDelayed(attach, MIRROR_REATTACH_MS)
+    }
+
+    /**
+     * Eine reine Bildfläche (kein Fenster): nimmt keine Berührungen an und gilt für Android nicht als Fenster über YouTube.
+     * Ein Fenster (SurfaceControlViewHost) liess YouTubes echte Leiste für die Bedienungshilfen "verdeckt" erscheinen
+     * (Lage 2424 statt 2217, gemessen 17.11.: Scrollen wie das Original ging so nicht mehr).
+     */
+    private fun createMirror(): android.view.SurfaceControl? {
+        if (Build.VERSION.SDK_INT < 34) return null
+        return try {
+            val w = maxOf(1, target.width())
+            val h = maxOf(1, target.height())
+            val sc = android.view.SurfaceControl.Builder()
+                .setName("FuckShortsSpiegel")
+                .setBufferSize(w, h)
+                .setFormat(PixelFormat.TRANSLUCENT)
+                .setOpaque(false)
+                .build()
+            android.view.SurfaceControl.Transaction().setVisibility(sc, false).apply()
+            mirrorSurface = sc
+            mirrorCanvasSurface = android.view.Surface(sc)
+            mirrorRect.set(0, 0, w, h)
+            mirrorDirty = true
+            sc
+        } catch (e: Exception) {
+            android.util.Log.w("FuckShorts", "Spiegel anlegen ging nicht", e)
+            null
+        }
+    }
+
+    /** Malt unsere Leiste (so wie sie gerade steht) in die Fläche des Spiegels. */
+    private fun drawMirror() {
+        mirrorDrawPosted = false
+        val v = view ?: return
+        val surface = mirrorCanvasSurface ?: return
+        if (!mirrorWanted() || mirrorFrozen || v.width <= 0 || v.height <= 0) return
+        val w = mirrorRect.width()
+        val h = mirrorRect.height()
+        if (w != v.width || h != v.height) {
+            // Lage stimmt noch nicht mit dem Fenster überein (wird gleich gesetzt): beim nächsten Zeichnen.
+            mirrorDirty = true
+            return
+        }
+        try {
+            val bmp = mirrorBitmap?.takeIf { it.width == w && it.height == h }
+                ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).also { mirrorBitmap = it }
+            bmp.eraseColor(0)
+            drawingMirror = true
+            try {
+                v.draw(android.graphics.Canvas(bmp))
+            } finally {
+                drawingMirror = false
+            }
+            val c = surface.lockHardwareCanvas()
+            c.drawColor(0, android.graphics.PorterDuff.Mode.CLEAR)
+            c.drawBitmap(bmp, 0f, 0f, null)
+            surface.unlockCanvasAndPost(c)
+            mirrorDirty = false
+        } catch (e: Exception) {
+            android.util.Log.w("FuckShorts", "Spiegel malen ging nicht", e)
+        }
+    }
+
+    /** Steht unsere Leiste ganz normal (nichts fährt, nichts abgedunkelt, berührbar)? Nur dann gilt der Spiegel. */
+    private fun mirrorWanted(): Boolean {
+        val v = view ?: return false
+        val s = uiState ?: return false
+        return isShowing && !passThrough && !underMenu && !sunk && !fading && slide == null && riser == null &&
+            scrollTarget == 0f && scroller == null && coverFromPx == Float.MAX_VALUE && compactNav < 0 &&
+            s.dim == 0f && s.hole == null && s.veil == null && v.alpha == 1f && v.translationY == 0f
+    }
+
+    /** Spiegel an Lage und Zustand unserer Leiste angleichen (bei jedem Zeichnen und jeder Änderung). */
+    private fun syncMirror(drawn: Boolean = false) {
+        val sc = mirrorSurface ?: return
+        if (mirrorWindowId < 0 || mirrorFrozen) return
+        if (drawn) mirrorDirty = true
+        val want = mirrorWanted()
+        if (want) {
+            val displayWidth = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                windowManager.currentWindowMetrics.bounds.width()
+            } else {
+                service.resources.displayMetrics.widthPixels
+            }
+            val w = if (params.width == WindowManager.LayoutParams.MATCH_PARENT) displayWidth else params.width
+            val r = Rect(params.x, params.y, params.x + w, params.y + params.height)
+            if (r != mirrorRect) {
+                val t = android.view.SurfaceControl.Transaction()
+                if (r.width() != mirrorRect.width() || r.height() != mirrorRect.height()) {
+                    t.setBufferSize(sc, r.width(), r.height())
+                    mirrorDirty = true
                 }
-                val kind = COLUMNS[column]
-                if (kind != TabKind.CREATE || uiState?.hasCreate == true) {
+                mirrorRect.set(r)
+                t.setPosition(sc, r.left.toFloat(), r.top.toFloat()).apply()
+            }
+            // Erst den Inhalt malen, dann zeigen (sonst stünde ein Bild lang ein alter oder leerer Inhalt da).
+            if (mirrorDirty && !mirrorDrawPosted) {
+                mirrorDrawPosted = true
+                view?.post { drawMirror(); syncMirror() }
+                if (!mirrorShown) return
+            }
+        }
+        setMirrorShown(want)
+    }
+
+    private fun setMirrorShown(shown: Boolean) {
+        val sc = mirrorSurface ?: return
+        if (shown == mirrorShown) return
+        mirrorShown = shown
+        if (app.fshorts.BuildConfig.DEBUG && android.util.Log.isLoggable("FShortsTrace", android.util.Log.VERBOSE)) {
+            android.util.Log.d("FuckShorts", "Spiegel ${if (shown) "an" else "aus"}${if (mirrorFrozen) " (eingefroren)" else ""}")
+        }
+        android.view.SurfaceControl.Transaction().setVisibility(sc, shown).apply()
+    }
+
+    /** Eingefroren und YouTube wieder vorne, aber unsere kam nicht: nach [MIRROR_FRONT_MAX_MS] Spiegel weg. */
+    private val mirrorWatch = object : Runnable {
+        override fun run() {
+            if (!mirrorFrozen) return
+            val now = SystemClock.uptimeMillis()
+            if (youTubeFront()) {
+                if (mirrorFrozenFrontSince == 0L) mirrorFrozenFrontSince = now
+                if (now - mirrorFrozenFrontSince > MIRROR_FRONT_MAX_MS) {
+                    mirrorFrozen = false
+                    syncMirror()
+                    return
+                }
+            } else {
+                mirrorFrozenFrontSince = 0L
+            }
+            view?.postDelayed(this, MIRROR_WATCH_MS)
+        }
+    }
+
+    /**
+     * Wie [hide], aber der Spiegel bleibt, wie er ist: YouTube wird von einem anderen Fenster verdeckt oder verlassen
+     * (andere App, Kamera, Google Play, App wechseln). Seine Leiste liegt darunter unverändert. Fährt YouTube wieder
+     * herein, zeigt der Spiegel unsere statt der echten.
+     */
+    fun hideKeepMirror(showMirror: Boolean = false) {
+        // showMirror: Spiegel jetzt sicher zeigen (unsere war gerade nicht "normal", z. B. Plus gedreht oder abgedunkelt).
+        // Er zeigt den Zustand nach dem Verstecken: nicht abgedunkelt, Knöpfe oben.
+        if (showMirror && mirrorWindowId >= 0 && !mirrorRect.isEmpty && isShowing) {
+            mirrorFrozen = false
+            setMirrorShown(true)
+        }
+        if (mirrorWindowId >= 0 && !mirrorFrozen) {
+            mirrorFrozen = true
+            mirrorFrozenFrontSince = 0L
+            view?.removeCallbacks(mirrorWatch)
+            view?.postDelayed(mirrorWatch, MIRROR_WATCH_MS)
+        }
+        hideInternal()
+    }
+
+
+    private fun makeTapHandler(): View.OnTouchListener = TapHandler(onTap = tap@{ x, width ->
+        if (SystemClock.uptimeMillis() < ignoreTapsUntil) return@tap
+        val column = if (uiState?.style?.tablet == true) {
+            // Tablet: enger Block in der Mitte (4 Spalten à 96 dp). Ausserhalb: kein Knopf.
+            val slot = TABLET_SLOT_DP * service.resources.displayMetrics.density
+            val start = (width - slot * 4) / 2f
+            val c = Math.floor(((x - start) / slot).toDouble()).toInt()
+            if (c !in 0..3) return@tap
+            c
+        } else {
+            (x / width * 4).toInt().coerceIn(0, 3)
+        }
+        val kind = COLUMNS[column]
+        if (kind != TabKind.CREATE || uiState?.hasCreate == true) {
+            if (kind != TabKind.CREATE) {
+                optimistic = kind
+                optimisticAt = SystemClock.uptimeMillis()
+                uiState = uiState?.copy(selected = kind)
+            }
+            onTap(kind)
+        }
+    }, onLongPress = onLongPress)
+
+    @Composable
+    private fun BarContent() {
+        uiState?.let { state ->
+            BottomBar(
+                state = state,
+                dimInstant = dimInstant,
+                sunk = sunk,
+                sinkSnap = sinkSnap,
+                compactNav = compactNav,
+                topExtra = topExtra,
+                inkMs = inkInMs,
+                inkOutMs = inkOutMs,
+                cover = { coverFromPx },
+                rise = { risePx + scrollPx },
+                onTap = { kind ->
                     if (kind != TabKind.CREATE) {
                         optimistic = kind
                         optimisticAt = SystemClock.uptimeMillis()
                         uiState = uiState?.copy(selected = kind)
                     }
                     onTap(kind)
-                }
-            }, onLongPress = onLongPress))
-            setContent {
-                uiState?.let { state ->
-                    BottomBar(
-                        state = state,
-                        dimInstant = dimInstant,
-                        sunk = sunk,
-                        sinkSnap = sinkSnap,
-                        compactNav = compactNav,
-                        topExtra = topExtra,
-                        inkMs = inkInMs,
-                        inkOutMs = inkOutMs,
-                        cover = { coverFromPx },
-                        rise = { risePx + scrollPx },
+                },
+                onLongPress = onLongPress,
+            )
+        }
+    }
 
-                        onTap = { kind ->
-                            if (kind != TabKind.CREATE) {
-                                optimistic = kind
-                                optimisticAt = SystemClock.uptimeMillis()
-                                uiState = uiState?.copy(selected = kind)
-                            }
-                            onTap(kind)
-                        },
-                        onLongPress = onLongPress,
-                    )
-                }
+    private fun create(): ComposeView {
+        val owner = OverlayLifecycleOwner().also { it.start() }
+        lifecycleOwner = owner
+        return ComposeView(service).apply {
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
+            viewTreeObserver.addOnDrawListener {
+                drawnAt = SystemClock.uptimeMillis()
+                syncMirror(drawn = true)
             }
+            // Berührungen selbst auswerten statt über Compose: einfacher und zuverlässiger in einem Overlay.
+            // Die Leiste hat vier gleich breite Spalten: Startseite, Abos, Mein YouTube, Plus.
+            setOnTouchListener(makeTapHandler())
+            setContent { BarContent() }
             view = this
         }
     }
@@ -748,6 +1024,11 @@ class BottomBarOverlay(
     companion object {
         /** Nur zum Messen (Test-Versionen): unsere Leiste unsichtbar zeichnen. */
         var ghost by mutableStateOf(false)
+        /** Nur zum Testen (Test-Versionen): unsere unsichtbar, nur der Spiegel wird gezeichnet. */
+        var mirrorTest by mutableStateOf(false)
+        /** Gerade wird in den Spiegel gemalt (nicht ins eigene Fenster). */
+        @JvmStatic var drawingMirror = false
+
 
 
         const val BASE_FLAGS = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -757,6 +1038,12 @@ class BottomBarOverlay(
         const val SLIDE_MS = 300L
         const val FRAME_MS = 40L
         const val SCROLL_QUIET_AFTER_MS = 150L
+        /** Eingefrorener Spiegel, YouTube wieder vorne, unsere kam nicht: so lange darf er noch stehen. */
+        const val MIRROR_FRONT_MAX_MS = 1_500L
+        const val MIRROR_WATCH_MS = 250L
+        const val MIRROR_REATTACH_MS = 600L
+
+
 
         const val RISE_TOUCH_MS = 110L
 
@@ -884,6 +1171,8 @@ private fun BottomBar(
             .drawWithContent {
                 // Nur zum Messen: unsere unsichtbar (die Logik läuft weiter).
                 if (BottomBarOverlay.ghost) return@drawWithContent
+                // Nur zum Testen des Spiegels: unsere eigene unsichtbar, der Spiegel bleibt.
+                if (!BottomBarOverlay.drawingMirror && BottomBarOverlay.mirrorTest) return@drawWithContent
                 // Panel über dem unteren Teil: nur darüber zeichnen (das Panel "verschluckt" die Leiste).
                 val c = cover()
                 if (c >= size.height) {
