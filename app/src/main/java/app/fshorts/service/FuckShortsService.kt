@@ -467,7 +467,12 @@ class FuckShortsService : AccessibilityService() {
 
             Log.d(TAG, "Ereignis ${AccessibilityEvent.eventTypeToString(event.eventType)} $pkg w=${event.windowId} " +
                 "ch=${event.contentChangeTypes} wch=${event.windowChanges} ${event.className} " +
-                "\"${(event.contentDescription ?: event.text.firstOrNull())?.toString()?.take(30)}\"")
+                "\"${(event.contentDescription ?: event.text.firstOrNull())?.toString()?.take(30)}\"" +
+                (if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
+                    windows.firstOrNull { it.id == event.windowId }?.let { w ->
+                        " bounds=${Rect().also { w.getBoundsInScreen(it) }.toShortString()} aktiv=${w.isActive} typ=${w.type}"
+                    } ?: " (nicht in Liste)"
+                } else ""))
 
         }
         // Tipp in YouTube öffnet eine andere App (Werbung → Chrome Custom Tab): Deren Fenster ist sofort undurchsichtig.

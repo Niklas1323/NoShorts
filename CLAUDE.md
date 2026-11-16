@@ -1131,3 +1131,23 @@ echte nie sehen").
 Abos, Mein YouTube, dazu Startseite und Abos mit Mini-Player (Werbung lief darin): **0 Bilder echte Leiste**; unsere fuhr
 nur bei den schnellen Wischern runter (je 4/4), bei langsamen nie; Mini-Player rutscht mit. Zurück-Taste bei
 weggescrollter Leiste 4/4 sauber. Scrollen wie das Original bleibt drin.
+
+**Regressionstest 16.11. (Stand 6f447ce + Trace-Erweiterung), Pixel 9, Benutzer Leon, dunkel und hell:**
+
+| Test | dunkel | hell |
+|---|---|---|
+| Scrollen gemischt (26 s) / lang (65 s), Startseite, Abos, Du, mit und ohne Mini-Player | 0 Bilder echte | 0 |
+| Zurück-Taste bei weggescrollter Leiste | 0 (4/4) | – |
+| Tabs (2 Runden Abos/Du/Home) | 0, 6/6 "ausgewählt" | 0, 6/6 |
+| Suche (Lupe, Text, Suchen, 2× Zurück) | 0 | 0 |
+| Plus → Kamera → Zurück / Geste / X | 0 / 0 / 0 | 0 / – / 0 |
+| Benachrichtigungen auf/zu | 0 | 0 |
+| Video verlassen: Zurück-Geste (Werbung lief), Runterziehen (Werbung lief), Zurück | 0 / 0 / – | – / 0 (Mini-Player) / 0 |
+| ⋮-Menü auf Verlaufs-Karte | 0, Abdunkeln weich über ~15 Bilder (unverändert) | – |
+| Drehen quer → hoch | 0 (vorher 3) | – |
+| App-Übersicht → zurück | 14–17 Bilder: Androids Zoom-Bild (YouTube-Fenster wird in Kartengrösse [190,340][890,1911] gemeldet, erst ~330 ms später in voller Grösse). Niklas: "sieht perfekt aus" – so gelassen. | – |
+
+Fehlalarme von `avs`: pinke/rote Video-Inhalte (z. B. Werbung mit Brille, Kleider) direkt über der Leiste – Bilder immer
+ansehen. Nicht getestet: Werbung → Google Play (in 16 Wischern kam keine Werbung mit "Installieren"), Tablet.
+Test-Falle: Tipps auf eine Video-Karte trafen 2× die Werbung darüber (Liste verschiebt sich, Chrome ging auf, mit
+Zurück geschlossen) → nach dem Wischen 2 s warten und erst dann das Referenzfoto für `tapif` machen.

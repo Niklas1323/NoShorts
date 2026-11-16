@@ -106,3 +106,14 @@ scrollmix() { local n=$1; ytfront || return 1; live $n; recstart ${2:-26}; sleep
 tabgo() { barshow >/dev/null || { echo "LEISTE NICHT DA"; return 1; }; bartap $1 >/dev/null; sleep 3; adb shell input swipe 300 700 300 1900 150; sleep 2; }
 barshow() { for i in 1 2 3; do barok && return 0; ytfront || return 1; adb shell input swipe 120 900 120 1500 150; sleep 1.5; done; barok; }
 tabgo() { barshow >/dev/null || { echo "LEISTE NICHT DA"; return 1; }; bartap $1 >/dev/null; sleep 3; adb shell input swipe 120 700 120 1900 150; sleep 2; }
+# scrolllong NAME: ~65 s, viel Stillstehen (Videos in der Liste laufen an, YouTube zeigt seine Leiste evtl. von selbst)
+scrolllong() { local n=$1; ytfront || return 1; live $n; recstart 70; sleep 0.5
+  sw() { adb shell input swipe 300 $1 300 $2 $3; sleep $4; }
+  sw 1700 900 150 6; sw 1700 900 150 7; sw 1300 1500 400 5; sw 1500 1250 400 6; sw 900 1500 150 6
+  sw 1700 900 150 4; sw 1600 1200 1200 5; sw 1200 1600 1200 6; sw 1700 900 150 8; sw 900 1500 150 4
+  recpull $n >/dev/null; local e=$(avs $n | grep "^E"); echo "${e:-keine echte Leiste}"
+  echo "runter/herein: $(grep -a 'Leiste:' rec/$n.log | grep -cE 'fährt runter|unsere mit') / $(grep -a 'Leiste:' rec/$n.log | grep -cE 'herein|sofort')"; }
+# vt2 NAME METHODE X Y: auf der aktuellen Seite (Referenzfoto) Video antippen, 5 s, verlassen, auswerten
+vt2() { local n=$1 m=$2 x=$3 y=$4; ytfront || return 1; adb exec-out screencap -p > rec/${n}_r.png; live $n; recstart 13; sleep 0.5; tapif ${n}_r $x $y || { recpull $n >/dev/null; return 1; }; sleep 5; ytfront || return 1
+  case $m in back) adb shell input keyevent KEYCODE_BACK;; edge) adb shell input swipe 3 1300 600 1300 150;; down) adb shell input swipe 540 450 540 1800 200;; esac
+  sleep 3.5; recpull $n >/dev/null; local e=$(avs $n | grep '^E'); echo "$n $m: ${e:-keine echte Leiste}"; }
