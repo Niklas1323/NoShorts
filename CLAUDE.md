@@ -1089,3 +1089,40 @@ echte zeigt, geht so nicht. Unsere bleibt darum beim Scrollen stehen.
 - Kamera öffnen: "YouTube nicht mehr aktiv" kommt ~30 ms vor der Kamera-Meldung, aber 3–4 Bilder zu früh (echte
   sichtbar) – nicht verwenden. Kamera-Meldung + 40 ms passt.
 - Kamera X: Android meldet das Fenster sofort als entfernt, die Kamera ist aber noch ~130 ms zu sehen.
+
+### 15./16.11.2026, Abend/Nacht (Terminal, Pixel, Benutzer Leon) – Höhe, Werbe-Menü, Scrollen wie das Original
+Wünsche von Niklas: "Leiste ist höher geworden – nur ein ganz kleines bisschen höher als das Original", Werbe-Menü
+("Mein Anzeigen-Center") verbessern, **Scrollen wie das Original** ("smooth runter und hoch, nie ohne Grund runter,
+echte nie sehen").
+
+| Test | vorher | nachher | behoben? |
+|---|---|---|---|
+| Höhe hochkant | unsere 65 px höher als die echte (falsch gelernte Ruhelage, gleiche Unterkante, Oberkante zu hoch) | 2 dp (5 px) höher als die echte (`TOP_EXTRA_DP`, Inhalt um diesen Rand tiefer); grössere/höhere Lage gilt erst nach 1,5 s, zu gross gelernte korrigiert sich nach 3 s Ruhe (`shorterRest`) | ja |
+| Werbe-Menü öffnen | unsere 4–5 Bilder hell über dem Panel | 2–3 Bilder (Panel wird gleich nach der Berührung jedes Bild gesucht, `PANEL_PROBE_MS`; Verstecken stellt die Fenster-Flags erst im nächsten Bild um) | grösstenteils |
+| Werbe-Menü schliessen | Leiste fehlte, kam stockend und hell | kommt abgedunkelt (50 %) und hellt im Takt der Seite auf (`showFromDim`, `PANEL_BRIGHTEN_MS` 90), Abweichung 0–2 Bilder | ja |
+| Scrollen schnell runter | unsere blieb stehen | fährt mit der echten weg (200 ms, Start sanft) | ja |
+| Scrollen hoch | – | Richtung im eigenen Thread (alle 8 ms ein Listen-Element nachsehen) → Hochwischen nach 36–60 ms erkannt, unsere ist vor der echten oben | ja |
+| Langsam scrollen | – | unsere bleibt stehen (die echte auch) | ok |
+| Zurück-Taste, während weggescrollt | 13–16 Bilder echte | 0 Bilder (4/4): eigener Thread fragt alle 25 ms nur die Leiste ab (`startPresenceProbe`), keine volle Suche solange weggescrollt und niemand berührt | ja |
+| Gemischtes Scrollen 26 s (12 Wischer) | – | Startseite 2/2, Abos 2/2 (hell+dunkel), Du 1/1: 0 Bilder echte | ok |
+
+**Wie YouTube 21.45 seine Leiste beim Scrollen bewegt (gemessen mit unsichtbarer eigener Leiste, `FShortsGhost`):**
+- Schnell runter: ~3 Bilder nach Beginn ist sie weg (2277→2283→weg), oft gleich ganz aus der Oberfläche genommen.
+- Hoch: kommt ~80 ms nach dem Fingerauflegen, fährt in ~10 Bildern hoch (2342, 2318, 2295 … 2217). Meldungen dazu
+  kommen erst >100 ms später, und YouTube antwortet in der Zeit kaum auf Abfragen → darum der eigene Thread.
+- Langsam: bleibt stehen.
+- Auf "Mein YouTube" blendet YouTube sie beim Scrollen nicht aus → unsere bleibt dort stehen.
+
+**Wichtige Erkenntnisse:**
+- Jede Abfrage an YouTube während des Scrollens kann den Haupt-Thread 0,1–1 s anhalten → Animation stand still. Darum
+  während `isScrollMoving` (+150 ms) keine Scans/Abfragen (`drawPending`, `scanRunnable`).
+- Profilbild nicht während/kurz nach dem Scrollen abschauen (`SAMPLE_CALM_MS`): einmal wurde ein fremdes Bild ("17")
+  als Profilbild übernommen.
+- Mess-Hilfen (nur Test-Versionen, `adb shell setprop log.tag.X VERBOSE`): `FShortsTrace` (Meldungen, Richtung,
+  Zustand), `FShortsTraceYT` (YouTubes Inhalts-Meldungen), `FShortsMeasure` (Lage der echten jedes Bild),
+  `FShortsGhost` (unsere unsichtbar zeichnen, um YouTube allein aufzunehmen). Danach wieder `INFO` setzen.
+- Test-Fallen: `avs` (in `tools/pixel-test/leon.sh` nachtragen) zählt nur die Farbe von Leons Profilbild an der Stelle
+  der echten (x 900–990); rosa Inhalt (Kleider, Werbung) löst sonst falsch aus. Tipps mitten in die Liste trafen 2× eine
+  Werbung (Chrome ging auf, mit Zurück geschlossen) → Wischer am Rand (x 120–300).
+- Bekannt (vorher verworfen, jetzt gelöst): YouTube zeigt seine Leiste manchmal ohne Wischen wieder (z. B. Zurück-Taste,
+  Seitenwechsel). Das merkt jetzt `startPresenceProbe`.

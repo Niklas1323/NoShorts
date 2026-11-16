@@ -78,3 +78,31 @@ lum() { local n=$1; ffmpeg -loglevel fatal -y -i rec/$n.mp4 -fps_mode passthroug
   paste -d' ' <(grep -oE 'pts_time:[0-9.]+' rec/_l1.txt | cut -d: -f2) <(grep -oE 'YAVG=[0-9.]+' rec/_l1.txt | cut -d= -f2) <(grep -oE 'YAVG=[0-9.]+' rec/_l2.txt | cut -d= -f2) <(grep -oE 'YAVG=[0-9.]+' rec/_l3.txt | cut -d= -f2) | awk '{printf "%d %.3f %.1f %.1f %.1f\n", NR-1,$1,$2,$3,$4}' > rec/lum_$n.txt; }
 # lumch NAME: nur Bilder zeigen, in denen sich die Helligkeit ändert
 lumch() { awk '{d=($3-p3)+($4-p4)+($5-p5); if(d<0)d=-d; if(NR>1 && d>0.25) printf "%d(%.2f): %s %s %s\n",$1,$2,$3,$4,$5; p3=$3;p4=$4;p5=$5}' rec/lum_$1.txt; }
+# etrack NAME [E|U]: Oberkante des Profilbilds pro Bild über das ganze Video, nur Änderungen ("-" = nicht da). E=echte (x911), U=unsere (x640)
+etrack() { local n=$1 w=${2:-E} x=911 m="255*gt(r(X,Y),150)*lt(g(X,Y),70)*gt(b(X,Y),55)*lt(b(X,Y),135)"; [ "$w" = U ] && x=640
+  ffmpeg -loglevel fatal -y -i rec/$n.mp4 -fps_mode passthrough -vf "crop=70:207:$x:2217,format=gbrp,geq=r='$m':g='$m':b='$m',scale=1:207:flags=area,format=gray" -f rawvideo - | od -An -v -tu1 -w207 | awk '{y="-"; for(i=1;i<=NF;i++) if($i>50){y=2217+i-1;break} print NR-1, y}' > rec/et_${n}_$w.txt
+  paste -d' ' <(cut -d' ' -f2 rec/av_$n.txt 2>/dev/null) rec/et_${n}_$w.txt | awk '{ if($3!=p){printf "%d(%s):%s ", $2,$1,$3; p=$3} } END{print ""}'; }
+# scrollmix NAME: gemischte Wischer (schnell/langsam/kurz, runter/hoch), Aufnahme + Auswertung
+scrollmix() { local n=$1; ytfront || return 1; live $n; recstart ${2:-26}; sleep 0.5
+  sw() { adb shell input swipe 540 $1 540 $2 $3; sleep $4; }
+  sw 1700 900 150 2; sw 900 1500 150 2; sw 1700 900 150 1.5; sw 1100 1600 900 2; sw 1700 900 150 1; sw 1700 900 150 1
+  sw 1300 1500 120 2; sw 1500 1300 120 2; sw 900 1500 150 2; sw 1600 1100 900 2; sw 1100 1600 900 2; sw 1700 900 150 2
+  recpull $n >/dev/null; avs $n | grep -E "^E" ; echo "E-Abschnitte: $(grep -c . /dev/null)"; }
+# avs NAME: genauer für Scroll-Tests: nur Spalte des echten Profilbilds (x900-990), Farbe eng um (194,23,91); E ab 2 % der Fläche
+avs() { local n=$1 m="255*gt(r(X,Y),165)*lt(r(X,Y),225)*lt(g(X,Y),50)*gt(b(X,Y),70)*lt(b(X,Y),115)"
+  ffmpeg -loglevel fatal -y -i rec/$n.mp4 -fps_mode passthrough -filter_complex "[0:v]split=2[a][b];[a]crop=90:207:900:2217,format=gbrp,geq=r='$m':g='$m':b='$m',format=gray,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=rec/_a1.txt[ao];[b]crop=70:70:640:2241,format=gbrp,geq=r='$m':g='$m':b='$m',format=gray,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=rec/_a2.txt[bo]" -map "[ao]" -f null - -map "[bo]" -f null -
+  paste -d' ' <(grep -oE 'pts_time:[0-9.]+' rec/_a1.txt | cut -d: -f2) <(grep -oE 'YAVG=[0-9.]+' rec/_a1.txt | cut -d= -f2) <(grep -oE 'YAVG=[0-9.]+' rec/_a2.txt | cut -d= -f2) | awk '{printf "%d %.3f %.4f %.2f\n", NR-1, $1, $2/255, $3/255}' > rec/av_$n.txt
+  avsum $n 0.12 0.02; }
+# barok neu: unser Profilbild (magenta) muss an seiner festen Stelle stehen (Leiste ganz da, nicht weggescrollt)
+barok() { adb exec-out screencap -p > rec/_b.png; local m="255*gt(r(X,Y),165)*lt(r(X,Y),225)*lt(g(X,Y),50)*gt(b(X,Y),70)*lt(b(X,Y),115)"; local v=$(ffmpeg -hide_banner -i rec/_b.png -vf "crop=50:50:650:2251,format=gbrp,geq=r='$m':g='$m':b='$m',format=gray,signalstats,metadata=print:key=lavfi.signalstats.YAVG" -f null - 2>&1 | grep -oE 'YAVG=[0-9.]+' | cut -d= -f2); awk -v v="${v:-0}" 'BEGIN{exit !(v>100)}'; }
+# barshow: Liste hochwischen, bis unsere Leiste ganz da ist (höchstens 3×)
+barshow() { for i in 1 2 3; do barok && return 0; ytfront || return 1; adb shell input swipe 540 900 540 1500 150; sleep 1.5; done; barok; }
+scrollmix() { local n=$1; ytfront || return 1; live $n; recstart ${2:-26}; sleep 0.5
+  sw() { adb shell input swipe 300 $1 300 $2 $3; sleep $4; }
+  sw 1700 900 150 2; sw 900 1500 150 2; sw 1700 900 150 1.5; sw 1100 1600 900 2; sw 1700 900 150 1; sw 1700 900 150 1
+  sw 1300 1500 120 2; sw 1500 1300 120 2; sw 900 1500 150 2; sw 1600 1100 900 2; sw 1100 1600 900 2; sw 1700 900 150 2
+  recpull $n >/dev/null; local e=$(avs $n | grep "^E"); echo "${e:-keine echte Leiste}"
+  echo "unsere weg/herein: $(grep -a 'Leiste:' rec/$n.log | grep -cE 'fährt runter|unsere mit') / $(grep -a 'Leiste:' rec/$n.log | grep -cE 'herein|sofort')"; }
+tabgo() { barshow >/dev/null || { echo "LEISTE NICHT DA"; return 1; }; bartap $1 >/dev/null; sleep 3; adb shell input swipe 300 700 300 1900 150; sleep 2; }
+barshow() { for i in 1 2 3; do barok && return 0; ytfront || return 1; adb shell input swipe 120 900 120 1500 150; sleep 1.5; done; barok; }
+tabgo() { barshow >/dev/null || { echo "LEISTE NICHT DA"; return 1; }; bartap $1 >/dev/null; sleep 3; adb shell input swipe 120 700 120 1900 150; sleep 2; }
