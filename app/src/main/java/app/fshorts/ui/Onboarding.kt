@@ -547,7 +547,12 @@ private fun FakeSwitch() {
  * Console neu abgeben und `Prefs.DISCLOSURE` hochzählen.
  */
 @Composable
-fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
+fun Disclosure(
+    collapsible: Boolean = false,
+    textColor: Color = Color.White,
+    background: Color = Color.Black.copy(alpha = 0.35f),
+    border: Color = Color.White.copy(alpha = 0.08f),
+) {
     var expanded by remember { mutableStateOf(!collapsible) }
     val sub = textColor.copy(alpha = 0.8f)
     val shape = RoundedCornerShape(18.dp)
@@ -555,8 +560,8 @@ fun Disclosure(collapsible: Boolean = false, textColor: Color = Color.White) {
         Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Color.Black.copy(alpha = 0.35f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
+            .background(background)
+            .border(1.dp, border, shape)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {

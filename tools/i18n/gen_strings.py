@@ -521,6 +521,11 @@ s("bar_modern", "Modern", "Modern", "Moderne", "Moderna", "Moderna", "Moderna")
 s("bar_modern_desc", "Icons only, like YouTube's new design: Home, You, Plus", "Nur Symbole wie im neuen YouTube-Design: Startseite, Du, Plus",
   "Icônes seules, comme le nouveau design de YouTube : Accueil, Vous, Plus", "Solo icone, come il nuovo design di YouTube: Home, Tu, Più",
   "Solo iconos, como el nuevo diseño de YouTube: Inicio, Tú, Más", "Só ícones, como o novo design do YouTube: Início, Você, Mais")
+s("bar_label_home", "Home", "Startseite", "Accueil", "Home", "Inicio", "Início")
+s("bar_label_subscriptions", "Subscriptions", "Abos", "Abonnements", "Iscrizioni", "Suscripciones", "Inscrições")
+s("bar_label_you", "You", "Du", "Vous", "Tu", "Tú", "Você")
+s("stat_shorts", "Shorts blocked", "Shorts blockiert", "Shorts bloqués", "Shorts bloccati", "Shorts bloqueados", "Shorts bloqueados")
+s("stat_time", "Time saved", "Zeit gespart", "Temps gagné", "Tempo risparmiato", "Tiempo ahorrado", "Tempo economizado")
 
 s("section_about", "ABOUT", "INFO", "À PROPOS", "INFO", "ACERCA DE", "SOBRE")
 s("rate_app", "Rate the app", "App bewerten", "Noter l'appli", "Valuta l'app", "Valorar la app", "Avaliar o app")

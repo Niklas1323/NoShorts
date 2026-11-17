@@ -146,7 +146,7 @@ private enum class Screen { Home, Settings, Privacy }
 
 /** Leiste unten: Status, Settings, Pro. Pro ist keine Seite, sondern öffnet immer unsere Superwall-Paywall. */
 @Composable
-fun HomeApp(state: HomeState, actions: HomeActions) {
+fun HomeApp(state: HomeState, actions: HomeActions, onDesignV2: (() -> Unit)? = null) {
     // Saveable: Sprachwechsel baut die Seite neu auf, man bleibt in den Einstellungen.
     var screen by rememberSaveable { mutableStateOf(Screen.Home) }
     BackHandler(enabled = screen != Screen.Home) {
@@ -166,7 +166,7 @@ fun HomeApp(state: HomeState, actions: HomeActions) {
             ) { s ->
                 when (s) {
                     Screen.Home -> HomeScreen(state, actions)
-                    Screen.Settings -> SettingsScreen(state, actions, onPrivacy = { screen = Screen.Privacy })
+                    Screen.Settings -> SettingsScreen(state, actions, onPrivacy = { screen = Screen.Privacy }, onDesignV2 = onDesignV2)
                     Screen.Privacy -> PrivacyScreen(onBack = { screen = Screen.Settings })
                 }
             }
@@ -422,14 +422,14 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
 
 /** Sprüche, die vom Ausschalten abhalten sollen (`shorts_quotes` in den Sprachdateien). */
 @Composable
-private fun randomQuote(): String {
+internal fun randomQuote(): String {
     val quotes = stringArrayResource(R.array.shorts_quotes)
     val index = remember { quotes.indices.random() }
     return quotes[index]
 }
 
 /** "Das wirfst du weg": Tag seit Beginn plus eigene Zahlen im Ausschalt-Fenster. */
-private fun progressLine(res: Resources, shortsClosed: Int, startedAt: Long, now: Long): String {
+internal fun progressLine(res: Resources, shortsClosed: Int, startedAt: Long, now: Long): String {
     val ref = if (now > 0L) now else System.currentTimeMillis()
     val day = if (startedAt <= 0L) 1 else ((ref - startedAt).coerceAtLeast(0L) / 86_400_000L + 1).toInt()
     val dayLine = when {
@@ -451,7 +451,7 @@ private fun progressLine(res: Resources, shortsClosed: Int, startedAt: Long, now
     return "$dayLine $blocked"
 }
 
-private fun countdown(ms: Long): String {
+internal fun countdown(ms: Long): String {
     val total = (ms + 999) / 1000
     val h = total / 3600
     val m = (total % 3600) / 60
@@ -756,7 +756,7 @@ private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit, or
 
 
 /** Schätzung: Wer in einem Short landet, bleibt im Schnitt ein paar Minuten hängen. */
-private fun duration(res: Resources, shortsClosed: Int): String {
+internal fun duration(res: Resources, shortsClosed: Int): String {
     val minutes = shortsClosed * 3 / 2
     return if (minutes >= 60) {
         res.getString(R.string.dur_hours_minutes, minutes / 60, minutes % 60)
@@ -765,7 +765,7 @@ private fun duration(res: Resources, shortsClosed: Int): String {
     }
 }
 
-private fun timeSaved(res: Resources, shortsClosed: Int): String =
+internal fun timeSaved(res: Resources, shortsClosed: Int): String =
     res.getString(R.string.approx, duration(res, shortsClosed))
 
 @Composable
@@ -847,7 +847,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: () -> Unit) {
+private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: () -> Unit, onDesignV2: (() -> Unit)? = null) {
     val p = LocalPalette.current
     var redeemOpen by remember { mutableStateOf(false) }
     var languageOpen by remember { mutableStateOf(false) }
@@ -988,6 +988,11 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
             Icon(Icons.Outlined.RestartAlt, null, tint = p.text, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.run_setup_again), color = p.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+        if (onDesignV2 != null) {
+            // Nur Test-Versionen: zum neuen Design (V2).
+            Spacer(Modifier.height(12.dp))
+            GlassCard(padding = 0.dp) { LinkRow(Icons.Outlined.RestartAlt, "Design V2 (Test)", null, onDesignV2) }
         }
         Spacer(Modifier.height(20.dp))
     }

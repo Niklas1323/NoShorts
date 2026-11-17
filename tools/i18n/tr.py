@@ -137,6 +137,11 @@ TR = {
     "bar_classic_desc": "Yazılı simgeler: Ana Sayfa, Abonelikler, Siz, Artı",
     "bar_modern": "Modern",
     "bar_modern_desc": "Yalnızca simgeler, YouTube'un yeni tasarımı gibi: Ana Sayfa, Siz, Artı",
+    "bar_label_home": "Ana Sayfa",
+    "bar_label_subscriptions": "Abonelikler",
+    "bar_label_you": "Siz",
+    "stat_shorts": "Engellenen Shorts",
+    "stat_time": "Kazanılan zaman",
     "theme_light":
  "Açık",
     "section_about": "HAKKINDA",

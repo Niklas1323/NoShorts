@@ -21,6 +21,8 @@ object Prefs {
     private const val MENU_DIM = "menu_dim"
     private const val BAR_STATE = "bar_state"
     private const val UPDATE_SNOOZED = "update_snoozed_at"
+    /** Nur Test-Versionen: altes Design V1 statt V2 (zum Vergleichen). */
+    private const val DESIGN_V1 = "design_v1"
     /** Leisten-Stil in YouTube (siehe [barModern]). Öffentlich, damit der Dienst Änderungen sofort mitbekommt. */
     const val BAR_LAYOUT = "bar_layout"
 
@@ -103,6 +105,9 @@ object Prefs {
     fun setBarState(context: Context, value: String) = prefs(context).edit().putString(BAR_STATE, value).apply()
 
     /** "Später" beim Update-Hinweis (Uhrzeit ms). */
+    fun designV1(context: Context) = prefs(context).getBoolean(DESIGN_V1, false)
+    fun setDesignV1(context: Context, on: Boolean) = prefs(context).edit().putBoolean(DESIGN_V1, on).apply()
+
     fun updateSnoozedAt(context: Context) = prefs(context).getLong(UPDATE_SNOOZED, 0L)
     fun setUpdateSnoozedAt(context: Context, at: Long) = prefs(context).edit().putLong(UPDATE_SNOOZED, at).apply()
 }

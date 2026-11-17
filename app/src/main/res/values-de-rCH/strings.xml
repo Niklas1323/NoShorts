@@ -141,6 +141,8 @@
     <string name="bar_label_home">Startseite</string>
     <string name="bar_label_subscriptions">Abos</string>
     <string name="bar_label_you">Du</string>
+    <string name="stat_shorts">Shorts blockiert</string>
+    <string name="stat_time">Zeit gespart</string>
     <string name="section_about">INFO</string>
     <string name="rate_app">App bewerten</string>
     <string name="privacy_permissions">Datenschutz &amp; Berechtigungen</string>

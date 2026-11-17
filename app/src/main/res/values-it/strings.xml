@@ -141,6 +141,8 @@
     <string name="bar_label_home">Home</string>
     <string name="bar_label_subscriptions">Iscrizioni</string>
     <string name="bar_label_you">Tu</string>
+    <string name="stat_shorts">Shorts bloccati</string>
+    <string name="stat_time">Tempo risparmiato</string>
     <string name="section_about">INFO</string>
     <string name="rate_app">Valuta l\'app</string>
     <string name="privacy_permissions">Privacy e autorizzazioni</string>

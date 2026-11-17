@@ -272,7 +272,7 @@ private fun App() {
         } else if (target == 1) {
             ExpiredScreen(onResubscribe = { showPaywall() }, onRestore = restore, onRedeem = redeem)
         } else {
-            HomeApp(
+            HomeUi(
                 HomeState(
                     enabled = enabled,
                     shortsClosed = shortsClosed,
@@ -406,5 +406,34 @@ private fun openUrl(context: Context, url: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     } catch (e: ActivityNotFoundException) {
         Toast.makeText(context, R.string.link_failed, Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * Startseite im gewählten Design: V2 (17.11.2026, Standard) oder V1 (bis 0494956). Umschalten nur in Test-Versionen
+ * (Einstellungen ganz unten), zum Vergleichen; die Play-Store-Version zeigt immer V2.
+ */
+@Composable
+private fun HomeUi(state: HomeState, actions: HomeActions) {
+    val context = LocalContext.current
+    var designV1 by remember { mutableStateOf(BuildConfig.DEBUG && Prefs.designV1(context)) }
+    if (designV1) {
+        HomeApp(state, actions, onDesignV2 = if (BuildConfig.DEBUG) {
+            {
+                designV1 = false
+                Prefs.setDesignV1(context, false)
+            }
+        } else {
+            null
+        })
+    } else {
+        app.fshorts.ui.HomeAppV2(state, actions, onDesignV1 = if (BuildConfig.DEBUG) {
+            {
+                designV1 = true
+                Prefs.setDesignV1(context, true)
+            }
+        } else {
+            null
+        })
     }
 }

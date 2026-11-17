@@ -141,6 +141,8 @@
     <string name="bar_label_home">Ana Sayfa</string>
     <string name="bar_label_subscriptions">Abonelikler</string>
     <string name="bar_label_you">Siz</string>
+    <string name="stat_shorts">Engellenen Shorts</string>
+    <string name="stat_time">Kazanılan zaman</string>
     <string name="section_about">HAKKINDA</string>
     <string name="rate_app">Uygulamayı değerlendir</string>
     <string name="privacy_permissions">Gizlilik ve izinler</string>
