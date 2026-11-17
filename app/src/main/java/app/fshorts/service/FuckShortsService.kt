@@ -320,9 +320,15 @@ class FuckShortsService : AccessibilityService() {
         // 0,25–0,4 s auf, genau wenn die echte wiederkam (gemessen 15./16.11.: bis 16 Bilder echte Leiste). Die Rückkehr
         // merken die zwei Prüfungen im eigenen Thread (Richtung, startPresenceProbe). Nur wenn ein anderes Fenster vorne
         // ist (Fensterliste vom System, keine Abfrage an YouTube), doch suchen.
+        // Ausser eine Tastatur ist aufgegangen (Tipp auf die Lupe galt sonst als Wischen, die Tastatur wurde nie bemerkt
+        // und nach "Suchen" kam unsere ~15 Bilder zu spät, gemessen 17.11.).
         if (!isTablet && overlay.isScrolledAway && youTubeActive && lastNavAt < lastTouchAt && presenceRunning &&
-            windows.firstOrNull { it.isActive }?.id == barWindowId
+            windows.let { w ->
+                w.firstOrNull { it.isActive }?.id == barWindowId &&
+                    w.none { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+            }
         ) {
+
             handler.postDelayed({ scheduleScan() }, SCROLL_SCAN_RETRY_MS)
             return@Runnable
         }
@@ -1003,7 +1009,7 @@ class FuckShortsService : AccessibilityService() {
         if (dy < 0 && overlay.isScrolledAway && youTubeActive) {
             realGoneByScroll = false
             reason("Hochwischen, unsere fährt herein")
-            overlay.scrollBack(SCROLL_BACK_MS)
+            overlay.scrollBack(scrollBackMs())
         }
         // Weggescrollt: Die Rückkehr merken die Hintergrund-Prüfungen; eine Abfrage hier hielt beim Wischen alles auf.
         if (youTubeActive && !(overlay.isScrolledAway && presenceRunning)) updateBar(SystemClock.uptimeMillis(), null)
@@ -1067,7 +1073,7 @@ class FuckShortsService : AccessibilityService() {
                         lastUpScrollAt = SystemClock.uptimeMillis()
                         realGoneByScroll = false
                         reason("Hochwischen erkannt (Inhalt $moved px runter), unsere fährt herein")
-                        overlay.scrollBack(SCROLL_BACK_MS)
+                        overlay.scrollBack(scrollBackMs())
                         if (trace) {
                             Log.d(TAG, "Zustand: ${overlay.debugState()}")
                             handler.postDelayed({ Log.d(TAG, "Zustand +100: ${overlay.debugState()}") }, 100)
@@ -1199,6 +1205,14 @@ class FuckShortsService : AccessibilityService() {
      * Die echte fährt gerade wegen Wischen raus: Finger kurz vorher aufgelegt, seither kein Tipp (Klick). YouTube nimmt
      * die Leiste beim schnellen Wischen oft schon weg, bevor es "gescrollt" meldet – darum zählt die Berührung.
      */
+    /**
+     * Hochwischen erkannt: so schnell fährt unsere herein. YouTubes Leiste beginnt ~80 ms nach dem Fingerauflegen
+     * hochzufahren. Kam die Erkennung so spät (YouTube antwortete beim Wischen langsam), springt unsere sofort ganz
+     * hinein, sonst sah man 2–3 Bilder die hochfahrende echte (gemessen 17.11.).
+     */
+    private fun scrollBackMs(): Long =
+        if (SystemClock.uptimeMillis() - lastTouchAt >= SCROLL_BACK_LATE_MS) 0L else SCROLL_BACK_MS
+
     private fun touchScrollNow(now: Long): Boolean =
         now - lastTouchAt < SCROLL_TOUCH_MS && lastNavAt < lastTouchAt && !watchPageOpen && lastUpScrollAt < lastTouchAt
 
@@ -2603,8 +2617,12 @@ class FuckShortsService : AccessibilityService() {
                 return
             }
             val otherApp = frontPkg != null && frontPkg != selectors.youtubePackage && frontPkg != packageName
-            if (!otherApp && now - lastNavAt < NAV_LINK_MS && now - createTappedAt > CREATE_HOLD_MS) hideSmooth() else hideAll()
+            // Andere App (Google Play, Chrome …) oder anderes Fenster vorne: YouTubes Leiste liegt darunter unverändert,
+            // der Spiegel bleibt (sonst sah man sie unter Plays halbdurchsichtigem Blatt, gemessen 17.11.: 10 + 7 Bilder).
+            if (!otherApp && now - lastNavAt < NAV_LINK_MS && now - createTappedAt > CREATE_HOLD_MS) hideSmooth()
+            else hideAll(keepMirror = otherApp || keepFail == "anderes Fenster vorne")
             return
+
         }
         // Taucht die echte Leiste gerade wieder auf oder fährt hoch (z. B. Video verlassen), steht unsere
         // sofort ganz da. So kommt die echte nie zuerst.
@@ -3589,6 +3607,8 @@ class FuckShortsService : AccessibilityService() {
         /** Scrollen: unsere fährt in so vielen ms raus (die echte braucht ~50) bzw. wieder herein (die echte ~170). */
         private const val SCROLL_AWAY_MS = 200L
         private const val SCROLL_BACK_MS = 90L
+        private const val SCROLL_BACK_LATE_MS = 70L
+
         private const val DIR_PROBE_MS = 450L
         private const val DIR_PROBE_DP = 6f
         private const val DIR_PROBE_STEP_MS = 8L
