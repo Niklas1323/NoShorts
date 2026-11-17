@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
 private fun App() {
     val context = LocalContext.current
     var themeMode by remember { mutableIntStateOf(Prefs.themeMode(context)) }
+    var barModern by remember { mutableStateOf(Prefs.barModern(context)) }
     var enabled by remember { mutableStateOf(isServiceEnabled(context)) }
     var accepted by remember { mutableStateOf(Prefs.disclosureAccepted(context)) }
     var onboardingDone by remember { mutableStateOf(Prefs.onboardingDone(context)) }
@@ -278,6 +279,7 @@ private fun App() {
                     isPro = isPro,
                     promo = promo,
                     themeMode = themeMode,
+                    barModern = barModern,
                     version = BuildConfig.VERSION_NAME,
                     paused = paused,
                     unlockAt = unlockAt,
@@ -294,6 +296,11 @@ private fun App() {
                         themeMode = it
                         Prefs.setThemeMode(context, it)
                     },
+                    setBarModern = {
+                        barModern = it
+                        Prefs.setBarModern(context, it)
+                    },
+
                     showPaywall = { showPaywall() },
                     proTab = {
                         when {

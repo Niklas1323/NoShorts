@@ -511,6 +511,17 @@ s("section_appearance", "APPEARANCE", "DARSTELLUNG", "APPARENCE", "ASPETTO", "AP
 s("theme_system", "System", "System", "Système", "Sistema", "Sistema", "Sistema")
 s("theme_dark", "Dark", "Dunkel", "Sombre", "Scuro", "Oscuro", "Escuro")
 s("theme_light", "Light", "Hell", "Clair", "Chiaro", "Claro", "Claro")
+s("section_bar", "YOUTUBE BAR", "LEISTE IN YOUTUBE", "BARRE YOUTUBE", "BARRA DI YOUTUBE", "BARRA DE YOUTUBE", "BARRA DO YOUTUBE")
+s("bar_widget", "Bar in YouTube", "Leiste in YouTube", "Barre dans YouTube", "Barra in YouTube", "Barra en YouTube", "Barra no YouTube")
+s("bar_classic", "Classic", "Klassisch", "Classique", "Classica", "Clásica", "Clássica")
+s("bar_classic_desc", "Icons with text: Home, Subscriptions, You, Plus", "Symbole mit Text: Startseite, Abos, Du, Plus",
+  "Icônes avec texte : Accueil, Abonnements, Vous, Plus", "Icone con testo: Home, Iscrizioni, Tu, Più",
+  "Iconos con texto: Inicio, Suscripciones, Tú, Más", "Ícones com texto: Início, Inscrições, Você, Mais")
+s("bar_modern", "Modern", "Modern", "Moderne", "Moderna", "Moderna", "Moderna")
+s("bar_modern_desc", "Icons only, like YouTube's new design: Home, You, Plus", "Nur Symbole wie im neuen YouTube-Design: Startseite, Du, Plus",
+  "Icônes seules, comme le nouveau design de YouTube : Accueil, Vous, Plus", "Solo icone, come il nuovo design di YouTube: Home, Tu, Più",
+  "Solo iconos, como el nuevo diseño de YouTube: Inicio, Tú, Más", "Só ícones, como o novo design do YouTube: Início, Você, Mais")
+
 s("section_about", "ABOUT", "INFO", "À PROPOS", "INFO", "ACERCA DE", "SOBRE")
 s("rate_app", "Rate the app", "App bewerten", "Noter l'appli", "Valuta l'app", "Valorar la app", "Avaliar o app")
 s("privacy_permissions", "Privacy & permissions", "Datenschutz & Berechtigungen", "Confidentialité et autorisations",

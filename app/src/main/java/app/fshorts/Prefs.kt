@@ -21,6 +21,8 @@ object Prefs {
     private const val MENU_DIM = "menu_dim"
     private const val BAR_STATE = "bar_state"
     private const val UPDATE_SNOOZED = "update_snoozed_at"
+    /** Leisten-Stil in YouTube (siehe [barModern]). Öffentlich, damit der Dienst Änderungen sofort mitbekommt. */
+    const val BAR_LAYOUT = "bar_layout"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -64,7 +66,16 @@ object Prefs {
     fun promoUnlocked(context: Context) = prefs(context).getBoolean(PROMO, false)
     fun setPromoUnlocked(context: Context, on: Boolean) = prefs(context).edit().putBoolean(PROMO, on).apply()
 
+    /** Leisten-Stil: false = klassisch (Symbole mit Text, 4 Knöpfe, Standard), true = modern (nur Symbole, 3 Knöpfe). */
+    fun barModern(context: Context) = prefs(context).getInt(BAR_LAYOUT, 0) == 1
+    fun setBarModern(context: Context, on: Boolean) = prefs(context).edit().putInt(BAR_LAYOUT, if (on) 1 else 0).apply()
+
+    /** Änderungen mitbekommen (der Dienst läuft im selben Prozess). Den Listener selbst festhalten (schwache Referenz). */
+    fun registerListener(context: Context, listener: android.content.SharedPreferences.OnSharedPreferenceChangeListener) =
+        prefs(context).registerOnSharedPreferenceChangeListener(listener)
+
     /** 0 = wie das Handy, 1 = dunkel, 2 = hell. */
+
     fun themeMode(context: Context) = prefs(context).getInt(THEME_MODE, 0)
     fun setThemeMode(context: Context, mode: Int) = prefs(context).edit().putInt(THEME_MODE, mode).apply()
 

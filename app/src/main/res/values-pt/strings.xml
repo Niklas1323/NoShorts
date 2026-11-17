@@ -132,6 +132,12 @@
     <string name="theme_system">Sistema</string>
     <string name="theme_dark">Escuro</string>
     <string name="theme_light">Claro</string>
+    <string name="section_bar">BARRA DO YOUTUBE</string>
+    <string name="bar_widget">Barra no YouTube</string>
+    <string name="bar_classic">Clássica</string>
+    <string name="bar_classic_desc">Ícones com texto: Início, Inscrições, Você, Mais</string>
+    <string name="bar_modern">Moderna</string>
+    <string name="bar_modern_desc">Só ícones, como o novo design do YouTube: Início, Você, Mais</string>
     <string name="section_about">SOBRE</string>
     <string name="rate_app">Avaliar o app</string>
     <string name="privacy_permissions">Privacidade e permissões</string>

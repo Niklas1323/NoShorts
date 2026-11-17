@@ -26,7 +26,10 @@ data class BarStyle(
     val icons: Map<String, ImageBitmap>,
     /** Tablet (ab 600 dp): grössere Symbole und Schrift, enger Block in der Mitte, Trennlinie oben (wie YouTube dort). */
     val tablet: Boolean = false,
+    /** Moderne Leiste (Einstellung): nur Symbole, drei Knöpfe wie YouTubes neues Design. Sonst klassisch mit Text. */
+    val modern: Boolean = false,
 ) {
+
     companion object {
         // Feste, deckende Farben wie im Vorlagenbild. Unsere Leiste muss deckend sein, sonst scheint der
         // Shorts-Knopf der echten (durchsichtigen) Leiste durch.

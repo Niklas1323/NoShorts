@@ -60,6 +60,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.asAndroidPath
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -233,7 +237,15 @@ class BottomBarOverlay(
         }, FRAME_MS)
     }
 
+    /** Anderer Stil (z. B. klassisch ↔ modern in den Einstellungen): sofort so zeichnen. */
+    fun restyle(style: BarStyle) {
+        val s = uiState ?: return
+        if (s.style != style) uiState = s.copy(style = style)
+        mirrorDirty = true
+    }
+
     /** Beim Scrollen weggefahren: so viele Pixel steht der Inhalt tiefer (0 = ganz da). */
+
     private var scrollPx by mutableFloatStateOf(0f)
     private var scroller: android.animation.ValueAnimator? = null
     private var scrollTarget = 0f
@@ -955,17 +967,21 @@ class BottomBarOverlay(
 
     private fun makeTapHandler(): View.OnTouchListener = TapHandler(onTap = tap@{ x, width ->
         if (SystemClock.uptimeMillis() < ignoreTapsUntil) return@tap
+        // Klassisch 4 Spalten (Startseite, Abos, Mein YouTube, Plus), modern 3 (Startseite, Mein YouTube, Plus).
+        val columns = if (uiState?.style?.modern == true) MODERN_COLUMNS else COLUMNS
+        val n = columns.size
         val column = if (uiState?.style?.tablet == true) {
-            // Tablet: enger Block in der Mitte (4 Spalten à 96 dp). Ausserhalb: kein Knopf.
+            // Tablet: enger Block in der Mitte (Spalten à 96 dp). Ausserhalb: kein Knopf.
             val slot = TABLET_SLOT_DP * service.resources.displayMetrics.density
-            val start = (width - slot * 4) / 2f
+            val start = (width - slot * n) / 2f
             val c = Math.floor(((x - start) / slot).toDouble()).toInt()
-            if (c !in 0..3) return@tap
+            if (c !in 0 until n) return@tap
             c
         } else {
-            (x / width * 4).toInt().coerceIn(0, 3)
+            (x / width * n).toInt().coerceIn(0, n - 1)
         }
-        val kind = COLUMNS[column]
+        val kind = columns[column]
+
         if (kind != TabKind.CREATE || uiState?.hasCreate == true) {
             if (kind != TabKind.CREATE) {
                 optimistic = kind
@@ -1246,7 +1262,18 @@ private fun BottomBar(
         }
         // Tablet: Die echte Leiste hat enge Spalten (96 dp) als Block in der Mitte; auf dem Handy teilen sich vier
         // gleich breite Spalten die ganze Breite.
-        if (compactNav >= 0) CompactRow(
+        if (style.modern) {
+            // Moderne Leiste (Wahl in den Einstellungen): nur Symbole, drei Knöpfe.
+            if (compactNav >= 0) ModernCompactRow(
+                state = state,
+                height = (COMPACT_TOTAL_DP - COMPACT_HANDLE_DP).dp,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = duck
+                    scaleY = duck
+                },
+                spin = { sink.value },
+            ) else ModernRow(state, barHeight, topExtra, duck, spin = { sink.value })
+        } else if (compactNav >= 0) CompactRow(
             state = state,
             height = (COMPACT_TOTAL_DP - COMPACT_HANDLE_DP).dp,
             modifier = Modifier.graphicsLayer {
@@ -1547,4 +1574,255 @@ private val AVATAR_INSET = 2.5.dp
 @Composable
 private fun TabIcon(icon: ImageVector, tint: Color, size: androidx.compose.ui.unit.Dp = 24.dp) {
     Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// Moderne Leiste (Wahl in den Einstellungen): nur Symbole wie YouTubes neues Design, drei Knöpfe Startseite, Mein
+// YouTube, Plus (Abos gibt es dort nur oben als Reiter). Formen Pixel für Pixel von YouTube 21.45 abgemessen (Pixel 9,
+// Dichte 2,875, 17.11.2026): Symbol-Mitte 92,5 px unter der Oberkante, Haus 63 × 57 px, Plus-Kreis Ø 63 px mit 6 px
+// Rand und Kreuz 29 px / 5 px, Profilbild 69 px (gewählt: 6 px Ring, 3 px Abstand, Bild 51 px).
+// Alle Masse unten in px bei Dichte 2,875 (MODERN_PX), umgerechnet mit der Dichte des Geräts.
+// -------------------------------------------------------------------------------------------------------------------
+
+/** Symbol-Mitte unter der Oberkante der echten Leiste (dp). */
+internal const val MODERN_ICON_CENTER_DP = 32.17f
+/** Bezugsdichte der abgemessenen Pixelwerte. */
+private const val MODERN_PX = 2.875f
+
+/** Die drei Spalten der modernen Leiste, von links nach rechts. */
+internal val MODERN_COLUMNS = listOf(TabKind.HOME, TabKind.YOU, TabKind.CREATE)
+
+/**
+ * Haus wie YouTube: gefüllt (gewählt) oder als Umriss (5 px Strich, Tür als umgekehrtes U). Ecken leicht gerundet
+ * (~2,5 px). Erst die Einzelformen runden, dann abziehen: Rundet man das fertige Haus, verliert es seine Innenfläche.
+ */
+private fun modernHousePath(filled: Boolean, k: Float, cx: Float, cy: Float): android.graphics.Path {
+    fun poly(pts: List<Pair<Float, Float>>) = android.graphics.Path().apply {
+        pts.forEachIndexed { i, (x, y) ->
+            if (i == 0) moveTo(cx + x * k, cy + y * k) else lineTo(cx + x * k, cy + y * k)
+        }
+        close()
+    }
+    val rounder = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.FILL
+        pathEffect = android.graphics.CornerPathEffect(2.5f * k)
+    }
+    @Suppress("DEPRECATION")
+    fun round(p: android.graphics.Path) = android.graphics.Path().also { rounder.getFillPath(p, it) }
+    // Umriss aussen: Spitze, Dach, Traufe, Wände, Boden; gefüllt mit der Tür als Aussparung von unten.
+    val house = round(poly(listOf(
+        0f to -29.5f, 31.5f to -11.5f, 31.5f to -6.5f, 25.5f to -6.5f, 25.5f to 28.5f,
+        -25.5f to 28.5f, -25.5f to -6.5f, -31.5f to -6.5f, -31.5f to -11.5f,
+    )))
+    if (filled) {
+        // Tür eckig wie bei YouTube (11 px breit, ab 5,5 px unter der Mitte).
+        house.op(poly(listOf(-5.5f to 5.5f, 5.5f to 5.5f, 5.5f to 31f, -5.5f to 31f)), android.graphics.Path.Op.DIFFERENCE)
+        return house
+    }
+
+    // Innenraum (Strich 5 px) ohne den Türrahmen, dazu die Türöffnung durch den Boden.
+    val inner = round(poly(listOf(
+        0f to -23f, 20.5f to -10.5f, 20.5f to 22.5f, 8.5f to 22.5f, 8.5f to 2.5f,
+        -8.5f to 2.5f, -8.5f to 22.5f, -20.5f to 22.5f, -20.5f to -10.5f,
+    )))
+    val door = poly(listOf(-2.5f to 8.5f, 2.5f to 8.5f, 2.5f to 31f, -2.5f to 31f))
+    house.op(inner, android.graphics.Path.Op.DIFFERENCE)
+    house.op(door, android.graphics.Path.Op.DIFFERENCE)
+    return house
+}
+
+@Composable
+private fun ModernHome(selected: Boolean, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(26.dp)) {
+        val k = density / MODERN_PX
+        val path = modernHousePath(selected, k, size.width / 2f, size.height / 2f)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color.toArgb()
+            style = android.graphics.Paint.Style.FILL
+        }
+        drawContext.canvas.nativeCanvas.drawPath(path, paint)
+    }
+}
+
+/** Plus wie YouTube: Kreis (Rand 6 px) mit Kreuz. [spin] 0..1 = Plus getippt (wird grösser, dreht zum "×"). */
+@Composable
+private fun ModernPlus(color: Color, spin: () -> Float, modifier: Modifier = Modifier) {
+    Canvas(
+        modifier
+            .size(30.dp)
+            .graphicsLayer {
+                val p = spin()
+                scaleX = 1f + PLUS_GROW * p
+                scaleY = 1f + PLUS_GROW * p
+                rotationZ = PLUS_TURN * p
+            },
+    ) {
+        val k = density / MODERN_PX
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val p = spin().coerceIn(0f, 1f)
+        if (p > 0f) drawCircle(color.copy(alpha = PLUS_LIGHTEN * p), radius = 28.75f * k, center = c)
+        drawCircle(
+            color,
+            radius = 28.75f * k,
+            center = c,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f * k),
+        )
+        val arm = 12f * k
+        val w = 5f * k
+        drawLine(color, Offset(c.x - arm, c.y), Offset(c.x + arm, c.y), w, StrokeCap.Round)
+        drawLine(color, Offset(c.x, c.y - arm), Offset(c.x, c.y + arm), w, StrokeCap.Round)
+    }
+}
+
+/** Profilbild wie YouTube: 69 px rund; gewählt mit Ring (6 px) und Abstand (3 px) in der Farbe der Leiste. */
+@Composable
+private fun ModernAvatar(style: BarStyle, selected: Boolean, modifier: Modifier = Modifier) {
+    val avatar = style.avatar
+    val content = style.content
+    val background = style.background
+    if (avatar == null) {
+        // Noch kein Profilbild abgeschaut (oder Vorschau in der App): Personen-Symbol wie YouTube ohne Bild.
+        Box(modifier.size(26.dp), contentAlignment = Alignment.Center) {
+            val ring = if (selected) Modifier.border(2.dp, content, CircleShape).padding(3.dp) else Modifier
+            Box(Modifier.size(24.dp).then(ring), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.AccountCircle, null, tint = content, modifier = Modifier.fillMaxSize())
+            }
+        }
+        return
+    }
+    Canvas(modifier.size(26.dp)) {
+
+        val k = density / MODERN_PX
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val outer = 34.5f * k
+        val imageRadius = if (selected) 25.5f * k else outer
+        if (selected) {
+            drawCircle(content, radius = outer, center = c)
+            drawCircle(background, radius = outer - 6f * k, center = c)
+        }
+        if (avatar != null) {
+            // Ganzer Ausschnitt aus der echten Leiste (69 px), auf den Kreis gelegt: gewählt verkleinert wie bei YouTube.
+            val inset = 0
+            val src = androidx.compose.ui.unit.IntSize(avatar.width - inset * 2, avatar.height - inset * 2)
+
+            val d = (imageRadius * 2f).toInt()
+            val clip = androidx.compose.ui.graphics.Path().apply {
+                addOval(androidx.compose.ui.geometry.Rect(c, imageRadius))
+            }
+            clipPath(clip) {
+                drawImage(
+                    avatar,
+                    srcOffset = IntOffset(inset, inset),
+                    srcSize = src,
+                    dstOffset = IntOffset((c.x - d / 2f).toInt(), (c.y - d / 2f).toInt()),
+                    dstSize = androidx.compose.ui.unit.IntSize(d, d),
+                )
+            }
+        } else {
+            drawCircle(content.copy(alpha = 0.55f), radius = imageRadius, center = c)
+        }
+    }
+}
+
+/** Die drei Knöpfe der modernen Leiste (hochkant). Tablet: Block in der Mitte wie die klassische. */
+@Composable
+private fun ModernRow(
+    state: BarUiState,
+    barHeight: androidx.compose.ui.unit.Dp,
+    topExtra: Int,
+    duck: Float,
+    spin: () -> Float,
+) {
+    val style = state.style
+    val density = LocalDensity.current
+    // Abos gibt es in der modernen Leiste nicht: Die Abos-Seite gehört zur Startseite (wie bei YouTube).
+    val homeSelected = state.selected == TabKind.HOME || state.selected == TabKind.SUBSCRIPTIONS
+    val center = if (style.tablet) state.iconCenterPx else with(density) { MODERN_ICON_CENTER_DP.dp.roundToPx() }
+    Row(
+        modifier = Modifier.offset { IntOffset(0, topExtra) }.fillMaxWidth().height(barHeight).graphicsLayer {
+            scaleX = duck
+            scaleY = duck
+            transformOrigin = TransformOrigin(0.5f, 0.35f)
+        },
+        horizontalArrangement = if (style.tablet) Arrangement.Center else Arrangement.Start,
+    ) {
+        val slot: Modifier = if (style.tablet) Modifier.width(TABLET_SLOT_DP.dp) else Modifier.weight(1f)
+        Box(slot.fillMaxHeight()) { IconArea(center) { ModernHome(homeSelected, style.content) } }
+        Box(slot.fillMaxHeight()) { IconArea(center) { ModernAvatar(style, state.selected == TabKind.YOU) } }
+        Box(slot.fillMaxHeight()) {
+            if (state.hasCreate) IconArea(center) { ModernPlus(style.content, spin) }
+        }
+    }
+}
+
+/** Moderne Leiste quer (flach): nur die drei Symbole, mittig in drei gleich breiten Spalten. */
+@Composable
+private fun ModernCompactRow(state: BarUiState, height: androidx.compose.ui.unit.Dp, modifier: Modifier, spin: () -> Float) {
+    val style = state.style
+    Row(modifier = modifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
+        val slot = Modifier.weight(1f).fillMaxHeight()
+        val homeSelected = state.selected == TabKind.HOME || state.selected == TabKind.SUBSCRIPTIONS
+        Box(slot, contentAlignment = Alignment.Center) { ModernHome(homeSelected, style.content, Modifier.size(22.dp)) }
+        Box(slot, contentAlignment = Alignment.Center) {
+            ModernAvatar(style, state.selected == TabKind.YOU, Modifier.size(22.dp))
+        }
+        Box(slot, contentAlignment = Alignment.Center) {
+            if (state.hasCreate) ModernPlus(style.content, spin, Modifier.size(26.dp))
+        }
+    }
+}
+
+/**
+ * Vorschau der Leiste für die App (Einstellungen, Startseite): dieselbe Zeichnung wie in YouTube, mit Beispiel-Inhalt.
+ * [modern]: moderne Leiste (nur Symbole) statt klassisch (Symbole mit Text).
+ */
+@Composable
+fun BarPreview(modern: Boolean, dark: Boolean, modifier: Modifier = Modifier) {
+    val density = LocalDensity.current
+    val heightDp = 64.dp
+    val style = BarStyle.default(dark).copy(modern = modern)
+    val state = BarUiState(
+        selected = TabKind.HOME,
+        labels = mapOf(TabKind.HOME to "Home", TabKind.SUBSCRIPTIONS to "Subscriptions", TabKind.YOU to "You"),
+        subscriptionsBadge = false,
+        hasCreate = true,
+        barHeightPx = with(density) { heightDp.roundToPx() },
+        iconCenterPx = with(density) { 20.dp.roundToPx() },
+        labelTopPx = with(density) { 36.dp.roundToPx() },
+        showHandle = false,
+        style = style,
+    )
+    Box(modifier.fillMaxWidth().height(heightDp)) {
+        if (modern) {
+            Box(Modifier.fillMaxSize().background(style.background)) {
+                ModernRowPreview(state, heightDp)
+            }
+        } else {
+            BottomBar(
+                state = state,
+                dimInstant = true,
+                sunk = false,
+                sinkSnap = false,
+                compactNav = -1,
+                topExtra = 0,
+                inkMs = INK_IN_MS,
+                inkOutMs = INK_OUT_MS,
+                cover = { Float.MAX_VALUE },
+                rise = { 0f },
+                onTap = {},
+                onLongPress = {},
+            )
+        }
+    }
+}
+
+/** Vorschau: moderne Knöpfe in der Mitte der (niedrigeren) Vorschau-Fläche. */
+@Composable
+private fun ModernRowPreview(state: BarUiState, height: androidx.compose.ui.unit.Dp) {
+    Row(Modifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
+        val slot = Modifier.weight(1f)
+        Box(slot, contentAlignment = Alignment.Center) { ModernHome(true, state.style.content) }
+        Box(slot, contentAlignment = Alignment.Center) { ModernAvatar(state.style, false) }
+        Box(slot, contentAlignment = Alignment.Center) { ModernPlus(state.style.content, { 0f }) }
+    }
 }

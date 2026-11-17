@@ -133,6 +133,12 @@
     <string name="theme_system">System</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
+    <string name="section_bar">YOUTUBE BAR</string>
+    <string name="bar_widget">Bar in YouTube</string>
+    <string name="bar_classic">Classic</string>
+    <string name="bar_classic_desc">Icons with text: Home, Subscriptions, You, Plus</string>
+    <string name="bar_modern">Modern</string>
+    <string name="bar_modern_desc">Icons only, like YouTube\'s new design: Home, You, Plus</string>
     <string name="section_about">ABOUT</string>
     <string name="rate_app">Rate the app</string>
     <string name="privacy_permissions">Privacy &amp; permissions</string>

@@ -438,7 +438,10 @@ class FuckShortsService : AccessibilityService() {
         }.also { it.start() }
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         menuDim = Prefs.menuDim(this)
+        barModern = Prefs.barModern(this)
+        Prefs.registerListener(this, prefsListener)
         loadBarState()
+
         // Fenster unserer Leiste schon jetzt anlegen (unsichtbar): Das erste Anlegen dauert ~0,5 s. Musste es erst beim
         // ersten Zeigen entstehen (z. B. App-Update, während ein Video lief, dann Zurück), sah man so lange die echte.
         val warmRest = restBounds
@@ -2783,7 +2786,25 @@ class FuckShortsService : AccessibilityService() {
 
     private fun coverLimit(): Int = if (overlay.isShowing) overlay.top else screen.bottom
 
-    private fun currentStyle(): BarStyle = sampler.style(nightMode == Configuration.UI_MODE_NIGHT_YES)
+    private fun currentStyle(): BarStyle = sampler.style(nightMode == Configuration.UI_MODE_NIGHT_YES).copy(modern = barModern)
+
+    /** Leisten-Stil aus den Einstellungen (klassisch / modern), siehe [Prefs.barModern]. */
+    private var barModern = false
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == Prefs.BAR_LAYOUT) handler.post { onBarLayoutChanged() }
+    }
+
+    /** In der App umgestellt: sofort mit dem neuen Stil zeichnen (auch die Kopie an YouTubes Fenster). */
+    private fun onBarLayoutChanged() {
+        val modern = Prefs.barModern(this)
+        if (modern == barModern) return
+        barModern = modern
+        val style = currentStyle()
+        lastUiState = lastUiState?.copy(style = style)
+        for ((key, value) in restBySize.toList()) restBySize[key] = value.first to value.second.copy(style = style)
+        overlay.restyle(style)
+        Log.d(TAG, "Leiste: Stil ${if (modern) "modern" else "klassisch"}")
+    }
 
     /**
      * Kleines Popup-Menü vorne (z. B. ⋮ oben rechts in der Suche). Solange es offen ist, gibt Android YouTubes

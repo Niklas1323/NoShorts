@@ -99,6 +99,8 @@ class HomeState(
     val promo: Boolean,
     val themeMode: Int,
     val version: String,
+    /** Leiste in YouTube: modern (nur Symbole, 3 Knöpfe) statt klassisch (mit Text). */
+    val barModern: Boolean = false,
     /** Schutz vom Nutzer pausiert: Shorts laufen, unsere Leiste bleibt. */
     val paused: Boolean = false,
     /** Ab wann der Schutz ausgeschaltet werden darf (Uhrzeit ms, 0 = keine Wartezeit läuft). */
@@ -119,6 +121,8 @@ class HomeActions(
     val turnOn: () -> Unit,
     val openYouTube: () -> Unit,
     val setThemeMode: (Int) -> Unit,
+    /** Leisten-Stil in YouTube wählen (gilt sofort, auch in einem offenen YouTube). */
+    val setBarModern: (Boolean) -> Unit = {},
     /** Unsere Superwall-Paywall. */
     val showPaywall: () -> Unit,
     /** Pro unten in der Leiste: mit Abo Abo verwalten (Jahresabo, kündigen), sonst Paywall. */
@@ -232,6 +236,11 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
     // Arbeitet die App gerade? Bedienungshilfe an, Abo/Testzeit/Code, nicht pausiert.
     val active = state.enabled && state.isPro && !state.paused
     val res = LocalContext.current.resources
+    // Wenig Platz (kleiner Bildschirm oder grosse Schrift, z. B. 130 %): Schild und Schrift etwas kleiner, damit alles
+    // ohne Scrollen passt (mit dem Leisten-Widget wurde sonst die Zahlen-Karte abgeschnitten).
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val dense = maxHeight < 700.dp || (fontScale >= 1.15f && maxHeight < 820.dp)
     Column(
         Modifier
             .fillMaxSize()
@@ -250,6 +259,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             Spacer(Modifier.weight(0.6f))
             // Nur über das Schild lässt sich der Schutz ausschalten (mit Spruch und Wartezeit).
             StatusOrb(
+                orbSize = if (dense) 124.dp else 196.dp,
                 active = active,
                 waiting = waiting && !readyToTurnOff,
                 onClick = {
@@ -263,20 +273,21 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                     if (!state.enabled) actions.turnOn()
                 },
             )
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(if (dense) 12.dp else 22.dp))
             val accent = when {
                 active && waiting && !readyToTurnOff -> Brand.Amber
                 active -> Brand.Green
                 else -> Brand.Red
             }
-            Text(stringResource(R.string.protection), style = headline(40.sp), color = p.text)
+            val big = if (dense) 32.sp else 40.sp
+            Text(stringResource(R.string.protection), style = headline(big), color = p.text)
             Text(
                 when {
                     state.paused -> stringResource(R.string.protection_paused)
                     active -> stringResource(R.string.protection_on)
                     else -> stringResource(R.string.protection_off)
                 },
-                style = headline(40.sp),
+                style = headline(big),
                 color = accent,
             )
             Spacer(Modifier.height(8.dp))
@@ -315,12 +326,15 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                 )
             }
             Spacer(Modifier.weight(0.6f))
+            // Kleines Widget: Leisten-Stil auf die Schnelle wählen, mit Bild statt nur Text (Wunsch von Niklas).
+            BarStyleWidget(state.barModern, actions.setBarModern, dense)
+            Spacer(Modifier.height(if (dense) 8.dp else 12.dp))
             // Zahlen: geschlossene Shorts (zählt der Dienst mit) und die daraus geschätzte Zeit.
-            GlassCard(padding = 20.dp) {
+            GlassCard(padding = if (dense) 14.dp else 20.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("${state.shortsClosed}", style = headline(38.sp), color = p.text)
-                        Text(stringResource(R.string.shorts_closed), color = p.subtext, fontSize = 15.sp)
+                        Text("${state.shortsClosed}", style = headline(if (dense) 30.sp else 38.sp), color = p.text)
+                        Text(stringResource(R.string.shorts_closed), color = p.subtext, fontSize = if (dense) 13.sp else 15.sp)
                     }
                     Box(
                         Modifier.size(48.dp).clip(CircleShape).background(Brand.Red.copy(alpha = 0.2f)),
@@ -329,15 +343,15 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
                         BrandLogo(26.dp)
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(if (dense) 10.dp else 16.dp))
                 Box(Modifier.fillMaxWidth().height(1.dp).background(p.cardBorder))
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(if (dense) 8.dp else 14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Schedule, null, tint = p.text, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(timeSaved(res, state.shortsClosed), style = headline(20.sp), color = p.text)
-                        Text(stringResource(R.string.time_saved), color = p.subtext, fontSize = 13.sp)
+                        Text(timeSaved(res, state.shortsClosed), style = headline(if (dense) 18.sp else 20.sp), color = p.text)
+                        Text(stringResource(R.string.time_saved), color = p.subtext, fontSize = if (dense) 12.sp else 13.sp)
                     }
                 }
             }
@@ -349,6 +363,7 @@ private fun HomeScreen(state: HomeState, actions: HomeActions) {
             MainButton(stringResource(R.string.turn_on_protection), actions.turnOn)
         }
         Spacer(Modifier.height(16.dp))
+    }
     }
 
     when (dialog) {
@@ -694,7 +709,8 @@ private fun RelockDialog(current: Int, onClose: () -> Unit, onConfirm: (Int) -> 
 
 /** Grosser Kreis mit Schild: grün (an), orange (Wartezeit läuft), rot (aus). Antippen = Schutz-Einstellungen. */
 @Composable
-private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit) {
+private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit, orbSize: androidx.compose.ui.unit.Dp = 196.dp) {
+    val k = orbSize / 196.dp
     val accent = when {
         active && waiting -> Brand.Amber
         active -> Brand.Green
@@ -709,12 +725,12 @@ private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit) {
     )
     Box(
         Modifier
-            .size(196.dp)
+            .size(orbSize)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(196.dp)) {
+        Canvas(Modifier.size(orbSize)) {
             drawCircle(
                 Brush.radialGradient(listOf(accent.copy(alpha = glow), Color.Transparent)),
                 radius = size.minDimension / 2,
@@ -723,7 +739,7 @@ private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit) {
         }
         Box(
             Modifier
-                .size(116.dp)
+                .size(116.dp * k)
                 .clip(CircleShape)
                 .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.7f)))),
             contentAlignment = Alignment.Center,
@@ -732,11 +748,12 @@ private fun StatusOrb(active: Boolean, waiting: Boolean, onClick: () -> Unit) {
                 if (active) Icons.Outlined.GppGood else Icons.Outlined.GppBad,
                 stringResource(R.string.protection),
                 tint = Color.White,
-                modifier = Modifier.size(56.dp),
+                modifier = Modifier.size(56.dp * k),
             )
         }
     }
 }
+
 
 /** Schätzung: Wer in einem Short landet, bleibt im Schnitt ein paar Minuten hängen. */
 private fun duration(res: Resources, shortsClosed: Int): String {
@@ -886,6 +903,25 @@ private fun SettingsScreen(state: HomeState, actions: HomeActions, onPrivacy: ()
                 ),
                 state.themeMode,
                 actions.setThemeMode,
+            )
+        }
+
+        SectionLabel(stringResource(R.string.section_bar))
+        GlassCard(padding = 14.dp) {
+            BarStyleOption(
+                modern = false,
+                selected = !state.barModern,
+                title = stringResource(R.string.bar_classic),
+                description = stringResource(R.string.bar_classic_desc),
+                onClick = { actions.setBarModern(false) },
+            )
+            Spacer(Modifier.height(12.dp))
+            BarStyleOption(
+                modern = true,
+                selected = state.barModern,
+                title = stringResource(R.string.bar_modern),
+                description = stringResource(R.string.bar_modern_desc),
+                onClick = { actions.setBarModern(true) },
             )
         }
 
