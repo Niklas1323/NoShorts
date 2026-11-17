@@ -1151,3 +1151,65 @@ Fehlalarme von `avs`: pinke/rote Video-Inhalte (z. B. Werbung mit Brille, Kleide
 ansehen. Nicht getestet: Werbung → Google Play (in 16 Wischern kam keine Werbung mit "Installieren"), Tablet.
 Test-Falle: Tipps auf eine Video-Karte trafen 2× die Werbung darüber (Liste verschiebt sich, Chrome ging auf, mit
 Zurück geschlossen) → nach dem Wischen 2 s warten und erst dann das Referenzfoto für `tapif` machen.
+
+### 16./17.11.2026, Nacht und Tag (Terminal, Pixel 9, Benutzer Leon) – Spiegel-Leiste, moderne Leiste, Rest-Fehler
+Auftrag von Niklas: 100 % fertig, nichts ungetestet (ausser Tablet), zwei Leisten zur Wahl, echte Leiste nie sichtbar.
+YouTube 21.45.82, dunkel (hell kurz geprüft). Commits d2749d8 … 4398cf0.
+
+| Test | vorher | nachher | behoben? |
+|---|---|---|---|
+| Schnell hoch/runter hochkant (6×6 Wischer je Lauf) | 5–15 Bilder echte | meist 0; ca. 1 von 2 Läufen 1–3 Bilder, nur wenn YouTube beim Hochwischen > 85 ms nicht antwortet | grösstenteils |
+| Normal scrollen mit Pausen (26 s) | – | 0 | ok |
+| Quer schnell hoch/runter (3×5) | 4 Bilder | 0 | ja |
+| App wechseln per Gestenleiste (weg/zurück) | 4 + 10 Bilder echte | 0 (5×), Leiste fährt mit YouTube mit | ja |
+| App-Übersicht → zurück | 14–17 Bilder (Androids Zoom) | 0 (4×) | ja |
+| Home-Taste und wieder öffnen | – | 0 (2×) | ok |
+| Kamera zu (X, Zurück, Geste) | unsere ~4 Bilder über der noch sichtbaren Kamera | unsere liegt UNTER der wegblendenden Kamera, 0 echte (je 3×, klassisch + modern) | ja |
+| Google Play (Werbung "8 Ball Pool", nichts installiert) | 10 + 7 Bilder echte unter Plays halbdurchsichtigem Blatt | 0 (2×) | ja |
+| Suche (Lupe, Text, Suchen, Zurück) | ~15 Bilder echte nach "Suchen" | 0 (modern), 1 schwaches Bild durch die wegfahrende Tastatur (klassisch, bekannte Grenze) | ja |
+| Querformat | flache Leiste (40 dp), darüber Symbole der echten MIT Shorts | so hoch wie die echte, 0 | ja (siehe unten) |
+| Benachrichtigungen, Video verlassen (Zurück, Geste, Runterziehen), Tabs | – | 0 | ok |
+| Nach App-Update | – | keine alte Spiegel-Leiste übrig (Android räumt sie weg) | ok |
+
+**Spiegel-Leiste (neu, `BottomBarOverlay`, ab Android 14, nur Handy):** Eine Kopie unserer Leiste als reine Bildfläche
+(`SurfaceControl`, KEIN Fenster) wird mit `attachAccessibilityOverlayToWindow` an YouTubes Hauptfenster geheftet. Sie
+bewegt sich mit YouTube, wenn Android das Fenster animiert (App wechseln, App-Übersicht, App öffnen), und bleibt unter
+Fenstern anderer Apps/der Kamera liegen ("eingefroren", `hideKeepMirror`). Inhalt = Software-Bild unserer Leiste
+(`drawMirror`, nur wenn unsere ganz normal steht: `mirrorWanted`). Wichtig:
+- Erst mit `SurfaceControlViewHost` (= Fenster) gebaut: Dann galt YouTubes echte Leiste für die Bedienungshilfen als
+  verdeckt (Lage 2424 statt 2217) und das Scrollen wie das Original ging nicht mehr. Darum nur Bildfläche.
+- Android baut YouTubes Fläche nach dem Verlassen neu auf: nach jedem Wiederzeigen neu anheften (`reattachMirror`).
+- Test-Schalter (nur Test-Versionen): `setprop log.tag.FShortsMirror VERBOSE` = unsere unsichtbar, nur der Spiegel.
+
+**Zweite Leiste "Modern" (Wunsch von Niklas):** nur Symbole wie YouTubes neues Design, drei Knöpfe Startseite, Mein
+YouTube, Plus (Abos gibt es dort nur als Reiter oben; auf der Abos-Seite ist das Haus markiert wie bei YouTube), deckend.
+Formen aus Bildschirmfotos der echten Leiste abgemessen (Dichte 2,875): Symbol-Mitte 92,5 px unter der Oberkante, Haus
+63 × 57 px (gewählt gefüllt mit eckiger Tür, sonst 5-px-Umriss mit Tür-U, Ecken 2,5 px), Plus-Kreis Ø 63 px / Rand 6 px /
+Kreuz 29 × 5 px, Profilbild 69 px (gewählt: Ring 6 px, Abstand 3 px, Bild 51 px). Vergleich vergrössert: praktisch gleich.
+Gleiche Animationen (Tinte, Plus dreht, Hereinfahren, Scrollen, Spiegel). Wahl: Einstellungen "Leiste in YouTube"
+(grosse Vorschau) und Widget auf der Startseite (zwei Bildchen); Prefs `bar_layout` (0 = klassisch = Standard), gilt
+sofort (Listener im Dienst). Texte in 8 Sprachen (XML + `gen_strings.py`/`tr.py`). Vorschau = dieselbe Zeichnung
+(`BarPreview`, verkleinert mit `ScaledBarPreview`). Startseite bei wenig Platz/grosser Schrift kompakter (`dense`).
+
+**Weitere Fixes:**
+- Tipp auf die Lupe galt als Wischen, die Tastatur wurde nie bemerkt (volle Suchen pausierten): Suche läuft jetzt,
+  sobald ein Tastatur-Fenster da ist.
+- Hochwischen spät erkannt (≥ 70 ms): unsere springt sofort hinein (`scrollBackMs`). Liste weit gerutscht (quer):
+  direkt die Lage der echten abfragen (`realBarTopQuick`).
+- **Querformat:** YouTube 21.45 zeigt quer DOCH eine Leiste (207 px, Shorts-Knopf), je nach Lage (am 15.11. war sie
+  wohl gerade weggescrollt). Die flache Leiste ist aus (`COMPACT_LANDSCAPE = false`), quer so hoch wie die echte.
+  Niklas wollte sie quer flacher – geht nur, solange YouTube quer keine Leiste zeigt.
+- Mitlesen der Finger (`setObservedMotionEventSources`) ausprobiert: auf Android 17 für Apps gesperrt (hidden API),
+  verworfen.
+
+**Test-Werkzeuge (in `tools/pixel-test/leon.sh`):** `rbar NAME` erkennt die echte Leiste am Plus-Kreuz (x 675, auch
+klein beim Hochfahren, keine Fehlalarme durch rosa Inhalt), `rbarL` dasselbe quer (Aufnahme QUER starten, sonst stimmen
+die Koordinaten nicht), `MODERN=1` stellt `barok` auf die moderne Leiste um (Profilbild in der Mitte).
+
+**Bleibt (nicht lösbar oder Abwägung):**
+- Sehr schnelles Hin-und-her-Wischen hochkant: selten 1–3 Bilder, wenn YouTube beim Hochwischen > 85 ms nicht
+  antwortet (YouTube beginnt ~80 ms nach dem Finger hochzufahren; früher kennt niemand die Wischrichtung).
+- Nach "Suchen": 1 schwaches Bild durch die wegfahrende Tastatur (Android meldet das Zugehen zu spät).
+- Superwalls Test-Fenster ("Test Mode Active") kommt in Test-Versionen bei jedem App-Start; "Continue" mit Abo
+  "Inactive" setzt die App auf "Abo abgelaufen" (mit Code "Ningeninge" wieder freigeschaltet). Nicht Teil der Leiste.
+- Tablet: nicht getestet (Wunsch von Niklas). Spiegel ist dort aus.
