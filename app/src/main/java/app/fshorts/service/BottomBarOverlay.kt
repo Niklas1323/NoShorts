@@ -841,6 +841,8 @@ class BottomBarOverlay(
     private var mirrorDrawPosted = false
     /** YouTube ist nicht vorne (andere App, Kamera ...): Spiegel bleibt, wie er beim Verlassen war. */
     private var mirrorFrozen = false
+    /** Der Spiegel stand schon einmal an unserer Stelle (vorher liegt er oben links). */
+    private var mirrorPlaced = false
     private var mirrorFrozenFrontSince = 0L
     /** Vom Dienst gesetzt: Ist YouTubes Hauptfenster vorne? (Eingefrorener Spiegel darf dann nicht ewig stehen bleiben.) */
     var youTubeFront: () -> Boolean = { false }
@@ -992,6 +994,7 @@ class BottomBarOverlay(
                 }
                 mirrorRect.set(r)
                 t.setPosition(sc, r.left.toFloat(), r.top.toFloat()).apply()
+                mirrorPlaced = true
             }
             // Erst den Inhalt malen, dann zeigen (sonst stünde ein Bild lang ein alter oder leerer Inhalt da).
             if (mirrorDirty && !mirrorDrawPosted) {
@@ -1037,6 +1040,25 @@ class BottomBarOverlay(
      * (andere App, Kamera, Google Play, App wechseln). Seine Leiste liegt darunter unverändert. Fährt YouTube wieder
      * herein, zeigt der Spiegel unsere statt der echten.
      */
+    /**
+     * Spiegel sofort zeigen (mit dem zuletzt gemalten Bild), noch bevor unsere Leiste selbst kommt. Er liegt in YouTubes
+     * Fenster, also UNTER einer sich schliessenden Tastatur: Nach "Suchen" kommt die echte Leiste hinter der
+     * wegfahrenden Tastatur hervor (gemessen 18.11.: 3–4 schwache Bilder), unsere selbst läge dort über der Tastatur.
+     */
+    fun showMirrorNow() {
+        if (mirrorSurface == null || mirrorWindowId < 0 || !mirrorPlaced || isShowing) {
+            if (app.fshorts.BuildConfig.DEBUG && android.util.Log.isLoggable("FShortsTrace", android.util.Log.VERBOSE)) {
+                android.util.Log.d("FuckShorts", "Spiegel jetzt: nein (fläche=${mirrorSurface != null} fenster=$mirrorWindowId platziert=$mirrorPlaced zeigt=$isShowing)")
+            }
+            return
+        }
+        mirrorFrozen = true
+        mirrorFrozenFrontSince = 0L
+        view?.removeCallbacks(mirrorWatch)
+        view?.postDelayed(mirrorWatch, MIRROR_WATCH_MS)
+        setMirrorShown(true)
+    }
+
     fun hideKeepMirror(showMirror: Boolean = false) {
         // showMirror: Spiegel jetzt sicher zeigen (unsere war gerade nicht "normal", z. B. Plus gedreht oder abgedunkelt).
         // Er zeigt den Zustand nach dem Verstecken: nicht abgedunkelt, Knöpfe oben.

@@ -1185,6 +1185,9 @@ class FuckShortsService : AccessibilityService() {
             picked = p.first to r.top
             pos += moved
             if (moved != 0) lastMoveAt = t
+            // Noch keine Bewegung gesehen: Vielleicht ist das Element veraltet (z. B. nach dem Drehen, gemessen 17.11.: 26 Bilder
+            // echte Leiste quer) und bewegt sich gar nicht mit. Zur Sicherheit direkt nach der echten sehen.
+            if (!down && pos == 0 && barCheck(now)) return null
             if (passive) {
                 SystemClock.sleep(DIR_PROBE_STEP_MS)
                 continue
@@ -1589,6 +1592,12 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /** [keepMirror]: YouTube wird nur verdeckt oder verlassen, seine Leiste bleibt darunter (siehe Spiegel im Overlay). */
+    /** Siehe "Tastatur offen": Spiegel unter die offene Tastatur legen (nur wenn sie noch offen ist). */
+    private val mirrorUnderKeyboard = Runnable {
+        if (app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) Log.d(TAG, "Spiegel unter Tastatur? aktiv=$youTubeActive suchen=$keyboardToPage")
+        if (!youTubeActive && !keyboardToPage && isKeyboardOpen()) overlay.showMirrorNow()
+    }
+
     private fun hideAll(keepMirror: Boolean = false) {
         // Fährt gerade sanft weg (Tastatur, Video): fertig fahren lassen, danach ist sie ohnehin weg.
         if (overlay.isSlidingAway) return
@@ -1706,7 +1715,22 @@ class FuckShortsService : AccessibilityService() {
             menuOpen = false
             youTubeSince = 0L
             if (keyboard) overlay.releaseHold()
-            if (keyboard) hideSmooth() else hideAll(keepMirror = true)
+            // Tastatur: nur wegfahren, wenn unsere noch steht (sonst nichts tun – ein Verstecken nähme den Spiegel unter der
+            // Tastatur wieder weg).
+            if (keyboard) {
+                if (overlay.isShowing) hideSmooth()
+            } else {
+                hideAll(keepMirror = true)
+            }
+            // Tastatur offen (Suche): Den Spiegel gleich unter die Tastatur legen, sobald sie ganz offen ist (dort unsichtbar).
+            // Nach "Suchen" kommt die Ergebnis-Seite mit Leiste hinter der wegfahrenden Tastatur hervor; die Meldung dazu kam
+            // ~0,3 s später, so sah man in 1 von 3 Läufen 3 Bilder die echte Leiste durch die Tastatur (gemessen 18.11.).
+            if (keyboard && !isTablet && splitBounds == null) {
+                // Nur einmal pro Tastatur (beim Tippen kommen laufend Scans, ein Neu-Ansetzen schob es endlos hinaus).
+                if (!handler.hasCallbacks(mirrorUnderKeyboard) && !overlay.mirrorCovering) {
+                    handler.postDelayed(mirrorUnderKeyboard, KEYBOARD_MIRROR_MS)
+                }
+            }
             return
         }
         // "Suchen": Die Ergebnisse haben eine Leiste, die gleich hinter der ausblendenden Tastatur hervorkommt.
@@ -2811,6 +2835,12 @@ class FuckShortsService : AccessibilityService() {
             }
             // Die Leiste gibt es nicht mehr (anderer Bildschirm, z. B. Kamera nach Plus): sofort weg.
             reason("Leiste nicht mehr da ($keepFail)")
+            if (app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+                val ws = windows
+                Log.d(TAG, "Fenster: vorne=$frontPkg leiste=$barWindowId " + ws.joinToString { w ->
+                    "${w.id}:${w.type}${if (w.isActive) "A" else ""}${if (w.isFocused) "F" else ""}:${w.root?.packageName}:${Rect().also(w::getBoundsInScreen).toShortString()}"
+                })
+            }
             lastBar = null
             lastObservedTop = -1
             // Video wird geöffnet (Tipp, nicht Plus/Kamera): sanft wegfahren. Sonst sofort weg.
@@ -2824,7 +2854,9 @@ class FuckShortsService : AccessibilityService() {
             // Andere App (Google Play, Chrome …) oder anderes Fenster vorne: YouTubes Leiste liegt darunter unverändert,
             // der Spiegel bleibt (sonst sah man sie unter Plays halbdurchsichtigem Blatt, gemessen 17.11.: 10 + 7 Bilder).
             if (!otherApp && now - lastNavAt < NAV_LINK_MS && now - createTappedAt > CREATE_HOLD_MS) hideSmooth()
-            else hideAll(keepMirror = otherApp || keepFail == "anderes Fenster vorne")
+            // Kein Inhalt mehr im vordersten Fenster (frontPkg null): YouTubes Fenster schliesst gerade (z. B. Zurück auf der
+            // Startseite) und fährt mit seiner Leiste weg. Der Spiegel fährt mit (sonst sah man darauf ~8 Bilder die echte).
+            else hideAll(keepMirror = otherApp || frontPkg == null || keepFail == "anderes Fenster vorne")
             return
 
         }
@@ -3665,7 +3697,14 @@ class FuckShortsService : AccessibilityService() {
             ?.takeIf { it.packageName?.toString() == selectors.youtubePackage }
         if (focus?.isEditable == true) imeFocusSeen = true
         val open = focus == null || focus.isEditable || !imeFocusSeen
-        if (open) keyboardWasOpen = true else if (keyboardWasOpen) keyboardToPage = true
+        if (open) {
+            keyboardWasOpen = true
+        } else if (keyboardWasOpen && !keyboardToPage) {
+            keyboardToPage = true
+            // "Suchen": Die Ergebnisse haben eine Leiste, die hinter der wegfahrenden Tastatur hervorkommt. Der Spiegel
+            // liegt unter der Tastatur und deckt sie dort sofort ab (unsere kommt, sobald YouTube wieder vorne ist).
+            if (!isTablet && splitBounds == null) overlay.showMirrorNow()
+        }
         return open
     }
 
@@ -3757,6 +3796,8 @@ class FuckShortsService : AccessibilityService() {
         private const val SAMPLE_AFTER_VIDEO_MS = 1500L
         private const val WATCHDOG_MS = 400L
         private const val BACK_COOLDOWN_MS = 700L
+        /** Tastatur geht auf: so lange warten, bis sie sicher ganz offen ist, dann den Spiegel darunter legen. */
+        private const val KEYBOARD_MIRROR_MS = 450L
         private const val HINT_WINDOW_MS = 10_000L
         private const val AUTO_DUMP_AFTER_MS = 2_000L
         private const val AUTO_DUMP_INTERVAL_MS = 20_000L
