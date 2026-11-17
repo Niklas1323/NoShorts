@@ -579,6 +579,11 @@ class BottomBarOverlay(
 
     /** Handy quer: Höhe der Gestenleiste unten (mindestens 0) = flache Leiste. Sonst -1. */
     private fun compactNavPx(rest: Rect): Int {
+        // Aus (17.11.2026): YouTube 21.45 zeigt quer doch eine eigene Leiste (207 px, mit Shorts-Knopf), je nach Lage
+        // (am 15.11. war sie beim Messen wohl gerade weggescrollt). Die flache Leiste (40 dp) deckte nur die untere
+        // Hälfte ab, darüber sah man die Symbole der echten. Darum quer gleich hoch wie die echte.
+        if (!COMPACT_LANDSCAPE) return -1
+
         val cfg = service.resources.configuration
         if (cfg.smallestScreenWidthDp >= 600 || cfg.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE) return -1
         val nav = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -1826,3 +1831,6 @@ private fun ModernRowPreview(state: BarUiState, height: androidx.compose.ui.unit
         Box(slot, contentAlignment = Alignment.Center) { ModernPlus(state.style.content, { 0f }) }
     }
 }
+
+/** Flache Leiste im Querformat (siehe compactNavPx). Aus, solange YouTube quer eine eigene Leiste zeigt. */
+private const val COMPACT_LANDSCAPE = false

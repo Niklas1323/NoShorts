@@ -161,3 +161,23 @@ rbar() { local n=$1
     if (!found && on) { printf "ECHT Bilder %d-%d (%d) erst y=%d Grösse %s\n", st, f-1, f-st, y0, s0; on=0; cnt++ }
   }
   END { if (on) { printf "ECHT Bilder %d-%d (%d) erst y=%d Grösse %s\n", st, NR-1, NR-st, y0, s0; cnt++ } printf "Bilder %d, Abschnitte mit echter Leiste: %d\n", NR, cnt+0 }'; }
+# Moderne Leiste (MODERN=1): unser Profilbild in der Mitte (x 515-565), Knöpfe Home 180, You 540, Plus 900
+barok() { adb exec-out screencap -p > rec/_b.png; local m="255*gt(r(X,Y),165)*lt(r(X,Y),225)*lt(g(X,Y),50)*gt(b(X,Y),70)*lt(b(X,Y),115)"; local c="crop=50:50:650:2251"; [ "$MODERN" = 1 ] && c="crop=40:40:520:2289"; local v=$(ffmpeg -hide_banner -i rec/_b.png -vf "$c,format=gbrp,geq=r='$m':g='$m':b='$m',format=gray,signalstats,metadata=print:key=lavfi.signalstats.YAVG" -f null - 2>&1 | grep -oE 'YAVG=[0-9.]+' | cut -d= -f2); awk -v v="${v:-0}" 'BEGIN{exit !(v>100)}'; }
+rbarL() { local n=$1
+  ffmpeg -loglevel fatal -i rec/$n.mp4 -fps_mode passthrough -vf "format=gray,crop=110:207:1525:873" -f rawvideo - | od -An -v -tu1 -w22770 | awk '
+  function px(x,y){ if (y>1079 || y<873) return ""; return $( (y-873)*110 + (x-1525) + 1 ) }
+  function test(cy, s,   bg, i, q, v, d, c, ok) {
+    bg=px(1580+int(42*s+0.5), cy); if (bg=="") return 0
+    c=0
+    for (i=1;i<=13;i++) { split(P[i], q, " "); v=px(1580+int(q[1]*s+(q[1]<0?-0.5:0.5)), cy+int(q[2]*s+(q[2]<0?-0.5:0.5))); if (v=="") continue; d=v-bg; if (d<0) d=-d; if (d<60) return 0; c++ }
+    if (c<8) return 0
+    for (i=1;i<=4;i++) { split(G[i], q, " "); v=px(1580+int(q[1]*s+(q[1]<0?-0.5:0.5)), cy+int(q[2]*s+(q[2]<0?-0.5:0.5))); if (v=="") continue; d=v-bg; if (d<0) d=-d; if (d>45) return 0 }
+    return 1 }
+  BEGIN { split("28 0,-28 0,0 28,0 -28,20 20,-20 20,20 -20,-20 -20,0 0,9 0,-9 0,0 9,0 -9", P, ","); split("14 14,-14 14,14 -14,-14 -14", G, ","); ns=split("1 0.9 0.8 0.7 0.6 0.5", S, " ") }
+  { found=0
+    for (k=1;k<=ns && !found;k++) for (cy=956; cy<=1070 && !found; cy++) if (test(cy, S[k])) { found=1; fy=cy; fs=S[k] }
+    f=NR-1
+    if (found && !on) { on=1; st=f; y0=fy; s0=fs }
+    if (!found && on) { printf "ECHT Bilder %d-%d (%d) erst y=%d Grösse %s\n", st, f-1, f-st, y0, s0; on=0; cnt++ }
+  }
+  END { if (on) { printf "ECHT Bilder %d-%d (%d) erst y=%d Grösse %s\n", st, NR-1, NR-st, y0, s0; cnt++ } printf "Bilder %d, Abschnitte mit echter Leiste: %d\n", NR, cnt+0 }'; }
