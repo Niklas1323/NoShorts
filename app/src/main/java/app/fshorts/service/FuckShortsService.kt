@@ -1060,11 +1060,26 @@ class FuckShortsService : AccessibilityService() {
                 p.first.getBoundsInScreen(r)
                 val moved = r.top - p.second
                 if (kotlin.math.abs(moved) > scr.height() / 2) {
-                    // Element wurde für einen anderen Eintrag wiederverwendet: neuer Ausgangspunkt.
+                    // Element wurde für einen anderen Eintrag wiederverwendet – oder die Liste ist weit gerutscht, weil
+                    // YouTube lange nicht antwortete (quer: niedriger Bildschirm, gemessen 17.11.: 164 ms, dann nur noch
+                    // "0 px" und 4 Bilder echte Leiste). Dann direkt nachsehen, ob die echte gerade hochfährt.
+                    val realTop = realBarTopQuick(scr)
+                    if (moved > 0 && realTop != null && realTop < scr.bottom - 2) {
+                        handler.postAtFrontOfQueue {
+                            if (gen != probeGen || !overlay.isScrolledAway) return@postAtFrontOfQueue
+                            dirUntil = 0L
+                            lastUpScrollAt = SystemClock.uptimeMillis()
+                            realGoneByScroll = false
+                            reason("Hochwischen erkannt (Liste weit gerutscht, echte bei $realTop), unsere fährt herein")
+                            overlay.scrollBack(scrollBackMs())
+                        }
+                        return
+                    }
                     picked = p.first to r.top
                     SystemClock.sleep(DIR_PROBE_STEP_MS)
                     continue
                 }
+
                 if (trace) Log.d(TAG, "Richtung: $moved px, ${SystemClock.uptimeMillis() - lastTouchAt} ms nach Finger")
                 if (moved > step) {
                     handler.postAtFrontOfQueue {
@@ -1090,8 +1105,21 @@ class FuckShortsService : AccessibilityService() {
         }
     }
 
+    /** Lage der echten Leiste mit möglichst wenig Abfragen (für Hintergrund-Threads). null = nicht da. */
+    private fun realBarTopQuick(scr: Rect): Int? {
+        val root = youTubeMainRoot() ?: return null
+        val r = Rect()
+        for (id in selectors.barIds) {
+            val bar = root.findAccessibilityNodeInfosByViewId(selectors.fullId(id)).firstOrNull { it.isVisibleToUser } ?: continue
+            bar.getBoundsInScreen(r)
+            if (!r.isEmpty && r.top < scr.bottom) return r.top
+        }
+        return null
+    }
+
     /**
      * Unsere fährt beim Scrollen weg. Gleich im Hintergrund die Liste der Seite merken: Beim nächsten Fingerauflegen
+
      * muss die Richtungserkennung sofort ein Element haben. Ohne Liste suchte sie erst den ganzen Baum ab (bei
      * beschäftigtem YouTube zu langsam, gemessen 16.11.: 15 Bilder echte Leiste).
      */
