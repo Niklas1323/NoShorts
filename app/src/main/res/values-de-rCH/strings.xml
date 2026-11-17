@@ -138,6 +138,9 @@
     <string name="bar_classic_desc">Symbole mit Text: Startseite, Abos, Du, Plus</string>
     <string name="bar_modern">Modern</string>
     <string name="bar_modern_desc">Nur Symbole wie im neuen YouTube-Design: Startseite, Du, Plus</string>
+    <string name="bar_label_home">Startseite</string>
+    <string name="bar_label_subscriptions">Abos</string>
+    <string name="bar_label_you">Du</string>
     <string name="section_about">INFO</string>
     <string name="rate_app">App bewerten</string>
     <string name="privacy_permissions">Datenschutz &amp; Berechtigungen</string>

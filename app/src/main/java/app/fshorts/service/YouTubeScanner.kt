@@ -708,7 +708,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
             tabs[kind] = TabInfo(
                 kind = kind,
                 bounds = Rect(r),
-                label = textNode?.text?.toString()?.trim(),
+                label = textNode?.text?.toString()?.trim() ?: shortDescription(child),
                 labelBounds = textNode?.let { Rect().also(it::getBoundsInScreen) },
                 iconBounds = findIcon(child, 0),
                 selected = isSelectedDeep(child, 0),
@@ -717,6 +717,13 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
             nodes[kind] = child
         }
     }
+
+    /**
+     * Neues Design: Die Knöpfe haben keinen Text, nur eine Beschreibung ("Startseite", "Mein YouTube"). Die nehmen wir
+     * als Beschriftung der klassischen Leiste, damit sie in YouTubes Sprache und Wortwahl erscheint (vorher englisch).
+     */
+    private fun shortDescription(node: AccessibilityNodeInfo): String? =
+        node.contentDescription?.toString()?.trim()?.takeIf { it.length in 1..24 && ',' !in it && '\n' !in it }
 
     private fun collectClickable(
         node: AccessibilityNodeInfo,
@@ -767,7 +774,7 @@ class YouTubeScanner(private val sel: Selectors, private val density: Float, pri
                     tabs[kind] = TabInfo(
                         kind = kind,
                         bounds = Rect(r),
-                        label = textNode?.text?.toString()?.trim(),
+                        label = textNode?.text?.toString()?.trim() ?: shortDescription(child),
                         labelBounds = textNode?.let { Rect().also(it::getBoundsInScreen) },
                         iconBounds = findIcon(child, 0),
                         selected = isSelectedDeep(child, 0),

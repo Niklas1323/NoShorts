@@ -138,6 +138,9 @@
     <string name="bar_classic_desc">Icone con testo: Home, Iscrizioni, Tu, Più</string>
     <string name="bar_modern">Moderna</string>
     <string name="bar_modern_desc">Solo icone, come il nuovo design di YouTube: Home, Tu, Più</string>
+    <string name="bar_label_home">Home</string>
+    <string name="bar_label_subscriptions">Iscrizioni</string>
+    <string name="bar_label_you">Tu</string>
     <string name="section_about">INFO</string>
     <string name="rate_app">Valuta l\'app</string>
     <string name="privacy_permissions">Privacy e autorizzazioni</string>

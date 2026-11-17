@@ -138,6 +138,9 @@
     <string name="bar_classic_desc">Icônes avec texte : Accueil, Abonnements, Vous, Plus</string>
     <string name="bar_modern">Moderne</string>
     <string name="bar_modern_desc">Icônes seules, comme le nouveau design de YouTube : Accueil, Vous, Plus</string>
+    <string name="bar_label_home">Accueil</string>
+    <string name="bar_label_subscriptions">Abonnements</string>
+    <string name="bar_label_you">Vous</string>
     <string name="section_about">À PROPOS</string>
     <string name="rate_app">Noter l\'appli</string>
     <string name="privacy_permissions">Confidentialité et autorisations</string>

@@ -138,9 +138,18 @@ class BottomBarOverlay(
     /** Handy quer: flache Leiste, Wert = Höhe der Gestenleiste darunter. -1 = normale Leiste. */
     private var compactNav by mutableStateOf(-1)
     private val restoreSink = Runnable {
+        if (handOver) {
+            // Keine Kamera gekommen: unsere wieder zeigen (Plus ohne Drehen), der Spiegel läuft wieder mit.
+            handOver = false
+            sinkSnap = true
+            mirrorFrozen = false
+            view?.removeCallbacks(mirrorWatch)
+        }
         sunk = false
         syncMirror()
     }
+    /** Plus getippt, der Spiegel zeigt die Leiste: unsere zeichnet nichts (siehe [sinkContent]). */
+    private var handOver by mutableStateOf(false)
     /** Plus getippt: bis dann sinken die Knöpfe (so lange keine Abfragen an YouTube, sie hielten die Animation an). */
     private var sinkUntil = 0L
     /** Video verlassen: Die Leiste fährt von unten herein. So viele Pixel steht sie gerade noch zu tief. */
@@ -265,11 +274,32 @@ class BottomBarOverlay(
     fun scrollAway(ms: Long) {
         val h = target.height().toFloat()
         if (!isShowing || scrollTarget >= h) return
-        scrollTo(h, ms, android.view.animation.PathInterpolator(0.3f, 0f, 0.8f, 0.15f))
+        // Wie YouTubes neue Leiste (gemessen 17.11.): rutscht beschleunigt raus, die Knöpfe schrumpfen gegen Ende weg.
+        scrollTo(h, ms, android.view.animation.AccelerateInterpolator(1.6f))
+        popTo(POP_AWAY, (ms * 0.6f).toLong(), (ms * 0.4f).toLong(), android.view.animation.AccelerateInterpolator(1.2f))
         applyFlags()
     }
 
-    /** Die echte kommt zurück (Hochscrollen): unsere fährt schnell wieder herein, vor der echten. 0 ms = sofort. */
+    /**
+     * Die echte kommt gleich zurück (schnell hochgewischt, früh erkannt): unsere kommt so wie YouTubes neue Leiste
+     * (gemessen 17.11., Bild für Bild): im ersten Bild ~30 % der Höhe unter der Ruhelage, dann stark abbremsend hoch
+     * (~190 ms), die Knöpfe "ploppen" dabei von klein auf (~110 ms).
+     */
+    fun scrollRise(late: Boolean = false) {
+        if (scrollTarget == 0f && scroller == null) return
+        // Spät erkannt: Die echte ist schon weiter oben, unsere beginnt darum höher (deckt ihre Knöpfe sicher ab).
+        val from = minOf(scrollPx, target.height() * if (late) RISE_FROM_LATE_FRAC else RISE_FROM_FRAC)
+        scrollPx = from
+        scrollTo(0f, SCROLL_RISE_MS, android.view.animation.DecelerateInterpolator(1.5f))
+        if (scrollPop > POP_FROM) scrollPop = POP_FROM
+        popTo(1f, SCROLL_POP_MS, 0L, android.view.animation.DecelerateInterpolator(1.5f))
+        applyFlags()
+    }
+
+    /**
+     * Die echte kommt zurück (schon unterwegs oder spät erkannt): unsere fährt schnell herein, vor der echten.
+     * 0 ms = sofort ganz da.
+     */
     fun scrollBack(ms: Long) {
         if (scrollTarget == 0f && scroller == null) return
         if (ms <= 0L) {
@@ -277,10 +307,36 @@ class BottomBarOverlay(
             scroller = null
             scrollTarget = 0f
             scrollPx = 0f
+            popper?.cancel()
+            popper = null
+            scrollPop = 1f
         } else {
             scrollTo(0f, ms, android.view.animation.PathInterpolator(0.05f, 0.7f, 0.1f, 1f))
+            if (scrollPop > POP_FROM) scrollPop = POP_FROM
+            popTo(1f, SCROLL_POP_MS, 0L, android.view.animation.DecelerateInterpolator(1.5f))
         }
         applyFlags()
+    }
+
+    /** Grösse der Knöpfe beim Weg-/Hereinfahren (1 = normal). */
+    private var scrollPop by mutableFloatStateOf(1f)
+    private var popper: android.animation.ValueAnimator? = null
+
+    private fun popTo(to: Float, ms: Long, delay: Long, curve: android.animation.TimeInterpolator) {
+        popper?.cancel()
+        popper = android.animation.ValueAnimator.ofFloat(scrollPop, to).apply {
+            duration = ms
+            startDelay = delay
+            interpolator = curve
+            addUpdateListener { scrollPop = it.animatedValue as Float }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (popper === animation) popper = null
+                    syncMirror()
+                }
+            })
+            start()
+        }
     }
 
     /** Nur fürs Test-Protokoll: Zustand der Leiste. */
@@ -487,8 +543,9 @@ class BottomBarOverlay(
         if (!keepSlide) stopSlide()
         // Unsere zeigt wieder selbst: Spiegel folgt ihr wieder. War sie versteckt (YouTube weg, Kamera ...), hat Android
         // YouTubes Fenster oft neu aufgebaut (neue Fläche, gemessen 17.11.: Spiegel danach weg) → neu anheften.
-        val reattach = mirrorFrozen || !isShowing || view?.alpha == 0f
-        if (mirrorFrozen) {
+        // Plus getippt (Spiegel zeigt die Leiste, Kamera kommt): Spiegel nicht anrühren.
+        val reattach = !handOver && (mirrorFrozen || !isShowing || view?.alpha == 0f)
+        if (mirrorFrozen && !handOver) {
             mirrorFrozen = false
             view?.removeCallbacks(mirrorWatch)
         }
@@ -614,6 +671,23 @@ class BottomBarOverlay(
     fun sinkContent(restoreMs: Long) {
         val v = view ?: return
         if (!isShowing) return
+        if (mirrorShown && mirrorWindowId >= 0 && !mirrorFrozen && !mirrorRect.isEmpty) {
+            // Spiegel da (Handy, Android 14+): Er liegt in YouTubes Fenster genau unter unserer und zeigt dasselbe. Wie bei
+            // YouTube dreht sich nichts: Unsere zeichnet nichts mehr (fängt aber weiter alle Tipps ab), der Spiegel bleibt
+            // stehen, und die Kamera fährt genau wie beim Original über die Leiste. Vorher drehte sich Plus zum "×" und
+            // sprang nach der Kamera zurück ("unsatisfying", Niklas 17.11.).
+            mirrorFrozen = true
+            mirrorFrozenFrontSince = 0L
+            v.removeCallbacks(mirrorWatch)
+            v.postDelayed(mirrorWatch, MIRROR_WATCH_MS)
+            handOver = true
+            sinkSnap = false
+            sunk = true
+            sinkUntil = SystemClock.uptimeMillis()
+            v.removeCallbacks(restoreSink)
+            v.postDelayed(restoreSink, restoreMs)
+            return
+        }
         sinkSnap = false
         sunk = true
         sinkUntil = SystemClock.uptimeMillis() + SINK_MS
@@ -641,6 +715,12 @@ class BottomBarOverlay(
     val isFading: Boolean get() = fading
 
     fun hide() {
+        // Plus getippt, die Kamera kommt gleich: Der Spiegel bleibt stehen, bis sie darüber ist (sonst sah man beim
+        // Verstecken 4 Bilder die echte Leiste, gemessen 17.11.).
+        if (handOver) {
+            hideKeepMirror()
+            return
+        }
         // YouTube selbst zeigt etwas ohne Leiste (Video, Tastatur ...): Spiegel auch weg.
         if (mirrorFrozen) {
             mirrorFrozen = false
@@ -652,6 +732,7 @@ class BottomBarOverlay(
 
     private fun hideInternal() {
         val v = view ?: return
+        handOver = false
         if (fading) {
             fading = false
             v.animate().cancel()
@@ -669,6 +750,9 @@ class BottomBarOverlay(
         scroller = null
         scrollTarget = 0f
         scrollPx = 0f
+        popper?.cancel()
+        popper = null
+        scrollPop = 1f
         isShowing = false
         // Versteckt nie abgedunkelt zurücklassen: Sonst kam sie beim nächsten Zeigen erst dunkel und hellte auf
         // (gemessen 15.11. nach Google Play: 6 Bilder).
@@ -882,7 +966,7 @@ class BottomBarOverlay(
         val v = view ?: return false
         val s = uiState ?: return false
         return isShowing && !passThrough && !underMenu && !sunk && !fading && slide == null && riser == null &&
-            scrollTarget == 0f && scroller == null && coverFromPx == Float.MAX_VALUE && compactNav < 0 &&
+            scrollTarget == 0f && scroller == null && popper == null && scrollPop == 1f && coverFromPx == Float.MAX_VALUE && compactNav < 0 &&
             s.dim == 0f && s.hole == null && s.veil == null && v.alpha == 1f && v.translationY == 0f
     }
 
@@ -1000,6 +1084,7 @@ class BottomBarOverlay(
     @Composable
     private fun BarContent() {
         uiState?.let { state ->
+            androidx.compose.runtime.CompositionLocalProvider(LocalPop provides { scrollPop }) {
             BottomBar(
                 state = state,
                 dimInstant = dimInstant,
@@ -1011,6 +1096,7 @@ class BottomBarOverlay(
                 inkOutMs = inkOutMs,
                 cover = { coverFromPx },
                 rise = { risePx + scrollPx },
+                invisible = { handOver },
                 onTap = { kind ->
                     if (kind != TabKind.CREATE) {
                         optimistic = kind
@@ -1021,6 +1107,7 @@ class BottomBarOverlay(
                 },
                 onLongPress = onLongPress,
             )
+            }
         }
     }
 
@@ -1059,6 +1146,14 @@ class BottomBarOverlay(
         const val SLIDE_MS = 300L
         const val FRAME_MS = 40L
         const val SCROLL_QUIET_AFTER_MS = 150L
+        /** Hochwischen: unsere beginnt so weit unter der Ruhelage (Anteil der Höhe), wie YouTubes erstes Bild. */
+        private const val RISE_FROM_FRAC = 0.32f
+        private const val RISE_FROM_LATE_FRAC = 0.14f
+        private const val SCROLL_RISE_MS = 190L
+        private const val SCROLL_POP_MS = 110L
+        /** Knöpfe beim Hereinfahren erst so gross (dann auf 1), beim Wegfahren am Ende so klein. */
+        private const val POP_FROM = 0.3f
+        private const val POP_AWAY = 0.35f
         /** Eingefrorener Spiegel, YouTube wieder vorne, unsere kam nicht: so lange darf er noch stehen. */
         const val MIRROR_FRONT_MAX_MS = 1_500L
         const val MIRROR_WATCH_MS = 250L
@@ -1128,6 +1223,7 @@ private fun BottomBar(
     inkOutMs: Int,
     cover: () -> Float,
     rise: () -> Float,
+    invisible: () -> Boolean = { false },
     onTap: (TabKind) -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -1194,6 +1290,8 @@ private fun BottomBar(
                 if (BottomBarOverlay.ghost) return@drawWithContent
                 // Nur zum Testen des Spiegels: unsere eigene unsichtbar, der Spiegel bleibt.
                 if (!BottomBarOverlay.drawingMirror && BottomBarOverlay.mirrorTest) return@drawWithContent
+                // Plus getippt, der Spiegel in YouTubes Fenster zeigt die Leiste (Kamera fährt darüber).
+                if (invisible()) return@drawWithContent
                 // Panel über dem unteren Teil: nur darüber zeichnen (das Panel "verschluckt" die Leiste).
                 val c = cover()
                 if (c >= size.height) {
@@ -1300,7 +1398,7 @@ private fun BottomBar(
             TabSlot(
                 modifier = slot,
                 kind = TabKind.HOME,
-                label = state.labels[TabKind.HOME] ?: "Home",
+                label = state.labels[TabKind.HOME] ?: androidx.compose.ui.res.stringResource(app.fshorts.R.string.bar_label_home),
                 state = state,
                 onTap = onTap,
                 onLongPress = onLongPress,
@@ -1310,7 +1408,7 @@ private fun BottomBar(
             TabSlot(
                 modifier = slot,
                 kind = TabKind.SUBSCRIPTIONS,
-                label = state.labels[TabKind.SUBSCRIPTIONS] ?: "Subscriptions",
+                label = state.labels[TabKind.SUBSCRIPTIONS] ?: androidx.compose.ui.res.stringResource(app.fshorts.R.string.bar_label_subscriptions),
                 state = state,
                 onTap = onTap,
                 onLongPress = onLongPress,
@@ -1346,7 +1444,7 @@ private fun BottomBar(
             TabSlot(
                 modifier = slot,
                 kind = TabKind.YOU,
-                label = state.labels[TabKind.YOU] ?: "You",
+                label = state.labels[TabKind.YOU] ?: androidx.compose.ui.res.stringResource(app.fshorts.R.string.bar_label_you),
                 state = state,
                 onTap = onTap,
                 onLongPress = onLongPress,
@@ -1377,7 +1475,7 @@ private fun BottomBar(
                 }
             }
             Box(
-                modifier = slot.fillMaxHeight(),
+                modifier = slot.fillMaxHeight().popIn(),
             ) {
                 if (state.hasCreate) {
                     // Wie im Vorlagenbild: Plus-Kreis etwas unter der Icon-Reihe (Mitte 25,5 dp ab Oberkante).
@@ -1423,7 +1521,7 @@ private fun CompactRow(state: BarUiState, height: androidx.compose.ui.unit.Dp, m
         Row(slot, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             TabIcon(if (state.selected == TabKind.HOME) Icons.Filled.FilledHome else Icons.Outlined.OutlinedHome, style.content, 22.dp)
             Spacer(Modifier.width(8.dp))
-            Label(text = state.labels[TabKind.HOME] ?: "Home", color = style.content)
+            Label(text = state.labels[TabKind.HOME] ?: androidx.compose.ui.res.stringResource(app.fshorts.R.string.bar_label_home), color = style.content)
         }
         Row(slot, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             TabIcon(
@@ -1432,7 +1530,7 @@ private fun CompactRow(state: BarUiState, height: androidx.compose.ui.unit.Dp, m
                 22.dp,
             )
             Spacer(Modifier.width(8.dp))
-            Label(text = state.labels[TabKind.SUBSCRIPTIONS] ?: "Subscriptions", color = style.content)
+            Label(text = state.labels[TabKind.SUBSCRIPTIONS] ?: androidx.compose.ui.res.stringResource(app.fshorts.R.string.bar_label_subscriptions), color = style.content)
         }
         Row(slot, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             val avatar = style.avatar
@@ -1450,7 +1548,7 @@ private fun CompactRow(state: BarUiState, height: androidx.compose.ui.unit.Dp, m
                 TabIcon(Icons.Filled.AccountCircle, style.content, 22.dp)
             }
             Spacer(Modifier.width(8.dp))
-            Label(text = state.labels[TabKind.YOU] ?: "You", color = style.content)
+            Label(text = state.labels[TabKind.YOU] ?: androidx.compose.ui.res.stringResource(app.fshorts.R.string.bar_label_you), color = style.content)
         }
         Box(slot, contentAlignment = Alignment.Center) {
             if (state.hasCreate) {
@@ -1483,7 +1581,8 @@ private fun TabSlot(
     val labelTop = state.labelTopPx
     Box(
         modifier = modifier
-            .fillMaxHeight(),
+            .fillMaxHeight()
+            .popIn(),
     ) {
         if (state.iconCenterPx != null && labelTop != null) {
             // Gleiche Höhe wie bei YouTube: Icon-Mitte und Schrift-Oberkante aus der echten Leiste.
@@ -1506,6 +1605,24 @@ private fun TabSlot(
                 Spacer(Modifier.height(2.dp))
                 Label(text = label, color = state.style.content, tablet = state.style.tablet)
             }
+        }
+    }
+}
+
+/** Grösse der Knöpfe beim Weg-/Hereinfahren (1 = normal), siehe [BottomBarOverlay.scrollRise]. */
+private val LocalPop = androidx.compose.runtime.staticCompositionLocalOf<() -> Float> { { 1f } }
+
+/** Knopf "ploppt" beim Weg-/Hereinfahren wie bei YouTube: Grösse und Deckkraft um die Knopf-Mitte. */
+@Composable
+private fun Modifier.popIn(originY: Float = POP_ORIGIN_Y): Modifier {
+    val pop = LocalPop.current
+    return graphicsLayer {
+        val s = pop()
+        if (s != 1f) {
+            scaleX = s
+            scaleY = s
+            alpha = ((s - 0.15f) / 0.5f).coerceIn(0f, 1f)
+            transformOrigin = TransformOrigin(0.5f, originY)
         }
     }
 }
@@ -1547,6 +1664,8 @@ private fun Label(text: String, color: Color, tablet: Boolean = false, modifier:
 
 /** Schriftgrösse wie die echte Leiste (gemessen: "Startseite" ist dort 129 px breit bei Dichte 2,875). */
 private const val LABEL_DP = 10.5f
+/** Drehpunkt der Knöpfe beim "Ploppen" (Anteil der Leistenhöhe, etwa Symbol-Mitte). */
+private const val POP_ORIGIN_Y = 0.42f
 /** Abdunkeln beim ⋮-Menü: Tinte breitet sich aus (ms) bzw. zieht sich zurück. */
 private const val INK_IN_MS = 480
 private const val INK_OUT_MS = 380
@@ -1590,9 +1709,11 @@ private fun TabIcon(icon: ImageVector, tint: Color, size: androidx.compose.ui.un
 // -------------------------------------------------------------------------------------------------------------------
 
 /** Symbol-Mitte unter der Oberkante der echten Leiste (dp). */
-internal const val MODERN_ICON_CENTER_DP = 32.17f
+internal const val MODERN_ICON_CENTER_DP = 27.5f
 /** Bezugsdichte der abgemessenen Pixelwerte. */
 private const val MODERN_PX = 2.875f
+/** Symbole etwas grösser als bei YouTube (Wunsch von Niklas, 17.11.: "ein bisschen klein"). */
+private const val MODERN_SCALE = 1.14f
 
 /** Die drei Spalten der modernen Leiste, von links nach rechts. */
 internal val MODERN_COLUMNS = listOf(TabKind.HOME, TabKind.YOU, TabKind.CREATE)
@@ -1638,8 +1759,8 @@ private fun modernHousePath(filled: Boolean, k: Float, cx: Float, cy: Float): an
 
 @Composable
 private fun ModernHome(selected: Boolean, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(26.dp)) {
-        val k = density / MODERN_PX
+    Canvas(modifier.size(30.dp)) {
+        val k = density / MODERN_PX * MODERN_SCALE
         val path = modernHousePath(selected, k, size.width / 2f, size.height / 2f)
         val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color.toArgb()
@@ -1654,7 +1775,7 @@ private fun ModernHome(selected: Boolean, color: Color, modifier: Modifier = Mod
 private fun ModernPlus(color: Color, spin: () -> Float, modifier: Modifier = Modifier) {
     Canvas(
         modifier
-            .size(30.dp)
+            .size(34.dp)
             .graphicsLayer {
                 val p = spin()
                 scaleX = 1f + PLUS_GROW * p
@@ -1662,7 +1783,7 @@ private fun ModernPlus(color: Color, spin: () -> Float, modifier: Modifier = Mod
                 rotationZ = PLUS_TURN * p
             },
     ) {
-        val k = density / MODERN_PX
+        val k = density / MODERN_PX * MODERN_SCALE
         val c = Offset(size.width / 2f, size.height / 2f)
         val p = spin().coerceIn(0f, 1f)
         if (p > 0f) drawCircle(color.copy(alpha = PLUS_LIGHTEN * p), radius = 28.75f * k, center = c)
@@ -1687,17 +1808,16 @@ private fun ModernAvatar(style: BarStyle, selected: Boolean, modifier: Modifier 
     val background = style.background
     if (avatar == null) {
         // Noch kein Profilbild abgeschaut (oder Vorschau in der App): Personen-Symbol wie YouTube ohne Bild.
-        Box(modifier.size(26.dp), contentAlignment = Alignment.Center) {
+        Box(modifier.size(30.dp), contentAlignment = Alignment.Center) {
             val ring = if (selected) Modifier.border(2.dp, content, CircleShape).padding(3.dp) else Modifier
-            Box(Modifier.size(24.dp).then(ring), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(27.dp).then(ring), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.AccountCircle, null, tint = content, modifier = Modifier.fillMaxSize())
             }
         }
         return
     }
-    Canvas(modifier.size(26.dp)) {
-
-        val k = density / MODERN_PX
+    Canvas(modifier.size(30.dp)) {
+        val k = density / MODERN_PX * MODERN_SCALE
         val c = Offset(size.width / 2f, size.height / 2f)
         val outer = 34.5f * k
         val imageRadius = if (selected) 25.5f * k else outer
@@ -1752,9 +1872,9 @@ private fun ModernRow(
         horizontalArrangement = if (style.tablet) Arrangement.Center else Arrangement.Start,
     ) {
         val slot: Modifier = if (style.tablet) Modifier.width(TABLET_SLOT_DP.dp) else Modifier.weight(1f)
-        Box(slot.fillMaxHeight()) { IconArea(center) { ModernHome(homeSelected, style.content) } }
-        Box(slot.fillMaxHeight()) { IconArea(center) { ModernAvatar(style, state.selected == TabKind.YOU) } }
-        Box(slot.fillMaxHeight()) {
+        Box(slot.fillMaxHeight().popIn()) { IconArea(center) { ModernHome(homeSelected, style.content) } }
+        Box(slot.fillMaxHeight().popIn()) { IconArea(center) { ModernAvatar(style, state.selected == TabKind.YOU) } }
+        Box(slot.fillMaxHeight().popIn()) {
             if (state.hasCreate) IconArea(center) { ModernPlus(style.content, spin) }
         }
     }
@@ -1788,7 +1908,7 @@ fun BarPreview(modern: Boolean, dark: Boolean, modifier: Modifier = Modifier) {
     val style = BarStyle.default(dark).copy(modern = modern)
     val state = BarUiState(
         selected = TabKind.HOME,
-        labels = mapOf(TabKind.HOME to "Home", TabKind.SUBSCRIPTIONS to "Subscriptions", TabKind.YOU to "You"),
+        labels = emptyMap(),
         subscriptionsBadge = false,
         hasCreate = true,
         barHeightPx = with(density) { heightDp.roundToPx() },
