@@ -1372,19 +1372,6 @@ private fun BottomBar(
             // Tablet, dunkel: YouTube zeichnet oben eine feine Trennlinie (2 px, #2B2B2B am Galaxy Tab A8 gemessen).
             Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(1.dp).background(Color(0xFF2B2B2B)))
         }
-        if (state.showHandle || compactNav >= 0) {
-            val handleBottom = if (compactNav >= 0) 5.dp else 10.dp
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = handleBottom)
-                    // Der Gestenstrich fährt nicht mit herein: Er steht still wie der vom System.
-                    .graphicsLayer { translationY = -rise() }
-                    .size(width = 108.dp, height = 4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(style.handle),
-            )
-        }
         // Tablet: Die echte Leiste hat enge Spalten (96 dp) als Block in der Mitte; auf dem Handy teilen sich vier
         // gleich breite Spalten die ganze Breite.
         if (style.modern) {
@@ -1527,6 +1514,21 @@ private fun BottomBar(
                     }
                 }
             }
+        }
+        // Gestenstrich zuletzt (oben drauf): Beim Weg- und Hereinfahren laufen die Knöpfe darunter durch wie beim Original
+        // (dort liegt der Strich des Systems über YouTubes Leiste).
+        if (state.showHandle || compactNav >= 0) {
+            val handleBottom = if (compactNav >= 0) 5.dp else 10.dp
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = handleBottom)
+                    // Der Gestenstrich fährt nicht mit herein: Er steht still wie der vom System.
+                    .graphicsLayer { translationY = -rise() }
+                    .size(width = 108.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(style.handle),
+            )
         }
     }
 }

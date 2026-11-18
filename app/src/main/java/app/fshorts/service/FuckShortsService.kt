@@ -1134,12 +1134,23 @@ class FuckShortsService : AccessibilityService() {
             }
         }
         // Noch kein Element (Liste wird gesucht): Zwischendurch direkt nachsehen, ob die echte schon kommt.
-        fun barCheck(now: Long): Boolean {
-            if (down || now - lastTouchAt < DIR_BAR_FIRST_MS || now - lastBarCheck < DIR_BAR_CHECK_MS) return false
+        // Direkt nach der echten sehen. Sie "kommt" nur, wenn sie steigt oder schon ganz oben steht: Gleich nach dem Wegfahren
+        // unserer ist die echte noch unterwegs nach unten (gemessen 18.11.: das holte unsere fälschlich zurück).
+        var prevBarTop = Int.MAX_VALUE
+        val restTop = restBounds?.top
+        fun barCheck(now: Long, why: String): Boolean {
+            // Eben war sie sichtbar (aber nicht steigend): gleich nochmals nachsehen, sonst seltener.
+            val every = if (prevBarTop < scr.bottom - 2) DIR_PROBE_STEP_MS * 2 else DIR_BAR_CHECK_MS
+            if (down || now - lastTouchAt < DIR_BAR_FIRST_MS || now - lastBarCheck < every) return false
             lastBarCheck = now
-            val realTop = realBarTopQuick(scr) ?: return false
-            if (realTop >= scr.bottom - 2) return false
-            post("echte kommt (top=$realTop, Liste noch nicht gemessen), unsere schnell herein", rise = false)
+            val realTop = realBarTopQuick(scr)
+            val prev = prevBarTop
+            prevBarTop = realTop ?: Int.MAX_VALUE
+            if (realTop == null || realTop >= scr.bottom - 2) return false
+            val atRest = restTop != null && realTop <= restTop + SCROLL_OUT_PX
+            val rising = prev != Int.MAX_VALUE && realTop < prev - 2
+            if (!atRest && !rising) return false
+            post("echte kommt (top=$realTop, $why), unsere schnell herein", rise = false)
             return true
         }
         while (gen == probeGen) {
@@ -1155,7 +1166,7 @@ class FuckShortsService : AccessibilityService() {
             val p = picked
             if (p == null || !p.first.refresh() || !p.first.isVisibleToUser) {
                 probeReady = false
-                if (barCheck(now)) return null
+                if (barCheck(now, "Liste noch nicht gemessen")) return null
                 picked = pick()
                 probeReady = picked != null
                 SystemClock.sleep(DIR_PROBE_STEP_MS)
@@ -1187,7 +1198,7 @@ class FuckShortsService : AccessibilityService() {
             if (moved != 0) lastMoveAt = t
             // Noch keine Bewegung gesehen: Vielleicht ist das Element veraltet (z. B. nach dem Drehen, gemessen 17.11.: 26 Bilder
             // echte Leiste quer) und bewegt sich gar nicht mit. Zur Sicherheit direkt nach der echten sehen.
-            if (!down && pos == 0 && barCheck(now)) return null
+            if (!down && pos == 0 && barCheck(now, "Liste steht")) return null
             if (passive) {
                 SystemClock.sleep(DIR_PROBE_STEP_MS)
                 continue
@@ -1216,7 +1227,7 @@ class FuckShortsService : AccessibilityService() {
             // ist). Solange es seit dem Fingerauflegen nur hoch ging: Fingerweg = Weg der Liste + diese Strecke.
             if (moved < 0) reversed = true
             val vStart = if (!down && !reversed && pos > 0 && t > lastTouchAt) (pos + slop) / (t - lastTouchAt) else 0f
-            val v = maxOf(vWin, vStart)
+            val v = if (down) vWin else maxOf(vWin, vStart)
             if (trace && moved != 0) Log.d(TAG, "Richtung: $pos px, v=${"%.2f".format(v)} px/ms, ${t - lastTouchAt} ms nach Finger")
             // Nach der Anfangszeit läuft die Liste in die "falsche" Richtung weiter (Schwung nach dem Loslassen): Das kehrt
             // nicht mehr um, also nur noch selten nachsehen, bis sie steht.
@@ -1240,14 +1251,9 @@ class FuckShortsService : AccessibilityService() {
                     post("Hochwischen schnell (${"%.2f".format(v)} px/ms, $pos px), unsere kommt", rise = true)
                     return null
                 }
-            } else if (moved > 0 && pos > minDist && t - lastBarCheck > DIR_BAR_CHECK_MS) {
+            } else if (moved > 0 && pos > minDist) {
                 // Langsam hoch: YouTube zeigt seine Leiste normalerweise nicht. Zur Sicherheit ab und zu nachsehen.
-                lastBarCheck = t
-                val realTop = realBarTopQuick(scr)
-                if (realTop != null && realTop < scr.bottom - 2) {
-                    post("echte kommt beim Hochscrollen (top=$realTop), unsere schnell herein", rise = false)
-                    return null
-                }
+                if (barCheck(now, "langsam hoch")) return null
             }
             SystemClock.sleep(DIR_PROBE_STEP_MS)
         }
