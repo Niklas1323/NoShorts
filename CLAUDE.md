@@ -1213,3 +1213,62 @@ die Koordinaten nicht), `MODERN=1` stellt `barok` auf die moderne Leiste um (Pro
 - Superwalls Test-Fenster ("Test Mode Active") kommt in Test-Versionen bei jedem App-Start; "Continue" mit Abo
   "Inactive" setzt die App auf "Abo abgelaufen" (mit Code "Ningeninge" wieder freigeschaltet). Nicht Teil der Leiste.
 - Tablet: nicht getestet (Wunsch von Niklas). Spiegel ist dort aus.
+
+### 17.–19.11.2026 (Terminal, Pixel 9, Benutzer Leon) – Scrollen wie YouTube, Plus, App-Design V2
+Wünsche von Niklas: moderne Symbole grösser und mittig; langsames/leichtes Hochscrollen darf die Leiste nicht holen
+(YouTube tut das auch nicht), bessere Animation; Leiste ging nach viel Hoch/Runter manchmal nicht mehr runter; Plus →
+Kamera → zurück wirkte unschön; "man soll nicht merken, dass es ein Overlay ist"; App-Oberfläche neu (V2, nicht
+"vibe-coded", minimalistisch, YouTube-Rot), alte Version sichern; Support-ID aufräumen; grösseres Schild.
+YouTube 21.45.82, dunkel (hell geprüft). Commits 42ee3e6 … 1330faa.
+
+**Wie YouTube 21.45 seine Leiste beim Hochscrollen zeigt (gemessen mit `FShortsGhost` + Mess-Modus `FShortsLab`,
+Lage eines Listen-Elements und der echten Leiste alle 8 ms):** nur bei schnellem Hochwischen. 0,5 / 0,62 / 1,0 px/ms →
+bleibt weg; 1,2 / 1,3 / 1,5 px/ms und schneller → kommt, ~50 ms nach dem Finger. Langsames/leichtes Hochscrollen zeigt
+sie nie (auch nicht nach 600 px). Animation der neuen Leiste: erstes Bild ~30 % der Höhe unter der Ruhelage, dann stark
+abbremsend (~190 ms), Knöpfe "ploppen" von klein auf. Wegfahren: beschleunigt, Knöpfe schrumpfen.
+
+| Test | vorher | nachher | behoben? |
+|---|---|---|---|
+| Langsam/leicht hochscrollen | unsere sprang sofort hoch (echte blieb weg) | unsere bleibt unten wie YouTube; Sicherheitsnetz fragt alle 60 ms die echte ab | ja |
+| Schnell hochwischen | unsere 90 ms oder sofort | wie YouTube: ab 30 % abbremsend + Plopp (`scrollRise`); spät erkannt ab 14 % | ja |
+| Unsere oben, echte schon weg → schnell runter | unsere blieb stehen ("geht nicht mehr runter") | fährt weg (`startDirectionProbe(down = true)`) | ja |
+| Schnell hoch/runter im Wechsel (je 6×6) | – | klassisch 2/2, modern 3/3: 0 echte (Treffer von `rbar` = runde Inhalte, Bilder geprüft) | ok |
+| Gemischt 12 Wischer (Start, Abos, Du), lang 65 s | – | 0 | ok |
+| Plus → Kamera → Zurück/Geste/X | Plus drehte zum ×, sprang nach der Kamera zurück | Spiegel übernimmt, Kamera fährt darüber wie beim Original, kein Drehen (`handOver`); 0 echte (klassisch 5×, modern 6×) | ja |
+| Zurück auf YouTube-Startseite (App schliesst) | ~8 Bilder echte auf dem wegschrumpfenden Fenster | Spiegel fährt mit (vorderstes Fenster ohne Inhalt = `frontPkg == null`) | ja |
+| Suche → "Suchen" | 1 von 3 Läufen 3–4 schwache Bilder durch die Tastatur | Spiegel liegt schon unter der offenen Tastatur (`mirrorUnderKeyboard`, 450 ms nach Öffnen), 0 (6/6) | ja |
+| Suche → Tastatur mit Zurück zu | – | 0, Vorschläge ohne Leiste | ok |
+| Quer nach dem Drehen hoch/runter | 13–26 Bilder echte (veraltetes Listen-Element) | 0 (3/3); direkte Abfrage, solange sich das Element nicht bewegt | ja |
+| Moderne Symbole | zu klein, zu tief | 14 % grösser, Mitte 27,5 dp = genau zwischen Oberkante und Gestenstrich | ja |
+| Klassische Beschriftung | englische Ersatztexte | YouTubes Knopf-Beschreibung ("Startseite", "Mein YouTube"), sonst `bar_label_*` je Sprache | ja |
+| Tabs, App wechseln, App-Übersicht, Benachrichtigungen, Home + öffnen, Video verlassen (Zurück/Geste/Runter, Mini-Player), ⋮, Google Play (Werbung "Download"), Short per Link | – | 0 (klassisch und modern) | ok |
+
+**Wichtig im Code (`FuckShortsService.runDirectionProbe`/`probeLoop`):** Tempo über ~50 ms (`DIR_SPEED_*`), am Anfang
+zusätzlich Fingerweg = Listenweg + Touch-Slop (die Liste läuft erst nach ~8 dp los); plötzlicher Sprung nach langsamem
+Hochscrollen braucht eine zweite schnelle Messung (`DIR_CONFIRM_AFTER_MS`, ein Element änderte einmal die Grösse);
+`barCheck` zählt die echte nur, wenn sie steigt oder ganz oben steht. Nach der Messung liegt ein Element für das nächste
+Fingerauflegen bereit (`probeReady`, Suchen dauerte beim Wischen bis 330 ms). Der alte Weg über Scroll-Meldungen holt
+unsere nur noch ohne Messung und bei > 60 dp (`SCROLL_EVENT_FAST_DP`). Gestenstrich wird über den Knöpfen gezeichnet.
+
+**App-Design V2 (`ui/HomeV2.kt`, `ui/OnboardingV2.kt`, Standard):** flaches YouTube-Schwarz `#0F0F0F` / Weiss, graue
+Flächen ohne Rahmen, YouTube-Rot `#FF0033` nur als Akzent (Hauptknopf, Auswahl), keine Verläufe/Glas/Leuchten.
+Startseite: Schild gross (200 dp, flach, ruhiger "Atem"-Ring), "Schutz an" in einer Zeile, zwei Zahlen-Kacheln, Leisten-
+Wahl mit Bildchen, roter Knopf; Leiste unten wie unsere YouTube-Leiste. Einstellungen als schlichte Liste (Sprache unter
+Darstellung, Abschnitte normal statt GROSS). **Support-ID:** wird gebraucht (Datenschutzerklärung: Auskunft/Löschung bei
+Superwall) → jetzt zum Aufklappen, Antippen kopiert. Einrichtung, "Abo beendet", Sprachwahl, Code, Update-Hinweis,
+Ausschalt-/Wieder-Einschalten-Dialoge im selben Stil (`LocalDesignV2`, `LocalV2ForceDark`). Neue Texte `stat_shorts`,
+`stat_time`, `bar_label_*` in 8 Sprachen (XML + `gen_strings.py`/`tr.py`).
+**V1 gesichert:** Commit 0494956 (alle UI-Dateien von damals), APK `C:\Users\A023985\FShorts-Versionen\fshorts-design-v1-0494956.apk`
+(dazu V2: `fshorts-design-v2-1330faa.apk`), und in Test-Versionen ganz unten in den Einstellungen "Design V1 (Test)" /
+"Design V2 (Test)" (Prefs `design_v1`, ganze App). Play-Store-Version zeigt immer V2.
+
+**Test-Werkzeuge** (`tools/pixel-test/leon.sh` = s15 + s17): `upmix` (12 gemischte Wischer + Ereignisse), `trk`/`mot`
+(Lage pro Bild + Bewegung), `ghost an|aus`, `appsw`, `ovw`, `shade`, `tabt`, `srch`, `srchback`, `menu`, `bexit`
+(Zurück schliesst YouTube), `homere`, `vlx` (Mini-Player an Stelle y), `swcont` (Superwalls Test-Fenster mit Continue).
+Achtung: `swcont` tippt blind auf "Continue" – nur nutzen, wenn das Test-Fenster sicher offen ist (sonst trifft es
+"YouTube öffnen"). Mess-Modus `setprop log.tag.FShortsLab VERBOSE`.
+
+**Bleibt:** Tablet ungetestet (Wunsch). Superwalls Test-Fenster in Test-Versionen bei jedem Start. Fehlalarme von `rbar`
+bei runden Inhalten (DJ-Teller, Zahnräder, Filamentrollen) – Bilder immer ansehen.
+Testfehler (ohne Folgen): Ein falsch umgerechneter Tipp öffnete die Datenschutzerklärung in Chrome (Chrome übersetzte
+sie), mit Zurück zu. Ein offenes Code-Feld bekam Buchstaben von Wischern ab ("CT cr f"), nicht eingelöst.

@@ -181,3 +181,125 @@ rbarL() { local n=$1
     if (!found && on) { printf "ECHT Bilder %d-%d (%d) erst y=%d Grösse %s\n", st, f-1, f-st, y0, s0; on=0; cnt++ }
   }
   END { if (on) { printf "ECHT Bilder %d-%d (%d) erst y=%d Grösse %s\n", st, NR-1, NR-st, y0, s0; cnt++ } printf "Bilder %d, Abschnitte mit echter Leiste: %d\n", NR, cnt+0 }'; }
+# Sitzung 17./18.11.2026: Zusatz-Hilfen (nach s15.sh laden)
+# ghost an|aus: unsere Leiste unsichtbar (nur Test-Version), Trace dazu
+ghost() { if [ "$1" = an ]; then adb shell 'setprop log.tag.FShortsGhost VERBOSE; setprop log.tag.FShortsTrace VERBOSE'; else adb shell 'setprop log.tag.FShortsGhost INFO; setprop log.tag.FShortsTrace INFO'; fi; sleep 0.5; }
+# mot NAME: pro Bild Bewegung des Inhalts (Unterschied zum Vorbild, y 500-1900) -> rec/mot_NAME.txt (Bild t Wert)
+mot() { local n=$1; ffmpeg -loglevel fatal -y -i rec/$n.mp4 -fps_mode passthrough -vf "crop=900:1400:180:500,format=gray,tblend=all_mode=difference,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=rec/_m.txt" -f null -
+  paste -d' ' <(grep -oE 'pts_time:[0-9.]+' rec/_m.txt | cut -d: -f2) <(grep -oE 'YAVG=[0-9.]+' rec/_m.txt | cut -d= -f2) | awk '{printf "%d %.3f %.2f\n", NR, $1, $2}' > rec/mot_$n.txt; }
+# trk NAME [E|U]: pro Bild Zeit, Inhalts-Bewegung, Oberkante Profilbild (echte E an x911 / unsere U an x640)
+trk() { local n=$1 w=${2:-E} x=911 m="255*gt(r(X,Y),150)*lt(g(X,Y),70)*gt(b(X,Y),55)*lt(b(X,Y),135)"; [ "$w" = U ] && x=640
+  ffmpeg -loglevel fatal -y -i rec/$n.mp4 -fps_mode passthrough -vf "crop=70:207:$x:2217,format=gbrp,geq=r='$m':g='$m':b='$m',scale=1:207:flags=area,format=gray" -f rawvideo - | od -An -v -tu1 -w207 | awk '{y="-"; for(i=1;i<=NF;i++) if($i>50){y=2217+i-1;break} print NR-1, y}' > rec/et_${n}_$w.txt
+  mot $n; paste -d' ' rec/et_${n}_$w.txt rec/mot_$n.txt | awk '{printf "%d %s %s %s\n", $1, $4, $5, $2}' > rec/trk_${n}_$w.txt; }
+# trksum NAME [E|U]: nur Bilder mit Bewegung oder Änderung der Leiste (Bild t Bewegung Lage)
+trksum() { awk '{ if ($3>0.4 || $4!=p) printf "%d %.3f %s %s\n", $1,$2,$3,$4; p=$4 }' rec/trk_${1}_${2:-E}.txt; }
+# upmix NAME: gemischte Wischer (leicht/langsam/mittel/schnell hoch, schnell runter), Trace, rbar + Ereignisse
+upmix() { local n=$1; ytfront || return 1; adb shell setprop log.tag.FShortsTrace VERBOSE; live $n; recstart ${2:-34}; sleep 0.5; : > rec/$n.mk
+  sw() { echo "SW $1 $2 $3 $(date +%T.%N|cut -c1-12)" >> rec/$n.mk; adb shell input swipe 120 $1 120 $2 $3; sleep $4; }
+  sw 1700 900 120 1.8; sw 1000 1060 400 1.6; sw 1000 1150 600 1.6; sw 900 1200 600 1.6; sw 1700 900 120 1.8
+  sw 900 1500 2000 1.6; sw 1700 900 120 1.8; sw 900 1300 300 1.8; sw 1700 900 120 1.8; sw 900 1600 120 2.0; sw 1700 900 120 1.8; sw 900 1200 230 2
+  recpull $n >/dev/null; adb shell setprop log.tag.FShortsTrace INFO; rbar $n; grep -a "Leiste:" rec/$n.log | sed 's/.*FuckShorts: //' | grep -vE "normal \(top|Scan" | cut -c1-110; }
+# swcont: Superwalls Test-Fenster (nur Test-Versionen) mit "Continue" schliessen (Zustand unverändert lassen)
+swcont() { adb shell input swipe 540 1900 540 900 300; sleep 0.8; adb shell input swipe 540 2000 540 700 300; sleep 1.2; adb shell input tap 540 2033; sleep 2; }
+# appsw NAME: per Gestenleiste zur vorherigen App und wieder zurück (Aufnahme, rbar)
+appsw() { local n=$1; ytfront || return 1; live $n; recstart 9; sleep 0.5; adb shell input swipe 200 2405 900 2405 250; sleep 2.2; echo "vorne: $(front)"; adb shell input swipe 900 2405 200 2405 250; sleep 3; recpull $n >/dev/null; ytfront && rbar $n | tail -2; }
+# ovw NAME: App-Übersicht und mit Tipp auf die YouTube-Karte zurück (nur wenn die Übersicht vorne ist)
+ovw() { local n=$1; ytfront || return 1; live $n; recstart 9; sleep 0.5; adb shell input keyevent KEYCODE_APP_SWITCH; sleep 2; local f=$(front); echo "vorne: $f"; case "$f" in *launcher*|*Launcher*|*recents*|*Recents*|*systemui*) adb shell input tap 540 1200;; *) adb shell input keyevent KEYCODE_BACK;; esac; sleep 3; recpull $n >/dev/null; ytfront && rbar $n | tail -2; }
+# shade NAME: Benachrichtigungen auf und zu
+shade() { local n=$1; ytfront || return 1; live $n; recstart 8; sleep 0.5; adb shell input swipe 540 5 540 1400 250; sleep 1.8; adb shell input swipe 540 2300 540 300 250; sleep 2.5; recpull $n >/dev/null; ytfront && rbar $n | tail -2; }
+shade () 
+{ 
+    local n=$1;
+    ytfront || return 1;
+    live $n;
+    recstart 8;
+    sleep 0.5;
+    adb shell input swipe 540 5 540 1400 250;
+    sleep 1.8;
+    adb shell input keyevent KEYCODE_BACK;
+    sleep 2.5;
+    recpull $n > /dev/null;
+    ytfront && rbar $n | tail -2
+}
+# tabt NAME X: Tipp auf unsere Leiste bei x=X (Aufnahme 6 s, rbar, gewählter Tab)
+tabt() { local n=$1 x=$2; ytfront || return 1; barshow >/dev/null || { echo "LEISTE NICHT DA"; return 1; }; live $n; recstart 6; sleep 0.4; bartap $x >/dev/null; sleep 3.5; recpull $n >/dev/null; echo "$n x=$x: $(rbar $n | tail -1) | $(grep -a 'Tab gewählt\|Tipp:' rec/$n.log | sed 's/.*FuckShorts: //' | tail -2 | tr '\n' ' ')"; }
+# srch NAME: Lupe, Text, Suchen, 2× Zurück (jeder Schritt nur, wenn YouTube vorne ist)
+srch() { local n=$1; tofeed >/dev/null; ytfront || return 1; live $n; recstart 16; sleep 0.5; adb shell input tap 1008 240; sleep 1.5
+  ytfront || return 1; adb shell input text "klavier"; sleep 1; ytfront || return 1; adb shell input keyevent KEYCODE_ENTER; sleep 3.5
+  ytfront || return 1; adb shell input keyevent KEYCODE_BACK; sleep 2; ytfront || return 1; adb shell input keyevent KEYCODE_BACK; sleep 3
+  recpull $n >/dev/null; echo "$n: $(rbar $n | tail -1)"; }
+# menu NAME X Y: ⋮ bei X,Y antippen (nur wenn unverändert), 2 s, Zurück; rbar
+menu() { local n=$1 x=$2 y=$3; ytfront || return 1; adb exec-out screencap -p > rec/${n}_r.png; live $n; recstart 8; sleep 0.4; tapif ${n}_r $x $y || { recpull $n >/dev/null; return 1; }; sleep 2; ytfront || return 1; adb shell input keyevent KEYCODE_BACK; sleep 3; recpull $n >/dev/null; echo "$n: $(rbar $n | tail -1)"; }
+menu () 
+{ 
+    local n=$1 x=$2 y=$3;
+    ytfront || return 1;
+    adb exec-out screencap -p > rec/${n}_r.png;
+    live $n;
+    recstart 8;
+    sleep 0.4;
+    tapif ${n}_r $x $y || { 
+        recpull $n > /dev/null;
+        return 1
+    };
+    sleep 2;
+    case "$(front)" in 
+        *youtube* | *PopupWindow*)
+            adb shell input keyevent KEYCODE_BACK
+        ;;
+        *)
+            echo "VORNE: $(front)";
+            return 1
+        ;;
+    esac;
+    sleep 3;
+    recpull $n > /dev/null;
+    echo "$n: $(rbar $n | tail -1)"
+}
+# bexit NAME [key|edge]: YouTube vom Startbildschirm öffnen, Startseite, Zurück (Taste oder Wischgeste) -> YouTube schliesst. Blatt der Animation.
+bexit() { local n=$1 m=${2:-key}; adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell monkey -p com.google.android.youtube -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 3; tofeed >/dev/null; barshow >/dev/null || return 1; ytfront || return 1
+  live $n; recstart 6; sleep 0.8; adb shell log -t FuckShorts "MARK back"; if [ "$m" = edge ]; then adb shell input swipe 3 1300 600 1300 150; else adb shell input keyevent KEYCODE_BACK; fi; sleep 3; recpull $n >/dev/null; echo "$n vorne: $(front)"
+  local f=$(gap3 $n 3 2>/dev/null | grep -oE 'Zone A: Bild [0-9]+' | grep -oE '[0-9]+$'); f=${f:-60}; ffmpeg -loglevel error -y -i rec/$n.mp4 -vf "select='between(n,$((f-4)),$((f+24)))*not(mod(n-$((f-4)),2))',scale=216:-1,drawtext=text='%{n}':x=4:y=4:fontsize=16:fontcolor=yellow:box=1:boxcolor=black@0.6:fontfile=/Windows/Fonts/arial.ttf,tile=8x2" -fps_mode passthrough -frames:v 1 rec/${n}_x.png; echo rec/${n}_x.png; }
+# srchback NAME: Lupe, Text, Zurück (Tastatur zu, Vorschläge bleiben), 1,5 s, Zurück (Startseite). Blatt um das Tastatur-Schliessen.
+srchback() { local n=$1; tofeed >/dev/null; ytfront || return 1; live $n; recstart 12; sleep 0.5; adb shell input tap 1008 240; sleep 1.5
+  ytfront || return 1; adb shell input text "hund"; sleep 1.2; ytfront || return 1; adb shell log -t FuckShorts "MARK zu"; adb shell input keyevent KEYCODE_BACK; sleep 1.8
+  ytfront || return 1; adb shell input keyevent KEYCODE_BACK; sleep 3; recpull $n >/dev/null; echo "$n: $(rbar $n | tail -1)"; }
+vlx () 
+{ 
+    local m=$1 n=$2 y=$3;
+    ytfront || return 1;
+    live $n;
+    recstart 9;
+    adb shell input tap 700 $y;
+    sleep 3.5;
+    ytfront || return 1;
+    case $m in 
+        back)
+            adb shell input keyevent KEYCODE_BACK
+        ;;
+        edge)
+            adb shell input swipe 3 1300 600 1300 150
+        ;;
+        down)
+            adb shell input swipe 540 450 540 1800 200
+        ;;
+    esac;
+    sleep 3;
+    recpull $n > /dev/null;
+    echo "$m: $(rbar $n | tail -1) | $(grep -a 'Leiste:' rec/$n.log | sed 's/.*FuckShorts: //' | grep -c 'Video verlassen') verlassen"
+}
+homere () 
+{ 
+    local n=$1;
+    ytfront || return 1;
+    barshow > /dev/null;
+    live $n;
+    recstart 9;
+    sleep 0.5;
+    adb shell input keyevent KEYCODE_HOME;
+    sleep 2;
+    adb shell monkey -p com.google.android.youtube -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1;
+    sleep 3.5;
+    recpull $n > /dev/null;
+    echo "$n: $(rbar $n | tail -1)"
+}
