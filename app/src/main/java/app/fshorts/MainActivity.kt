@@ -232,7 +232,18 @@ private fun App() {
         controller.isAppearanceLightStatusBars = !darkBackground
         controller.isAppearanceLightNavigationBars = !darkBackground
     }
+    // Design: V2 (Standard) oder V1 (bis 17.11.2026, nur Test-Versionen zum Vergleichen, Einstellungen ganz unten).
+    var designV1 by remember { mutableStateOf(BuildConfig.DEBUG && Prefs.designV1(context)) }
+    val setDesignV1: ((Boolean) -> Unit)? = if (BuildConfig.DEBUG) {
+        { on ->
+            designV1 = on
+            Prefs.setDesignV1(context, on)
+        }
+    } else {
+        null
+    }
     FShortsTheme(themeMode) {
+     androidx.compose.runtime.CompositionLocalProvider(app.fshorts.ui.LocalDesignV2 provides !designV1) {
       AnimatedContent(
         targetState = screen,
         transitionSpec = {
@@ -242,6 +253,32 @@ private fun App() {
       ) { target ->
         if (target == 0) {
             key(onboardingKey) {
+              if (!designV1) {
+                app.fshorts.ui.OnboardingV2(
+                    startStep = if (showSetup) 2 else 0,
+                    accepted = accepted,
+                    enabled = enabled,
+                    onAgree = {
+                        Prefs.setDisclosureAccepted(context)
+                        accepted = true
+                        if (enabled) {
+                            if (Access.unlocked) finishSetup()
+                        } else {
+                            awaitingEnable = true
+                            openAccessibilitySettings(context)
+                        }
+                    },
+                    onContinue = { if (rerunSetup || Access.unlocked) finishSetup() else showPaywall() },
+                    onOpenSettings = {
+                        awaitingEnable = true
+                        openAccessibilitySettings(context)
+                    },
+                    onOpenAppInfo = { openAppInfo(context) },
+                    isPro = isPro,
+                    onRedeem = redeem,
+                    onDone = { finishSetup() },
+                )
+              } else {
                 Onboarding(
                     startStep = if (showSetup) 2 else 0,
                     accepted = accepted,
@@ -268,11 +305,17 @@ private fun App() {
                     onRedeem = redeem,
                     onDone = { finishSetup() },
                 )
+              }
             }
         } else if (target == 1) {
-            ExpiredScreen(onResubscribe = { showPaywall() }, onRestore = restore, onRedeem = redeem)
+            if (designV1) {
+                ExpiredScreen(onResubscribe = { showPaywall() }, onRestore = restore, onRedeem = redeem)
+            } else {
+                app.fshorts.ui.ExpiredScreenV2(onResubscribe = { showPaywall() }, onRestore = restore, onRedeem = redeem)
+            }
         } else {
             HomeUi(
+                designV1, setDesignV1,
                 HomeState(
                     enabled = enabled,
                     shortsClosed = shortsClosed,
@@ -361,6 +404,7 @@ private fun App() {
               },
           )
       }
+     }
     }
 }
 
@@ -414,26 +458,10 @@ private fun openUrl(context: Context, url: String) {
  * (Einstellungen ganz unten), zum Vergleichen; die Play-Store-Version zeigt immer V2.
  */
 @Composable
-private fun HomeUi(state: HomeState, actions: HomeActions) {
-    val context = LocalContext.current
-    var designV1 by remember { mutableStateOf(BuildConfig.DEBUG && Prefs.designV1(context)) }
+private fun HomeUi(designV1: Boolean, setDesignV1: ((Boolean) -> Unit)?, state: HomeState, actions: HomeActions) {
     if (designV1) {
-        HomeApp(state, actions, onDesignV2 = if (BuildConfig.DEBUG) {
-            {
-                designV1 = false
-                Prefs.setDesignV1(context, false)
-            }
-        } else {
-            null
-        })
+        HomeApp(state, actions, onDesignV2 = setDesignV1?.let { set -> { set(false) } })
     } else {
-        app.fshorts.ui.HomeAppV2(state, actions, onDesignV1 = if (BuildConfig.DEBUG) {
-            {
-                designV1 = true
-                Prefs.setDesignV1(context, true)
-            }
-        } else {
-            null
-        })
+        app.fshorts.ui.HomeAppV2(state, actions, onDesignV1 = setDesignV1?.let { set -> { set(true) } })
     }
 }

@@ -47,6 +47,10 @@ private val diagonalGradient = Brush.linearGradient(
 /** Meldung "Update verfügbar". */
 @Composable
 fun UpdateDialog(onUpdate: () -> Unit, onLater: () -> Unit) {
+    if (LocalDesignV2.current) {
+        UpdateDialogV2(onUpdate, onLater)
+        return
+    }
     Dialog(onDismissRequest = onLater, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier
@@ -97,5 +101,27 @@ fun UpdateDialog(onUpdate: () -> Unit, onLater: () -> Unit) {
                     .padding(12.dp),
             )
         }
+    }
+}
+
+/** "Update verfügbar" im Design V2: graue Fläche, roter Hauptknopf (wie die Dialoge der Startseite V2). */
+@Composable
+private fun UpdateDialogV2(onUpdate: () -> Unit, onLater: () -> Unit) {
+    val c = v2()
+    SheetV2(onDismiss = onLater) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BrandLogo(48.dp, background = V2.Red)
+            Spacer(Modifier.size(12.dp))
+            Box(Modifier.size(36.dp).clip(CircleShape).background(c.chip), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.ArrowDownward, null, tint = c.text, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(stringResource(R.string.update_title), color = c.text, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(stringResource(R.string.update_text), color = c.sub, fontSize = 15.sp)
+        Spacer(Modifier.height(22.dp))
+        PrimaryButtonV2(stringResource(R.string.update_now), onUpdate)
+        SecondaryButtonV2(stringResource(R.string.update_later), onLater)
     }
 }

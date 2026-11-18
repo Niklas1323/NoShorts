@@ -46,9 +46,14 @@ fun LanguagePill() {
     var open by remember { mutableStateOf(false) }
     Row(
         Modifier
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.12f))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+            .then(
+                if (LocalDesignV2.current) {
+                    // V2: grauer Chip wie YouTubes Filter.
+                    Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF272727))
+                } else {
+                    Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.12f)).border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                },
+            )
             .clickable { open = true }
             .padding(start = 12.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -68,27 +73,33 @@ fun LanguageSheet(dark: Boolean, onClose: () -> Unit) {
     val context = LocalContext.current
     val current = remember { AppLanguage.current(context) }
     val text = if (dark) Color.White else LocalPalette.current.text
+    val v2 = LocalDesignV2.current
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = if (dark) Color(0xFF17171A) else Color(0xFFF4F4F6),
+        containerColor = when {
+            v2 && dark -> Color(0xFF212121)
+            v2 -> Color.White
+            dark -> Color(0xFF17171A)
+            else -> Color(0xFFF4F4F6)
+        },
     ) {
         Column(Modifier.padding(horizontal = 22.dp).padding(bottom = 24.dp)) {
             Text(
                 stringResource(R.string.language),
-                style = headline(28.sp),
+                style = if (v2) androidx.compose.ui.text.TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold) else headline(28.sp),
                 color = text,
                 modifier = Modifier.padding(bottom = 12.dp),
             )
             AppLanguage.ALL.forEach { lang ->
                 val selected = lang.code == current.code
-                val shape = RoundedCornerShape(18.dp)
+                val shape = RoundedCornerShape(if (v2) 12.dp else 18.dp)
                 Row(
                     Modifier
                         .padding(vertical = 4.dp)
                         .fillMaxWidth()
                         .clip(shape)
-                        .background(text.copy(alpha = if (selected) 0.14f else 0.05f))
+                        .background(text.copy(alpha = if (selected) 0.14f else if (v2) 0f else 0.05f))
                         .clickable {
                             onClose()
                             (context as? Activity)?.let { AppLanguage.set(it, lang.code) }

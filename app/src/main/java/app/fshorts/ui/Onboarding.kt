@@ -769,7 +769,7 @@ fun ExpiredScreen(onResubscribe: () -> Unit, onRestore: () -> Unit, onRedeem: (S
 }
 
 /** "Öffne %1$s" → Platzhalter fett. So stimmt die Wortstellung in jeder Sprache. */
-private fun boldArg(template: String, arg: String): AnnotatedString = buildAnnotatedString {
+internal fun boldArg(template: String, arg: String): AnnotatedString = buildAnnotatedString {
     val i = template.indexOf("%1\$s")
     if (i < 0) {
         append(template)

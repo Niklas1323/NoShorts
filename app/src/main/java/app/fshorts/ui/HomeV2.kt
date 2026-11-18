@@ -121,7 +121,7 @@ data class V2Colors(
     val line: Color,
 )
 
-private val V2Dark = V2Colors(
+internal val V2Dark = V2Colors(
     dark = true,
     bg = Color(0xFF0F0F0F),
     surface = Color(0xFF1F1F1F),
@@ -131,7 +131,7 @@ private val V2Dark = V2Colors(
     line = Color.White.copy(alpha = 0.10f),
 )
 
-private val V2Light = V2Colors(
+internal val V2Light = V2Colors(
     dark = false,
     bg = Color.White,
     surface = Color(0xFFF2F2F2),
@@ -148,8 +148,12 @@ object V2 {
     val Amber = Color(0xFFF5A000)
 }
 
+/** Farben V2: im Onboarding immer dunkel ([LocalV2ForceDark]), sonst nach dem gewählten Design. */
 @Composable
-private fun v2(): V2Colors = if (LocalPalette.current.dark) V2Dark else V2Light
+internal fun v2(): V2Colors = if (LocalV2ForceDark.current || LocalPalette.current.dark) V2Dark else V2Light
+
+/** Onboarding und "Abo beendet" sind immer dunkel (wie YouTube dunkel). */
+internal val LocalV2ForceDark = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 private enum class ScreenV2 { Home, Settings, Privacy }
 
@@ -506,7 +510,7 @@ private fun BarTileV2(modern: Boolean, selected: Boolean, label: String, modifie
 
 /** Hauptknopf: YouTube-Rot, weisse Schrift. */
 @Composable
-private fun PrimaryButtonV2(text: String, onClick: () -> Unit, icon: ImageVector? = null, enabled: Boolean = true) {
+internal fun PrimaryButtonV2(text: String, onClick: () -> Unit, icon: ImageVector? = null, enabled: Boolean = true) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -526,7 +530,7 @@ private fun PrimaryButtonV2(text: String, onClick: () -> Unit, icon: ImageVector
 }
 
 @Composable
-private fun SecondaryButtonV2(text: String, onClick: () -> Unit) {
+internal fun SecondaryButtonV2(text: String, onClick: () -> Unit) {
     val c = v2()
     Text(
         text,
@@ -545,7 +549,7 @@ private fun SecondaryButtonV2(text: String, onClick: () -> Unit) {
 
 /** Chip wie YouTubes Filter oben: grau, gewählt weiss mit schwarzer Schrift (hell umgekehrt). */
 @Composable
-private fun ChipV2(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun ChipV2(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = v2()
     val bg = when {
         selected && c.dark -> Color(0xFFF1F1F1)
@@ -571,7 +575,7 @@ private fun ChipV2(text: String, selected: Boolean, modifier: Modifier = Modifie
 
 /** Dialog im Design V2: graue Fläche, runde Ecken, ohne Verlauf. */
 @Composable
-private fun SheetV2(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+internal fun SheetV2(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     val c = v2()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
@@ -701,7 +705,7 @@ private fun v2FieldColors() = v2().let { c ->
 
 /** Gratis-Code eingeben (Design V2). */
 @Composable
-private fun RedeemSheetV2(redeem: (String) -> String, onClose: () -> Unit) {
+internal fun RedeemSheetV2(redeem: (String) -> String, onClose: () -> Unit) {
     val c = v2()
     var code by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
@@ -813,19 +817,24 @@ private fun SettingsScreenV2(state: HomeState, actions: HomeActions, onPrivacy: 
     if (languageOpen) LanguageSheet(dark = c.dark, onClose = { languageOpen = false })
 }
 
-/** Abschnitt-Titel wie bei YouTube: normal geschrieben statt GROSS (die Texte sind für V1 in Grossbuchstaben). */
+/** GROSS geschriebene Texte (für V1) normal schreiben ("VORHER" → "Vorher", "YouTube" bleibt). */
 @Composable
-private fun SectionV2(title: String) {
-    val c = v2()
+internal fun sentenceCase(title: String): String {
     val locale = androidx.compose.ui.text.intl.Locale.current.platformLocale
-    val normal = if (title == title.uppercase(locale) && title.length > 1) {
+    return if (title == title.uppercase(locale) && title.length > 1) {
         title.lowercase(locale).replaceFirstChar { it.titlecase(locale) }
             .replace(Regex("youtube", RegexOption.IGNORE_CASE), "YouTube")
     } else {
         title
     }
+}
+
+/** Abschnitt-Titel wie bei YouTube: normal geschrieben statt GROSS (die Texte sind für V1 in Grossbuchstaben). */
+@Composable
+private fun SectionV2(title: String) {
+    val c = v2()
     Text(
-        normal,
+        sentenceCase(title),
         color = c.sub,
         fontSize = 13.sp,
         fontWeight = FontWeight.Medium,

@@ -91,6 +91,9 @@ private val LightPalette = Palette(
 
 val LocalPalette = staticCompositionLocalOf { DarkPalette }
 
+/** Design V2 (17.11.2026) aktiv? V1 bleibt in Test-Versionen zum Vergleichen umschaltbar. */
+val LocalDesignV2 = staticCompositionLocalOf { true }
+
 /** themeMode: 0 = wie das Handy, 1 = dunkel, 2 = hell. */
 @Composable
 fun FShortsTheme(themeMode: Int, content: @Composable () -> Unit) {
