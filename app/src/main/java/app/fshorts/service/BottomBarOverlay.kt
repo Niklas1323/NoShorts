@@ -268,98 +268,104 @@ class BottomBarOverlay(
     val isScrolledAway: Boolean get() = scrollTarget > 0f
 
     /**
-     * Die echte Leiste ist beim Runterscrollen weggefahren: unsere fährt nach unten hinterher (das Fenster bleibt, nur
-     * der Inhalt rutscht raus). Die echte ist dabei schneller (~3 Bilder), unsere liegt also immer über ihr.
+     * Die echte Leiste fährt beim Runterscrollen weg: unsere genau wie YouTubes (gemessen 19.11., Pixel 9, YouTube
+     * 21.45, Bild für Bild mit unsichtbarer eigener Leiste): Fläche beschleunigt raus (+1, +4, +12, +30, +69, +117 px pro
+     * Bild, ≈ Höhe·(t/125 ms)^2,9), Knöpfe nur halb so weit und gegen Ende schrumpfend (ab ~58 ms, weg bei ~92 ms).
+     * [phaseMs]: so viele ms ist YouTubes Animation schon unterwegs (unsere beginnt an derselben Stelle der Kurve).
      */
-    fun scrollAway(ms: Long) {
+    fun scrollAway(phaseMs: Long = 0L) {
         val h = target.height().toFloat()
         if (!isShowing || scrollTarget >= h) return
-        // Wie YouTubes neue Leiste (gemessen 17.11.): rutscht beschleunigt raus, die Knöpfe schrumpfen gegen Ende weg.
-        scrollTo(h, ms, android.view.animation.AccelerateInterpolator(1.6f))
-        popTo(POP_AWAY, (ms * 0.6f).toLong(), (ms * 0.4f).toLong(), android.view.animation.AccelerateInterpolator(1.2f))
-        applyFlags()
+        // Kommt sie gerade herein: an der Stelle der Kurve weiterfahren, an der sie steht (nie zurückspringen).
+        val from = if (scrollPx > 0f) AWAY_MS * Math.pow((scrollPx / h).toDouble(), 1.0 / AWAY_POW).toFloat() else 0f
+        runScroll(rise = false, start = maxOf(phaseMs.toFloat(), from), end = AWAY_MS)
     }
 
     /**
-     * Die echte kommt gleich zurück (schnell hochgewischt, früh erkannt): unsere kommt so wie YouTubes neue Leiste
-     * (gemessen 17.11., Bild für Bild): im ersten Bild ~30 % der Höhe unter der Ruhelage, dann stark abbremsend hoch
-     * (~190 ms), die Knöpfe "ploppen" dabei von klein auf (~110 ms).
+     * Die echte kommt zurück (schnell hochgewischt): unsere wie YouTubes (gemessen 19.11.): Fläche kommt von ganz unten
+     * und bremst gleichmässig ab (Rest ≈ Höhe·e^(−t/45 ms), nach ~55 ms noch ~30 %), Knöpfe nur halb so weit, sie wachsen
+     * dabei von klein auf (20–112 ms, ohne Ausblenden). [phaseMs]: so weit ist YouTubes Animation schon (negativ = beginnt
+     * erst so viele ms später). Steht unsere schon höher, fährt sie von dort weiter (nie wieder runter).
      */
-    fun scrollRise(late: Boolean = false) {
+    fun scrollRise(phaseMs: Long) {
         if (scrollTarget == 0f && scroller == null) return
-        // Spät erkannt: Die echte ist schon weiter oben, unsere beginnt darum höher (deckt ihre Knöpfe sicher ab).
-        val from = minOf(scrollPx, target.height() * if (late) RISE_FROM_LATE_FRAC else RISE_FROM_FRAC)
-        scrollPx = from
-        scrollTo(0f, SCROLL_RISE_MS, android.view.animation.DecelerateInterpolator(1.5f))
-        if (scrollPop > POP_FROM) scrollPop = POP_FROM
-        popTo(1f, SCROLL_POP_MS, 0L, android.view.animation.DecelerateInterpolator(1.5f))
-        applyFlags()
-    }
-
-    /**
-     * Die echte kommt zurück (schon unterwegs oder spät erkannt): unsere fährt schnell herein, vor der echten.
-     * 0 ms = sofort ganz da.
-     */
-    fun scrollBack(ms: Long) {
-        if (scrollTarget == 0f && scroller == null) return
-        if (ms <= 0L) {
-            scroller?.cancel()
-            scroller = null
-            scrollTarget = 0f
-            scrollPx = 0f
-            popper?.cancel()
-            popper = null
-            scrollPop = 1f
-        } else {
-            scrollTo(0f, ms, android.view.animation.PathInterpolator(0.05f, 0.7f, 0.1f, 1f))
-            if (scrollPop > POP_FROM) scrollPop = POP_FROM
-            popTo(1f, SCROLL_POP_MS, 0L, android.view.animation.DecelerateInterpolator(1.5f))
+        val h = target.height().toFloat()
+        val from = when {
+            scrollPx >= h -> Float.NEGATIVE_INFINITY
+            scrollPx <= 0.5f -> RISE_END_MS
+            else -> RISE_TAU_MS * kotlin.math.ln(h / scrollPx)
         }
+        runScroll(rise = true, start = maxOf(phaseMs.toFloat(), from), end = RISE_END_MS)
+    }
+
+    /** Die echte steht schon ganz da (z. B. Zurück-Taste, Seitenwechsel): unsere sofort ganz da. */
+    fun scrollBackNow() {
+        if (scrollTarget == 0f && scroller == null) return
+        scroller?.cancel()
+        scroller = null
+        scrollTarget = 0f
+        scrollPx = 0f
+        scrollPop = 1f
         applyFlags()
+        syncMirror()
     }
 
     /** Grösse der Knöpfe beim Weg-/Hereinfahren (1 = normal). */
     private var scrollPop by mutableFloatStateOf(1f)
     private var popper: android.animation.ValueAnimator? = null
 
-    private fun popTo(to: Float, ms: Long, delay: Long, curve: android.animation.TimeInterpolator) {
-        popper?.cancel()
-        popper = android.animation.ValueAnimator.ofFloat(scrollPop, to).apply {
+    /** Lage und Knopfgrösse für Zeitpunkt [e] (ms ab Beginn von YouTubes Animation). */
+    private fun scrollAt(rise: Boolean, e: Float, h: Float) {
+        if (rise) {
+            scrollPx = if (e <= 0f) h else if (e >= RISE_END_MS) 0f else h * kotlin.math.exp(-e / RISE_TAU_MS)
+            // Abbremsend wie YouTubes Knöpfe (gemessen: 0,46 → 0,70 → 0,89 → 1,0 in aufeinanderfolgenden Bildern).
+            val x = ((e - RISE_POP_DELAY_MS) / RISE_POP_MS).coerceIn(0f, 1f)
+            scrollPop = 1f - (1f - x) * (1f - x)
+        } else {
+            val x = (e / AWAY_MS).coerceIn(0f, 1f)
+            scrollPx = h * Math.pow(x.toDouble(), AWAY_POW).toFloat()
+            val s = ((e - AWAY_POP_DELAY_MS) / AWAY_POP_MS).coerceIn(0f, 1f)
+            scrollPop = 1f - Math.pow(s.toDouble(), 1.5).toFloat()
+        }
+    }
+
+    private fun runScroll(rise: Boolean, start: Float, end: Float) {
+        val h = target.height().toFloat()
+        scrollTarget = if (rise) 0f else h
+        scroller?.cancel()
+        scroller = null
+        val s = start.coerceAtLeast(if (rise) -RISE_WAIT_MAX_MS else 0f)
+        if (s >= end) {
+            scrollAt(rise, end, h)
+            scrollQuietUntil = SystemClock.uptimeMillis() + SCROLL_QUIET_AFTER_MS
+            applyFlags()
+            syncMirror()
+            return
+        }
+        scrollAt(rise, s, h)
+        val ms = (end - s).toLong().coerceAtLeast(1L)
+        scrollQuietUntil = SystemClock.uptimeMillis() + ms + SCROLL_QUIET_AFTER_MS
+        scroller = android.animation.ValueAnimator.ofFloat(s, end).apply {
             duration = ms
-            startDelay = delay
-            interpolator = curve
-            addUpdateListener { scrollPop = it.animatedValue as Float }
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { scrollAt(rise, it.animatedValue as Float, h) }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
-                    if (popper === animation) popper = null
+                    if (scroller === animation) {
+                        scroller = null
+                        scrollAt(rise, end, h)
+                    }
                     syncMirror()
                 }
             })
             start()
         }
+        applyFlags()
     }
 
     /** Nur fürs Test-Protokoll: Zustand der Leiste. */
     fun debugState(): String = "zeigt=$isShowing alpha=${view?.alpha} ty=${view?.translationY} scroll=$scrollPx/$scrollTarget " +
         "slideAway=$isSlidingAway hold=${holdHiddenUntil - SystemClock.uptimeMillis()} rise=$risePx"
-
-    private fun scrollTo(to: Float, ms: Long, curve: android.animation.TimeInterpolator) {
-        scrollTarget = to
-        scrollQuietUntil = SystemClock.uptimeMillis() + ms + SCROLL_QUIET_AFTER_MS
-        scroller?.cancel()
-        scroller = android.animation.ValueAnimator.ofFloat(scrollPx, to).apply {
-            duration = ms
-            interpolator = curve
-            addUpdateListener { scrollPx = it.animatedValue as Float }
-            addListener(object : android.animation.AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: android.animation.Animator) {
-                    if (scroller === animation) scroller = null
-                    syncMirror()
-                }
-            })
-            start()
-        }
-    }
 
     /** Fährt gerade von unten herein ([showRising]). Solange keine Abfragen an YouTube: sie hielten die Animation an. */
     val isRising: Boolean get() = riser != null
@@ -1106,7 +1112,7 @@ class BottomBarOverlay(
     @Composable
     private fun BarContent() {
         uiState?.let { state ->
-            androidx.compose.runtime.CompositionLocalProvider(LocalPop provides { scrollPop }) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalPop provides ScrollPop({ scrollPop }, { scrollPx })) {
             BottomBar(
                 state = state,
                 dimInstant = dimInstant,
@@ -1168,14 +1174,24 @@ class BottomBarOverlay(
         const val SLIDE_MS = 300L
         const val FRAME_MS = 40L
         const val SCROLL_QUIET_AFTER_MS = 150L
-        /** Hochwischen: unsere beginnt so weit unter der Ruhelage (Anteil der Höhe), wie YouTubes erstes Bild. */
-        private const val RISE_FROM_FRAC = 0.32f
-        private const val RISE_FROM_LATE_FRAC = 0.14f
-        private const val SCROLL_RISE_MS = 190L
-        private const val SCROLL_POP_MS = 110L
-        /** Knöpfe beim Hereinfahren erst so gross (dann auf 1), beim Wegfahren am Ende so klein. */
-        private const val POP_FROM = 0.3f
-        private const val POP_AWAY = 0.35f
+        /**
+         * Scrollen wie YouTube 21.45 (gemessen 19.11.2026, Pixel 9, Bild für Bild): Hereinfahren = Rest·e^(−t/τ), fertig
+         * nach [RISE_END_MS]; Knöpfe wachsen von [RISE_POP_DELAY_MS] an in [RISE_POP_MS] auf volle Grösse. Wegfahren =
+         * Höhe·(t/[AWAY_MS])^[AWAY_POW]; Knöpfe schrumpfen ab [AWAY_POP_DELAY_MS] in [AWAY_POP_MS] auf nichts.
+         */
+        private const val RISE_TAU_MS = 45f
+        private const val RISE_END_MS = 275f
+        private const val RISE_POP_DELAY_MS = 40f
+        private const val RISE_POP_MS = 70f
+        /** Beginnt YouTubes Animation erst später: höchstens so lange warten (sonst sofort beginnen). */
+        private const val RISE_WAIT_MAX_MS = 120f
+        private const val AWAY_MS = 125f
+        private const val AWAY_POW = 2.9
+        private const val AWAY_POP_DELAY_MS = 58f
+        private const val AWAY_POP_MS = 34f
+        /** Profilbild: wird nicht kleiner, sondern oben abgedeckt (Kante so weit über seiner Oberkante) und rutscht höchstens so weit. */
+        val AVATAR_CLIP_ABOVE_DP = 3.8f
+        val AVATAR_SHIFT_MAX_DP = 2.1f
         /** Eingefrorener Spiegel, YouTube wieder vorne, unsere kam nicht: so lange darf er noch stehen. */
         const val MIRROR_FRONT_MAX_MS = 1_500L
         const val MIRROR_WATCH_MS = 250L
@@ -1457,6 +1473,7 @@ private fun BottomBar(
                 state = state,
                 onTap = onTap,
                 onLongPress = onLongPress,
+                avatarTop = state.style.avatar?.let { a -> state.iconCenterPx?.let { c -> c - a.height / 2f } },
             ) {
                 val avatar = style.avatar
                 if (avatar != null) {
@@ -1484,7 +1501,7 @@ private fun BottomBar(
                 }
             }
             Box(
-                modifier = slot.fillMaxHeight().popIn(),
+                modifier = slot.fillMaxHeight().popIn(originPx = with(density) { 25.5.dp.toPx() }),
             ) {
                 if (state.hasCreate) {
                     // Wie im Vorlagenbild: Plus-Kreis etwas unter der Icon-Reihe (Mitte 25,5 dp ab Oberkante).
@@ -1600,13 +1617,14 @@ private fun TabSlot(
     state: BarUiState,
     onTap: (TabKind) -> Unit,
     onLongPress: () -> Unit,
+    avatarTop: Float? = null,
     icon: @Composable () -> Unit,
 ) {
     val labelTop = state.labelTopPx
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .popIn(),
+            .popIn(avatarTop = avatarTop, originPx = state.iconCenterPx?.toFloat()),
     ) {
         if (state.iconCenterPx != null && labelTop != null) {
             // Gleiche Höhe wie bei YouTube: Icon-Mitte und Schrift-Oberkante aus der echten Leiste.
@@ -1633,20 +1651,49 @@ private fun TabSlot(
     }
 }
 
-/** Grösse der Knöpfe beim Weg-/Hereinfahren (1 = normal), siehe [BottomBarOverlay.scrollRise]. */
-private val LocalPop = androidx.compose.runtime.staticCompositionLocalOf<() -> Float> { { 1f } }
+/** Beim Scrollen: Grösse der Knöpfe (1 = normal) und wie weit die Fläche weggefahren ist (px), siehe [BottomBarOverlay.scrollRise]. */
+private class ScrollPop(val scale: () -> Float, val shift: () -> Float)
 
-/** Knopf "ploppt" beim Weg-/Hereinfahren wie bei YouTube: Grösse und Deckkraft um die Knopf-Mitte. */
+private val LocalPop = androidx.compose.runtime.staticCompositionLocalOf { ScrollPop({ 1f }, { 0f }) }
+
+/**
+ * Knopf beim Weg-/Hereinfahren (Scrollen) wie bei YouTube (gemessen 19.11.): Er fährt nur halb so weit wie die Fläche und
+ * "ploppt" (Grösse um die Knopf-Mitte, ohne Ausblenden; nur ganz klein durchsichtig).
+ * [avatarTop] (px ab Oberkante des Knopfs): Profilbild. Das wird bei YouTube nicht kleiner, sondern von einer Kante
+ * knapp darüber, die mit der Fläche fährt, abgedeckt; es selbst rutscht nur ein paar Pixel.
+ */
 @Composable
-private fun Modifier.popIn(originY: Float = POP_ORIGIN_Y): Modifier {
+private fun Modifier.popIn(originY: Float = POP_ORIGIN_Y, avatarTop: Float? = null, originPx: Float? = null): Modifier {
     val pop = LocalPop.current
-    return graphicsLayer {
-        val s = pop()
+    val density = LocalDensity.current
+    val clipAbove = with(density) { BottomBarOverlay.AVATAR_CLIP_ABOVE_DP.dp.toPx() }
+    val shiftMax = with(density) { BottomBarOverlay.AVATAR_SHIFT_MAX_DP.dp.toPx() }
+    val layered = graphicsLayer {
+        val shift = pop.shift()
+        if (avatarTop != null) {
+            if (shift != 0f) translationY = -shift + minOf(shiftMax, shift / 2f)
+            return@graphicsLayer
+        }
+        if (shift != 0f) translationY = -shift / 2f
+        val s = pop.scale()
         if (s != 1f) {
             scaleX = s
             scaleY = s
-            alpha = ((s - 0.15f) / 0.5f).coerceIn(0f, 1f)
-            transformOrigin = TransformOrigin(0.5f, originY)
+            alpha = (s / 0.25f).coerceIn(0f, 1f)
+            // Um die Mitte des Symbols (wie YouTube), sonst wanderte es beim Wachsen mit.
+            transformOrigin = TransformOrigin(0.5f, if (originPx != null && size.height > 0f) (originPx / size.height).coerceIn(0f, 1f) else originY)
+        }
+    }
+    if (avatarTop == null) return layered
+    return layered.drawWithContent {
+        val shift = pop.shift()
+        if (shift <= 0f) {
+            drawContent()
+        } else {
+            // Kante auf dem Bildschirm = Ruhelage der Kante + Weg der Fläche; hier in eigenen Koordinaten (das Profilbild
+            // selbst steht nur minOf(shiftMax, shift/2) tiefer).
+            val edge = avatarTop - clipAbove + shift - minOf(shiftMax, shift / 2f)
+            if (edge < size.height) clipRect(top = edge.coerceAtLeast(0f)) { this@drawWithContent.drawContent() }
         }
     }
 }
@@ -1896,9 +1943,9 @@ private fun ModernRow(
         horizontalArrangement = if (style.tablet) Arrangement.Center else Arrangement.Start,
     ) {
         val slot: Modifier = if (style.tablet) Modifier.width(TABLET_SLOT_DP.dp) else Modifier.weight(1f)
-        Box(slot.fillMaxHeight().popIn()) { IconArea(center) { ModernHome(homeSelected, style.content) } }
-        Box(slot.fillMaxHeight().popIn()) { IconArea(center) { ModernAvatar(style, state.selected == TabKind.YOU) } }
-        Box(slot.fillMaxHeight().popIn()) {
+        Box(slot.fillMaxHeight().popIn(originPx = center?.toFloat())) { IconArea(center) { ModernHome(homeSelected, style.content) } }
+        Box(slot.fillMaxHeight().popIn(avatarTop = center?.let { it - with(density) { 15.dp.toPx() } })) { IconArea(center) { ModernAvatar(style, state.selected == TabKind.YOU) } }
+        Box(slot.fillMaxHeight().popIn(originPx = center?.toFloat())) {
             if (state.hasCreate) IconArea(center) { ModernPlus(style.content, spin) }
         }
     }

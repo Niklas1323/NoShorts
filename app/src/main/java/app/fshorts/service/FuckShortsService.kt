@@ -50,6 +50,7 @@ class FuckShortsService : AccessibilityService() {
     private val recentBacks = ArrayDeque<Long>()
     private var lastHintAt = 0L
     private var youTubeSince = 0L
+    @Volatile
     private var youTubeActive = false
     private var barSeenOnce = false
     private var lastAutoDumpAt = 0L
@@ -86,7 +87,23 @@ class FuckShortsService : AccessibilityService() {
     private val presenceHandler = Handler(presenceThread.looper)
     private val labHandler by lazy { Handler(android.os.HandlerThread("fshorts-lab").also { it.start() }.looper) }
     /** Seit wann die echte Leiste weg ist (entfernt oder ganz unten). 0 = sie ist zu sehen. */
+    @Volatile
     private var realGoneSince = 0L
+    /**
+     * Liste einer Seite, auf der wir YouTube schon beim Scrollen ausblenden sahen (Startseite, Abos). Nur dort fährt unsere
+     * beim schnellen Runterwischen von selbst sofort weg (Mein YouTube und Suchergebnisse blenden nicht aus, gemessen 19.11.).
+     */
+    @Volatile
+    private var hidesFeed: AccessibilityNodeInfo? = null
+    /** Die Liste bewegt sich (Wischen): bis dann keine volle Suche, sie hielte unsere Animation an (siehe probeLoop). */
+    @Volatile
+    private var scanHoldUntil = 0L
+    /** Zuletzt ist unsere beim Runterwischen selbst (früh) weggefahren, siehe PROBE_DOWN_EARLY. */
+    @Volatile
+    private var earlyAwayAt = 0L
+    /** Element der gemerkten Liste ([hidesFeed]) für die Früh-Messung. */
+    @Volatile
+    private var earlyChild: AccessibilityNodeInfo? = null
     @Volatile
     private var presenceRunning = false
     /** Seit wann unsere weggescrollt ist (für die Rückkehr-Prüfung). */
@@ -124,8 +141,10 @@ class FuckShortsService : AccessibilityService() {
     private var restBounds: Rect? = null
     private var lastBar: FoundBar? = null
     private var lastUiState: BarUiState? = null
+    @Volatile
     private var hiddenByScroll = false
     private var navFromRest = false
+    @Volatile
     private var watchPageOpen = false
         set(value) {
             if (field && !value) watchClosedAt = SystemClock.uptimeMillis()
@@ -140,6 +159,7 @@ class FuckShortsService : AccessibilityService() {
      * YouTube nimmt seine Leiste beim Runterscrollen (z. B. Startseite) ganz aus der Oberfläche. Dann merken wir
      * uns die Liste der Seite: Solange es sie gibt, sind wir noch auf derselben Seite und unsere Leiste bleibt.
      */
+    @Volatile
     private var goneFeed: AccessibilityNodeInfo? = null
     @Volatile
     private var lastScrollAt = 0L
@@ -299,6 +319,13 @@ class FuckShortsService : AccessibilityService() {
             handler.postDelayed({ scheduleScan() }, POLL_MS)
             return@Runnable
         }
+        // Handy: Die Liste bewegt sich (Wischen, gemessen im eigenen Thread). Eine volle Suche hielte den Haupt-Thread bis
+        // 0,4 s an, so konnte unsere Leiste nicht mit YouTubes wegfahren (gemessen 19.11.: ~0,35 s zu spät).
+        val holdLeft = scanHoldUntil - SystemClock.uptimeMillis()
+        if (!isTablet && holdLeft > 0 && youTubeActive) {
+            handler.postDelayed({ scheduleScan() }, holdLeft)
+            return@Runnable
+        }
         // Tablet: Ein Scan dauert dort bis 1 s und blockiert das Zeichnen. War er schon eingeplant, als unsere
         // Leiste eben gezeigt wurde, sah man so lange die echte (z. B. Video runtergewischt, zurück zu YouTube).
         // Erst warten, bis Android sie wirklich gezeichnet hat (höchstens TABLET_DRAW_WAIT_MS), dann noch kurz.
@@ -420,20 +447,14 @@ class FuckShortsService : AccessibilityService() {
 
         dumper = TreeDumper(this)
         sampler = BarStyleSampler(this)
-        touchWatcher = TouchWatcher(this) {
+        touchWatcher = TouchWatcher(this, ::onTouchDown) {
             if (!touchedSinceEnter && youTubeActive) Log.d(TAG, "Berührung in YouTube")
-            if (app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) Log.d(TAG, "Finger auf")
+            if (app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)) {
+                Log.d(TAG, "Finger auf (Haupt-Thread ${SystemClock.uptimeMillis() - lastTouchAt} ms später)")
+            }
 
             touchedSinceEnter = true
-            lastTouchAt = SystemClock.uptimeMillis()
             if (shadeOverYouTube) onShadeTouched()
-            if (!isTablet && youTubeActive && overlay.isScrolledAway) {
-                startDirectionProbe()
-            } else if (!isTablet && youTubeActive && overlay.isShowing && hiddenByScroll && realGoneSince != 0L && scrollFollowPage()) {
-                // Unsere steht, die echte ist weggescrollt (z. B. vorher langsam hochgescrollt): Wischt der Finger jetzt
-                // schnell runter, fährt unsere weg wie YouTube seine.
-                startDirectionProbe(down = true)
-            }
             if (app.fshorts.BuildConfig.DEBUG && youTubeActive && Log.isLoggable("FShortsLab", Log.VERBOSE)) startLab()
             if (DIAGNOSTIC_DUMPS && app.fshorts.BuildConfig.DEBUG) dumpAfterTapSoon(lastTouchAt)
             // Tipp auf ein Video in der Liste: YouTube zeigt die Video-Seite, meldet aber ~1 s gar nichts. Darum kurz
@@ -1027,7 +1048,7 @@ class FuckShortsService : AccessibilityService() {
         ) {
             realGoneByScroll = false
             reason("Hochgescrollt ohne Messung ($dy px), unsere fährt herein")
-            overlay.scrollBack(SCROLL_BACK_MS)
+            overlay.scrollRise(RISE_NO_PROBE_PHASE_MS)
         }
         // Weggescrollt: Die Rückkehr merken die Hintergrund-Prüfungen; eine Abfrage hier hielt beim Wischen alles auf.
         if (youTubeActive && !(overlay.isScrolledAway && presenceRunning)) updateBar(SystemClock.uptimeMillis(), null)
@@ -1035,23 +1056,61 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /**
-     * Finger liegt auf (unsere ist weggescrollt) bzw. die Liste bewegt sich: Wie schnell und wohin rutscht der Inhalt?
-     * YouTube 21.45 zeigt seine Leiste beim Hochwischen nur, wenn schnell gewischt wird (gemessen 17.11. mit unsichtbarer
-     * eigener Leiste: 0,5 / 0,62 / 1,0 px/ms → bleibt weg, 1,2 / 1,3 / 1,5 px/ms → kommt, schon ~50 ms nach dem Finger).
-     * Langsames oder leichtes Hochscrollen zeigt sie nie. Unsere macht es gleich: Sie kommt nur bei schnellem Hochwischen
-     * (etwas tiefere Schwelle als YouTube, damit unsere sicher vor der echten da ist). Meldungen von YouTube kommen dafür
-     * zu spät (>100 ms, gedrosselt), darum misst ein eigener Thread jedes Bild die Lage eines Listen-Elements.
-     * [down]: unsere steht, die echte ist aber schon weg (z. B. vorher langsam hochgescrollt): Schnelles Runterwischen
-     * nimmt dann unsere weg wie YouTube seine (sonst blieb unsere stehen, "geht gar nicht mehr runter").
+     * Finger liegt auf (Touch-Thread, mit der echten Zeit der Berührung): Wischrichtung und -tempo messen, wenn es für
+     * unsere Leiste zählt. Drei Fälle:
+     * - unsere ist weggescrollt: kommt sie (wie YouTubes) wieder? ([PROBE_UP])
+     * - unsere steht, die echte ist schon weg: fährt sie beim schnellen Runterwischen weg? ([PROBE_DOWN_GONE])
+     * - unsere und die echte stehen, auf einer Seite, wo YouTube beim Scrollen ausblendet: unsere fährt beim schnellen
+     *   Runterwischen gleichzeitig mit YouTubes weg ([PROBE_DOWN_EARLY]). Vorher kam das erst über die Abfrage der echten,
+     *   ~0,35 s zu spät (gemessen 19.11.).
      */
-    private fun startDirectionProbe(down: Boolean = false) {
-        dirUntil = lastTouchAt + DIR_PROBE_MS
-        probeUntil = lastTouchAt + DIR_MAX_MS
+    private fun onTouchDown(downAt: Long) {
+        lastTouchAt = downAt
+        if (!connected || isTablet || !youTubeActive || !::overlay.isInitialized) return
+        if (overlay.isScrolledAway) {
+            startDirectionProbe(PROBE_UP)
+        } else if (overlay.isShowing && hiddenByScroll && realGoneSince != 0L && scrollFollowPage()) {
+            // Unsere steht, die echte ist weggescrollt (z. B. vorher langsam hochgescrollt): Wischt der Finger jetzt
+            // schnell runter, fährt unsere weg wie YouTube seine.
+            startDirectionProbe(PROBE_DOWN_GONE)
+        } else if (overlay.isShowing && !hiddenByScroll && scrollFollowPage()) {
+            // Hier blendet YouTube beim Scrollen aus (schon gesehen): unsere fährt beim schnellen Runterwischen gleich mit.
+            // Sonst (noch nicht gesehen, Mein YouTube, Suchergebnisse) nur beobachten: Bewegt sich die Liste, keine volle
+            // Suche (sie hielte das Mitfahren nach der Abfrage der echten an).
+            val early = hidesFeed != null && lastUiState?.selected != TabKind.YOU
+            startDirectionProbe(if (early) PROBE_DOWN_EARLY else PROBE_OBSERVE)
+            // Gleich keine volle Suche starten: Wird gewischt, hielte sie unsere Animation an. Bewegt sich die Liste nach
+            // TAP_RELEASE_MS nicht (Tipp), gibt die Messung das wieder frei.
+            if (early) scanHoldUntil = maxOf(scanHoldUntil, downAt + TOUCH_SCAN_HOLD_MS)
+        }
+    }
+
+    /**
+     * Wie YouTube 21.45 seine Leiste beim Scrollen bewegt (gemessen 19.11.2026, Pixel 9, Bild für Bild mit unsichtbarer
+     * eigener Leiste, `input swipe` mit festen Tempi, Startseite und Abos):
+     * - Entscheidung pro Bild: Rutscht die Liste in einem Bild um mehr als den Touch-Slop (8 dp = 23 px), fährt die Leiste
+     *   weg (runter) bzw. kommt (hoch). 1,0 px/ms (16–22 px pro Bild) nie, 1,2 px/ms nur wenn ein Bild ≥ 24 px springt,
+     *   ab ~1,45 px/ms immer. Langsames Ziehen bewegt sie gar nicht: Sie folgt nie dem Finger, sie spielt eine feste
+     *   Animation ab (immer gleich, egal wie schnell).
+     * - Wegfahren beginnt 1 Bild nach dem auslösenden Bild, ~100–125 ms lang. Hereinfahren beginnt ~62 ms danach (im
+     *   ersten Bild ganz unten), ab ~116 ms sind die Knöpfe zu sehen.
+     * Meldungen von YouTube kommen dafür zu spät (>100 ms, gedrosselt), darum misst ein eigener Thread laufend die Lage
+     * eines Listen-Elements.
+     */
+    @Synchronized
+    private fun startDirectionProbe(mode: Int = PROBE_UP) {
+        val touch = lastTouchAt
+        dirUntil = touch + DIR_PROBE_MS
+        probeUntil = touch + DIR_MAX_MS
         val gen = ++probeGen
-        val feed = goneFeed ?: probeFeed
+        val feed = when (mode) {
+            PROBE_DOWN_EARLY -> hidesFeed
+            PROBE_OBSERVE -> null
+            else -> goneFeed ?: probeFeed
+        }
         val scr = Rect(screen)
         val trace = app.fshorts.BuildConfig.DEBUG && Log.isLoggable(TRACE_TAG, Log.VERBOSE)
-        probeHandler.post { runDirectionProbe(gen, feed, scr, trace, down) }
+        probeHandler.post { runDirectionProbe(gen, feed, scr, trace, mode) }
     }
 
     /**
@@ -1060,17 +1119,23 @@ class FuckShortsService : AccessibilityService() {
      * Danach (Liste steht) gleich ein Element in der Mitte für das nächste Fingerauflegen bereitlegen: Das Suchen
      * dauerte beim Wischen bis 330 ms, so lange sah man die hochfahrende echte (gemessen 17.11.: 15 Bilder).
      */
-    private fun runDirectionProbe(gen: Int, feedIn: AccessibilityNodeInfo?, scr: Rect, trace: Boolean, down: Boolean) {
+    private fun runDirectionProbe(gen: Int, feedIn: AccessibilityNodeInfo?, scr: Rect, trace: Boolean, mode: Int) {
         probeReady = false
-        val last = probeLoop(gen, feedIn, scr, trace, down)
+        val last = probeLoop(gen, feedIn, scr, trace, mode)
         probeReady = false
-        if (gen != probeGen || down || !overlay.isScrolledAway) return
+        if (gen != probeGen) return
         val r = Rect()
-        val inMiddle = last != null && last.refresh() && last.isVisibleToUser && run {
-            last.getBoundsInScreen(r)
+        fun inMiddle(c: AccessibilityNodeInfo?) = c != null && c.refresh() && c.isVisibleToUser && run {
+            c.getBoundsInScreen(r)
             r.height() > 0 && r.top > scr.top + scr.height() / 8 && r.top < scr.bottom - scr.height() / 4
         }
-        probeChild = if (inMiddle) last else {
+        if (mode == PROBE_OBSERVE) return
+        if (mode == PROBE_DOWN_EARLY) {
+            earlyChild = if (inMiddle(last)) last else feedIn?.takeIf { it.refresh() }?.let { scanner.pickFeedChild(it, scr) }
+            return
+        }
+        if (mode != PROBE_UP || !overlay.isScrolledAway) return
+        probeChild = if (inMiddle(last)) last else {
             val feed = feedIn?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { scanner.findFeedQuick(it, scr) }
             feed?.let { scanner.pickFeedChild(it, scr) }
         }
@@ -1078,23 +1143,36 @@ class FuckShortsService : AccessibilityService() {
     }
 
     /** Die eigentliche Messung (siehe [startDirectionProbe]). Gibt das zuletzt gemessene Listen-Element zurück. */
-    private fun probeLoop(gen: Int, feedIn: AccessibilityNodeInfo?, scr: Rect, trace: Boolean, down: Boolean): AccessibilityNodeInfo? {
+    private fun probeLoop(gen: Int, feedIn: AccessibilityNodeInfo?, scr: Rect, trace: Boolean, mode: Int): AccessibilityNodeInfo? {
+        val down = mode != PROBE_UP
+        val early = mode == PROBE_DOWN_EARLY
+        // Nur beobachten (unsere steht, YouTube blendet hier vielleicht nicht aus): nichts auslösen, nur bei Bewegung die
+        // volle Suche anhalten.
+        val observe = mode == PROBE_OBSERVE
+        var tapReleased = false
+        var stillSamples = 0
         val r = Rect()
         val density = resources.displayMetrics.density
         fun pick(): Pair<AccessibilityNodeInfo, Int>? {
-            val feed = feedIn?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { scanner.findFeedQuick(it, scr) } ?: return null
+            // Früh-Modus nur mit der gemerkten Liste (dort blendet YouTube aus), nie mit einer anderen.
+            val feed = if (early) {
+                feedIn?.takeIf { it.refresh() && it.isVisibleToUser } ?: return null
+            } else {
+                feedIn?.takeIf { it.refresh() } ?: youTubeMainRoot()?.let { scanner.findFeedQuick(it, scr) } ?: return null
+            }
             val c = scanner.pickFeedChild(feed, scr) ?: return null
             c.getBoundsInScreen(r)
             return c to r.top
         }
         // Das gemerkte Element nur nehmen, wenn es noch sichtbar in der Mitte steht: Ist es beim Weiterscrollen aus dem
         // Bild gerutscht, bewegt es sich nicht mehr (gemessen 16.11.: bis 250 ms "0 px", obwohl die Liste lief).
-        var picked: Pair<AccessibilityNodeInfo, Int>? = probeChild?.takeIf { it.refresh() && it.isVisibleToUser }?.let { c ->
+        var picked: Pair<AccessibilityNodeInfo, Int>? = (if (early) earlyChild else probeChild)?.takeIf { it.refresh() && it.isVisibleToUser }?.let { c ->
             c.getBoundsInScreen(r)
             if (r.height() > 0 && r.top > scr.top + scr.height() / 8 && r.top < scr.bottom - scr.height() / 4) c to r.top else null
         }
         val minDist = DIR_PROBE_DP * density
-        val speed = DIR_SPEED_DP_MS * density
+        val riseSpeed = DIR_SPEED_DP_MS * density
+        val hideSpeed = HIDE_SPEED_DP_MS * density
         // Verlauf: Zeit (Mitte der Abfrage) und Lage des Inhalts seit dem Fingerauflegen (+ = nach unten = hochwischen).
         val ts = LongArray(DIR_SAMPLES)
         val ps = IntArray(DIR_SAMPLES)
@@ -1103,6 +1181,7 @@ class FuckShortsService : AccessibilityService() {
         var lastMoveAt = SystemClock.uptimeMillis()
         var lastBarCheck = 0L
         var lastQueryAt = 0L
+        var anyMove = false
         // Schwung in die "falsche" Richtung nach dem Loslassen: nur noch selten nachsehen, bis die Liste steht.
         var passive = false
         var confirmAt = 0L
@@ -1110,23 +1189,31 @@ class FuckShortsService : AccessibilityService() {
         val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop.toFloat()
         var prevT = 0L
         var firstUpAt = 0L
-        fun post(why: String, rise: Boolean) {
-            val late = firstUpAt != 0L && SystemClock.uptimeMillis() - firstUpAt > RISE_LATE_MS
+        // Letzte Messung, bei der die Liste (in Wischrichtung) noch stand: frühester möglicher Auslöser bei YouTube.
+        var stillAt = lastTouchAt
+        /**
+         * [phaseMs]: so viele ms ist YouTubes Animation (geschätzt) zum Zeitpunkt [at] schon unterwegs. Beim Ausführen
+         * (Haupt-Thread, evtl. später) wird die seither vergangene Zeit dazugezählt.
+         */
+        fun post(why: String, rise: Boolean, phaseMs: Long, at: Long) {
             handler.postAtFrontOfQueue {
                 if (gen != probeGen) return@postAtFrontOfQueue
                 dirUntil = 0L
+                val phase = phaseMs + (SystemClock.uptimeMillis() - at)
                 if (down) {
-                    if (overlay.isScrolledAway || !overlay.isShowing || realGoneSince == 0L || !scrollFollowPage()) return@postAtFrontOfQueue
+                    if (overlay.isScrolledAway || !overlay.isShowing || !scrollFollowPage()) return@postAtFrontOfQueue
+                    if (!early && realGoneSince == 0L) return@postAtFrontOfQueue
+                    if (early) earlyAwayAt = SystemClock.uptimeMillis()
                     realGoneByScroll = true
-                    reason(why)
-                    followAway()
+                    reason("$why (Phase $phase ms)")
+                    followAway(phase)
                     return@postAtFrontOfQueue
                 }
                 if (!overlay.isScrolledAway) return@postAtFrontOfQueue
                 lastUpScrollAt = SystemClock.uptimeMillis()
                 realGoneByScroll = false
-                reason(why)
-                if (rise) overlay.scrollRise(late) else overlay.scrollBack(SCROLL_BACK_MS)
+                reason("$why (Phase $phase ms)")
+                if (rise) overlay.scrollRise(phase) else overlay.scrollBackNow()
                 if (trace) {
                     Log.d(TAG, "Zustand: ${overlay.debugState()}")
                     handler.postDelayed({ Log.d(TAG, "Zustand +100: ${overlay.debugState()}") }, 100)
@@ -1137,7 +1224,7 @@ class FuckShortsService : AccessibilityService() {
         // Direkt nach der echten sehen. Sie "kommt" nur, wenn sie steigt oder schon ganz oben steht: Gleich nach dem Wegfahren
         // unserer ist die echte noch unterwegs nach unten (gemessen 18.11.: das holte unsere fälschlich zurück).
         var prevBarTop = Int.MAX_VALUE
-        val restTop = restBounds?.top
+        val rest = restBounds
         fun barCheck(now: Long, why: String): Boolean {
             // Eben war sie sichtbar (aber nicht steigend): gleich nochmals nachsehen, sonst seltener.
             val every = if (prevBarTop < scr.bottom - 2) DIR_PROBE_STEP_MS * 2 else DIR_BAR_CHECK_MS
@@ -1147,17 +1234,33 @@ class FuckShortsService : AccessibilityService() {
             val prev = prevBarTop
             prevBarTop = realTop ?: Int.MAX_VALUE
             if (realTop == null || realTop >= scr.bottom - 2) return false
-            val atRest = restTop != null && realTop <= restTop + SCROLL_OUT_PX
+            // Gleich nach unserem frühen Wegfahren steht die echte noch (ihre Animation beginnt erst): keine Rückkehr.
+            val atRest = rest != null && realTop <= rest.top + SCROLL_OUT_PX && !inEarlyGrace(now)
             val rising = prev != Int.MAX_VALUE && realTop < prev - 2
             if (!atRest && !rising) return false
-            post("echte kommt (top=$realTop, $why), unsere schnell herein", rise = false)
+            if (rest != null && realTop > rest.top + 1) {
+                post("echte kommt (top=$realTop, $why), unsere an ihrer Stelle", rise = true, risePhaseForTop(realTop, rest), SystemClock.uptimeMillis())
+            } else {
+                post("echte steht (top=$realTop, $why), unsere sofort", rise = false, 0L, SystemClock.uptimeMillis())
+            }
             return true
         }
         while (gen == probeGen) {
             val now = SystemClock.uptimeMillis()
             // Fertig: nach der Anfangszeit, sobald sich nichts mehr bewegt (Finger weg, Liste steht), spätestens nach
-            // DIR_MAX_MS. Ein neues Fingerauflegen startet neu.
+            // DIR_MAX_MS. Ein neues Fingerauflegen startet neu. Früh-Modus: ohne Bewegung bald aufhören (Tipp, nicht Wischen).
             if (now > probeUntil || (now - lastTouchAt > DIR_PROBE_MS && now - lastMoveAt > DIR_STILL_MS)) return picked?.first
+            if ((early || observe) && !anyMove && now - lastTouchAt > EARLY_IDLE_MS) return picked?.first
+            // Liste bewegt sich nicht (Tipp): die Pause der vollen Suche wieder freigeben (ein Tipp soll sofort wirken, z. B.
+            // Short schliessen).
+            if ((early || observe) && !anyMove && !tapReleased && stillSamples >= 2 && now - lastTouchAt >= TAP_RELEASE_MS) {
+                tapReleased = true
+                val hold = scanHoldUntil
+                if (hold > now && hold <= lastTouchAt + TOUCH_SCAN_HOLD_MS) {
+                    scanHoldUntil = 0L
+                    handler.post { scheduleScan() }
+                }
+            }
             if (passive && now - lastQueryAt < DIR_PASSIVE_STEP_MS) {
                 SystemClock.sleep(DIR_PROBE_STEP_MS)
                 continue
@@ -1168,6 +1271,7 @@ class FuckShortsService : AccessibilityService() {
                 probeReady = false
                 if (barCheck(now, "Liste noch nicht gemessen")) return null
                 picked = pick()
+                if (early && picked == null) return null
                 probeReady = picked != null
                 SystemClock.sleep(DIR_PROBE_STEP_MS)
                 continue
@@ -1182,8 +1286,8 @@ class FuckShortsService : AccessibilityService() {
                 // "0 px" und 4 Bilder echte Leiste). Dann direkt nachsehen, ob die echte gerade hochfährt.
                 if (!down && moved > 0) {
                     val realTop = realBarTopQuick(scr)
-                    if (realTop != null && realTop < scr.bottom - 2) {
-                        post("Hochwischen erkannt (Liste weit gerutscht, echte bei $realTop), unsere fährt herein", rise = false)
+                    if (realTop != null && realTop < scr.bottom - 2 && rest != null) {
+                        post("Hochwischen erkannt (Liste weit gerutscht, echte bei $realTop)", rise = true, risePhaseForTop(realTop, rest), SystemClock.uptimeMillis())
                         return null
                     }
                 }
@@ -1195,7 +1299,17 @@ class FuckShortsService : AccessibilityService() {
             }
             picked = p.first to r.top
             pos += moved
-            if (moved != 0) lastMoveAt = t
+            if (moved != 0) {
+                lastMoveAt = t
+                anyMove = true
+                // Die Liste bewegt sich (Wischen): keine volle Suche, sie hielte den Haupt-Thread (und damit unsere
+                // Animation) bis 0,4 s an.
+                scanHoldUntil = t + SCAN_HOLD_SCROLL_MS
+            } else if (pos == 0) {
+                stillAt = t
+                // Nur echte Messungen zählen (die erste dauert oft ~70 ms): erst dann gilt "Liste steht" als Tipp.
+                if (t - lastTouchAt >= TAP_RELEASE_MS - 15) stillSamples++
+            }
             // Noch keine Bewegung gesehen: Vielleicht ist das Element veraltet (z. B. nach dem Drehen, gemessen 17.11.: 26 Bilder
             // echte Leiste quer) und bewegt sich gar nicht mit. Zur Sicherheit direkt nach der echten sehen.
             if (!down && pos == 0 && barCheck(now, "Liste steht")) return null
@@ -1208,7 +1322,7 @@ class FuckShortsService : AccessibilityService() {
             val dt = if (prevT == 0L) DIR_PROBE_STEP_MS else (t - prevT).coerceAtLeast(1L)
             prevT = t
             // Ein Sprung wartet auf Bestätigung: Läuft die Liste in diesem Schritt nicht auch schnell weiter, war es keiner.
-            if (confirmAt != 0L && moved < dt * speed * 0.5f) confirmAt = 0L
+            if (confirmAt != 0L && moved < dt * riseSpeed * 0.5f) confirmAt = 0L
             if (n == DIR_SAMPLES) {
                 System.arraycopy(ts, 1, ts, 0, n - 1)
                 System.arraycopy(ps, 1, ps, 0, n - 1)
@@ -1222,13 +1336,17 @@ class FuckShortsService : AccessibilityService() {
             var ref = n - 2
             while (ref > 0 && t - ts[ref - 1] <= DIR_SPEED_WINDOW_MS) ref--
             while (ref > 0 && t - ts[ref] < DIR_SPEED_MIN_DT_MS) ref--
+            val winOk = ref >= 0 && t - ts[ref] >= DIR_SPEED_MIN_DT_MS
             val vWin = if (ref >= 0 && t > ts[ref]) (pos - ps[ref]).toFloat() / (t - ts[ref]) else 0f
-            // Am Anfang unterschätzt das die Geschwindigkeit (die Liste läuft erst los, wenn der Finger ~8 dp gewandert
-            // ist). Solange es seit dem Fingerauflegen nur hoch ging: Fingerweg = Weg der Liste + diese Strecke.
-            if (moved < 0) reversed = true
-            val vStart = if (!down && !reversed && pos > 0 && t > lastTouchAt) (pos + slop) / (t - lastTouchAt) else 0f
-            val v = if (down) vWin else maxOf(vWin, vStart)
-            if (trace && moved != 0) Log.d(TAG, "Richtung: $pos px, v=${"%.2f".format(v)} px/ms, ${t - lastTouchAt} ms nach Finger")
+            // Am Anfang ist das Fenster noch kurz: Solange es seit dem Fingerauflegen nur in eine Richtung ging, zählt auch
+            // das Tempo des Fingers (Weg der Liste + Touch-Slop, die Liste läuft erst danach los). Die Zeit der Berührung
+            // ist jetzt genau (Ereigniszeit aus dem Touch-Thread).
+            if (if (down) moved > 0 else moved < 0) reversed = true
+            val vStart = if (!reversed && pos != 0 && t > lastTouchAt) (pos + if (pos > 0) slop else -slop) / (t - lastTouchAt) else 0f
+            // Entschieden wird nur mit vollem Fenster: Die Schätzung über den Fingerweg lag am Anfang oft zu hoch (gemessen 19.11.:
+            // 1,0 px/ms als 1,62 px/ms, unsere kam, YouTubes nicht). vStart nur fürs Protokoll.
+            val v = if (winOk) vWin else 0f
+            if (trace && moved != 0) Log.d(TAG, "Richtung${if (early) " (früh)" else ""}: $pos px, v=${"%.2f".format(v)} px/ms (Start ${"%.2f".format(vStart)}), ${t - lastTouchAt} ms nach Finger")
             // Nach der Anfangszeit läuft die Liste in die "falsche" Richtung weiter (Schwung nach dem Loslassen): Das kehrt
             // nicht mehr um, also nur noch selten nachsehen, bis sie steht.
             if (now - lastTouchAt > DIR_PROBE_MS && (if (down) v > 0f else v < 0f)) {
@@ -1237,28 +1355,57 @@ class FuckShortsService : AccessibilityService() {
                 continue
             }
             if (down) {
-                if (-v >= speed && -pos > minDist * 2) {
-                    post("Runterwischen schnell (${"%.2f".format(-v)} px/ms), echte schon weg, unsere fährt runter", rise = false)
+                if (!observe && -v >= hideSpeed && -pos > slop) {
+                    // Wegfahren: YouTube hat schon mit dem auslösenden Bild begonnen. Unsere beginnt bei der neusten Messung
+                    // (eher etwas später: fährt sie früher als die echte, sähe man diese darüber).
+                    post(if (early) "Runterwischen schnell (${"%.2f".format(-v)} px/ms), unsere fährt mit der echten weg"
+                        else "Runterwischen schnell (${"%.2f".format(-v)} px/ms), echte schon weg, unsere fährt runter",
+                        rise = false, 0L, t)
                     return null
                 }
-            } else if (v >= speed && moved > 0 && pos > minDist) {
+            } else if (v >= riseSpeed && moved > 0 && pos > minDist) {
                 // War bisher langsam und springt plötzlich (z. B. ein Element ändert die Grösse, gemessen 17.11.: 175 px in
                 // einem Schritt, YouTube zeigte nichts): erst glauben, wenn auch die nächste Messung schnell weiterläuft.
                 val wasSlow = firstUpAt != 0L && now - firstUpAt > DIR_CONFIRM_AFTER_MS
                 if (wasSlow && confirmAt == 0L) {
                     confirmAt = t
                 } else {
-                    post("Hochwischen schnell (${"%.2f".format(v)} px/ms, $pos px), unsere kommt", rise = true)
+                    // YouTubes Animation beginnt ~RISE_START_MS nach dem auslösenden Bild. Das lag frühestens kurz nach der
+                    // letzten Messung, bei der die Liste noch stand, spätestens am Anfang des Messfensters.
+                    // Vorsichtig früh schätzen (Messung der Liste ist um 1–2 Bilder unsicher): eher zu früh als zu spät.
+                    val trig = maxOf(stillAt, t - RISE_TRIG_BACK_MS)
+                    post("Hochwischen schnell (${"%.2f".format(v)} px/ms, $pos px), unsere kommt", rise = true,
+                        t - trig - RISE_START_MS + RISE_LEAD_MS, t)
                     return null
                 }
             } else if (moved > 0 && pos > minDist) {
                 // Langsam hoch: YouTube zeigt seine Leiste normalerweise nicht. Zur Sicherheit ab und zu nachsehen.
                 if (barCheck(now, "langsam hoch")) return null
             }
-            SystemClock.sleep(DIR_PROBE_STEP_MS)
+            SystemClock.sleep(if (early) EARLY_STEP_MS else DIR_PROBE_STEP_MS)
         }
         return null
     }
+
+    /** Wie weit YouTubes Hereinfahren schon ist, wenn ihre Leiste bei [top] steht (Rest ≈ Höhe·e^(−t/45 ms)). */
+    private fun risePhaseForTop(top: Int, rest: Rect): Long {
+        val off = (top - rest.top).toFloat()
+        val h = rest.height().toFloat().coerceAtLeast(1f)
+        if (off <= 1f) return RISE_DONE_MS
+        if (off >= h) return RISE_LEAD_MS
+        return (RISE_TAU_MS * kotlin.math.ln(h / off)).toLong() + RISE_LEAD_MS
+    }
+
+    /** Wie weit YouTubes Wegfahren schon ist, wenn ihre Leiste bei [top] steht (≈ Höhe·(t/125 ms)^2,9), etwas später geschätzt. */
+    private fun awayPhaseForTop(top: Int, rest: Rect): Long {
+        val off = (top - rest.top).toFloat().coerceAtLeast(0f)
+        val h = rest.height().toFloat().coerceAtLeast(1f)
+        val e = AWAY_MS * Math.pow((off / h).coerceIn(0f, 1f).toDouble(), 1.0 / 2.9)
+        return (e - AWAY_LAG_MS).toLong().coerceAtLeast(0L)
+    }
+
+    /** Eben selbst früh weggefahren: Die echte steht noch kurz (ihre Animation beginnt erst), das ist keine Rückkehr. */
+    private fun inEarlyGrace(now: Long) = now - earlyAwayAt < EARLY_GRACE_MS
 
     /**
      * Nur zum Messen (Test-Versionen, `setprop log.tag.FShortsLab VERBOSE`): nach dem Fingerauflegen 1,2 s lang alle
@@ -1313,7 +1460,7 @@ class FuckShortsService : AccessibilityService() {
      * muss die Richtungserkennung sofort ein Element haben. Ohne Liste suchte sie erst den ganzen Baum ab (bei
      * beschäftigtem YouTube zu langsam, gemessen 16.11.: 15 Bilder echte Leiste).
      */
-    private fun followAway() {
+    private fun followAway(phaseMs: Long, learn: Boolean = false) {
         if (!overlay.isScrolledAway) {
             val known = goneFeed
             val scr = Rect(screen)
@@ -1323,9 +1470,16 @@ class FuckShortsService : AccessibilityService() {
                 }
                 probeFeed = feed
                 probeChild = feed?.let { scanner.pickFeedChild(it, scr) }
+                // Hier blendet YouTube beim Scrollen aus (eben gesehen): Ab jetzt fährt unsere auf dieser Seite beim schnellen
+                // Runterwischen gleich selbst mit weg (siehe PROBE_DOWN_EARLY).
+                if (learn && feed != null && feed != hidesFeed) {
+                    hidesFeed = feed
+                    earlyChild = null
+                    if (app.fshorts.BuildConfig.DEBUG) Log.d(TAG, "Leiste: Seite blendet beim Scrollen aus (gemerkt)")
+                }
             }
         }
-        overlay.scrollAway(SCROLL_AWAY_MS)
+        overlay.scrollAway(phaseMs)
         startPresenceProbe()
         // Finger liegt noch auf bzw. die Liste rutscht: Richtung weiter messen (Umkehr in derselben Berührung) und, wenn
         // die Liste steht, ein Element für das nächste Fingerauflegen bereitlegen.
@@ -1377,7 +1531,8 @@ class FuckShortsService : AccessibilityService() {
                 bar?.getBoundsInScreen(r)
                 val top = if (bar != null && !r.isEmpty && r.top < scr.bottom - 2) r.top else null
                 val calm = now - lastTouchAt > PRESENCE_IDLE_MS && now - lastScrollAt > PRESENCE_IDLE_MS
-                val atRest = top != null && top <= restTop + SCROLL_OUT_PX
+                // Gleich nach unserem frühen Wegfahren steht die echte noch (ihre Animation beginnt erst): keine Rückkehr.
+                val atRest = top != null && top <= restTop + SCROLL_OUT_PX && !inEarlyGrace(now)
                 val back = top != null && if (!hasSample) atRest && calm else (prevTop == null || top < prevTop!! - 2 || (atRest && top == prevTop))
                 if (trace && top != prevTop) Log.d(TAG, "Rückkehr-Prüfung: echte=${top ?: "weg"} (vorher ${prevTop ?: "weg"})")
                 hasSample = true
@@ -1390,8 +1545,8 @@ class FuckShortsService : AccessibilityService() {
                         realGoneByScroll = false
                         realGoneSince = 0L
                         val instant = t <= rest.top + SCROLL_OUT_PX
-                        reason("echte kommt zurück (top=$t), unsere ${if (instant) "sofort" else "fährt herein"}")
-                        overlay.scrollBack(if (instant) 0L else SCROLL_BACK_MS)
+                        reason("echte kommt zurück (top=$t), unsere ${if (instant) "sofort" else "an ihrer Stelle"}")
+                        if (instant) overlay.scrollBackNow() else overlay.scrollRise(risePhaseForTop(t, rest))
                         scheduleScan()
                     }
                     presenceRunning = false
@@ -1580,6 +1735,19 @@ class FuckShortsService : AccessibilityService() {
         continueScanSoon()
     }
 
+    /** Abbruch einer laufenden Suche, weil die Liste gerade gewischt wird (siehe [yieldIfScrolling]). */
+    private class ScanYield : RuntimeException() {
+        override fun fillInStackTrace(): Throwable = this
+    }
+
+    /**
+     * Handy: Wird gerade gewischt (die Richtungs-Messung sah die Liste laufen), eine volle Suche an einer sicheren Stelle
+     * abbrechen. Sie hielte den Haupt-Thread bis 0,4 s an, unsere Leiste könnte so lange nicht mit YouTubes fahren.
+     */
+    private fun yieldIfScrolling() {
+        if (!isTablet && SystemClock.uptimeMillis() < scanHoldUntil) throw ScanYield()
+    }
+
     private fun scan() {
         handler.removeCallbacks(watchdog)
         val started = SystemClock.uptimeMillis()
@@ -1587,6 +1755,11 @@ class FuckShortsService : AccessibilityService() {
             scanInternal()
             val took = SystemClock.uptimeMillis() - started
             if (took > SLOW_SCAN_MS) Log.d(TAG, "Scan dauerte $took ms")
+        } catch (e: ScanYield) {
+            // Liste bewegt sich: Suche abgebrochen, nach dem Wischen neu (siehe yieldIfScrolling).
+            if (app.fshorts.BuildConfig.DEBUG) Log.d(TAG, "Scan abgebrochen (Wischen) nach ${SystemClock.uptimeMillis() - started} ms")
+            handler.postDelayed({ scheduleScan() }, (scanHoldUntil - SystemClock.uptimeMillis()).coerceAtLeast(POLL_MS))
+            return
         } catch (e: Exception) {
             // Lieber nichts anzeigen als YouTube blockieren.
             Log.w(TAG, "Scan fehlgeschlagen", e)
@@ -1637,6 +1810,7 @@ class FuckShortsService : AccessibilityService() {
             overlay.hide()
             return
         }
+        yieldIfScrolling()
         // Google Play geht über YouTube auf, unsere dunkelt mit: das regelt sheetAppWatch.
         if (sheetAppAt != 0L) {
             handler.postDelayed({ scheduleScan() }, POLL_MS)
@@ -1988,6 +2162,7 @@ class FuckShortsService : AccessibilityService() {
 
         // Reihenfolge ist wichtig: Erst alles, was nötig ist, damit unsere Leiste richtig steht. Langsames
         // (Mini-Player, Profilbild, Regale) danach, sonst sieht man beim Verlassen eines Videos die echte Leiste.
+        yieldIfScrolling()
         val bar = scanner.findBar(root, screen)
         val player = scanner.findWatchPlayer(root, screen)
         if (watchPageOpen && now < watchRelearnUntil) {
@@ -2147,6 +2322,7 @@ class FuckShortsService : AccessibilityService() {
             continueScanSoon()
             return
         }
+        yieldIfScrolling()
 
         if (now - lastMiniCheckAt > MINI_CHECK_MS) {
             lastMiniCheckAt = now
@@ -2154,6 +2330,7 @@ class FuckShortsService : AccessibilityService() {
             if (walk) lastMiniWalkAt = now
             miniPlayerOpen = scanner.isMiniPlayerVisible(root, screen, walk)
         }
+        yieldIfScrolling()
 
         if (debugDumpWanted) {
             debugDumpWanted = false
@@ -2183,6 +2360,7 @@ class FuckShortsService : AccessibilityService() {
             }
         }
 
+        yieldIfScrolling()
         val found = scanner.findShelves(root, screen, coverLimit())
         if (found.size != shelves.size) Log.d(TAG, "Shorts-Regale: ${found.size}")
         shelves = found
@@ -2811,7 +2989,8 @@ class FuckShortsService : AccessibilityService() {
                 if (scrollFollowPage() && touchScrollNow(now) && realGoneSince >= lastTouchAt - GONE_TOUCH_SLACK_MS) {
                     realGoneByScroll = true
                     if (!overlay.isScrolledAway) reason("echte beim Scrollen weg, unsere fährt runter")
-                    followAway()
+                    // Die echte ist schon aus der Oberfläche: Ihre Animation ist fast oder ganz fertig, unsere holt rasch auf.
+                    followAway(AWAY_LATE_PHASE_MS, learn = true)
                 } else {
                     reason("echte weggescrollt und entfernt, unsere bleibt")
                 }
@@ -2876,24 +3055,28 @@ class FuckShortsService : AccessibilityService() {
         if (!isTablet && (overlay.isScrolledAway || realGoneByScroll)) {
             // Zurück nur, wenn die echte wirklich wieder hochfährt oder ganz da ist (nicht bei gleicher Meldung: sonst
             // fuhr unsere hin und her, gemessen 15.11.).
-            if (!realOut || realRising) {
+            // Gleich nach unserem frühen Wegfahren steht die echte noch an der Ruhelage (ihre Animation beginnt erst).
+            if ((!realOut && !inEarlyGrace(now)) || realRising) {
                 realGoneByScroll = false
                 if (overlay.isScrolledAway) {
                     // Steht die echte schon ganz da (YouTube setzt sie z. B. bei einem Tipp ohne Animation zurück),
-                    // unsere sofort ganz; fährt sie noch hoch, unsere schnell herein.
+                    // unsere sofort ganz; fährt sie noch hoch, unsere an derselben Stelle ihrer Kurve.
                     val instant = !realOut
-                    reason("echte kommt zurück (top=$observedTop), unsere ${if (instant) "sofort" else "fährt herein"}")
-                    overlay.scrollBack(if (instant) 0L else SCROLL_BACK_MS)
+                    reason("echte kommt zurück (top=$observedTop), unsere ${if (instant) "sofort" else "an ihrer Stelle"}")
+                    if (instant) overlay.scrollBackNow() else overlay.scrollRise(risePhaseForTop(observedTop, rest))
                 }
 
             }
         } else if (scrollFollowPage() && realOut && previousTop >= 0 && observedTop > previousTop &&
-            now - lastObservedAt < FRESH_OBSERVATION_MS && touchScrollNow(now) && overlay.isShowing
+            // Ganz draussen: auch nach einer längeren Lücke (eine volle Suche hielt den Haupt-Thread an, gemessen 19.11.:
+            // unsere blieb dann stehen, obwohl YouTubes längst weg war).
+            (now - lastObservedAt < FRESH_OBSERVATION_MS || observedTop >= screen.bottom - 2 || previousTop <= rest.top + SCROLL_OUT_PX) &&
+            touchScrollNow(now) && overlay.isShowing
         ) {
 
             // Die echte fährt (noch in der Oberfläche) nach unten raus: unsere hinterher.
             reason("echte fährt beim Scrollen raus (top=$observedTop), unsere mit")
-            followAway()
+            followAway(awayPhaseForTop(observedTop, rest), learn = true)
         }
         val visibleNow = observedTop < screen.bottom - 2
         val wasHidden = lastObservedTop < 0 || lastObservedTop >= screen.bottom - 2
@@ -2905,7 +3088,7 @@ class FuckShortsService : AccessibilityService() {
             reason("echte taucht auf (top=$observedTop)")
             hiddenByScroll = false
             overlay.show(rest.top, rest, state.copy(style = currentStyle()))
-            overlay.scrollBack(SCROLL_BACK_MS)
+            if (observedTop <= rest.top + 1) overlay.scrollBackNow() else overlay.scrollRise(risePhaseForTop(observedTop, rest))
             return
         }
         if (watchPageOpen) {
@@ -3856,16 +4039,52 @@ class FuckShortsService : AccessibilityService() {
         private const val POPUP_EDGE_PX = 8
         private const val PANEL_PROBE_MS = 250L
         /** Scrollen: unsere fährt in so vielen ms raus (die echte braucht ~50) bzw. wieder herein (die echte ~170). */
-        private const val SCROLL_AWAY_MS = 150L
-        private const val SCROLL_BACK_MS = 90L
+        // Scrollen wie YouTube 21.45 (gemessen 19.11.2026, siehe startDirectionProbe und BottomBarOverlay.scrollRise).
+        const val PROBE_UP = 0
+        const val PROBE_DOWN_GONE = 1
+        const val PROBE_DOWN_EARLY = 2
+        const val PROBE_OBSERVE = 3
+        /** Fingerauflegen: Bewegt sich die Liste nach so vielen ms noch nicht (Tipp), Pause der vollen Suche aufheben. */
+        private const val TAP_RELEASE_MS = 50L
+        /** YouTubes Hereinfahren beginnt so viele ms nach dem auslösenden Bild (Liste springt > Touch-Slop). */
+        private const val RISE_START_MS = 62L
+        /** Unsere so viel früher als YouTubes (fährt sie später, sähe man die echte darüber). */
+        private const val RISE_LEAD_MS = 10L
+        private const val RISE_DONE_MS = 300L
+        private const val RISE_TAU_MS = 45f
+        private const val AWAY_MS = 125.0
+        /** Wegfahren: unsere so viel später als die beobachtete echte (fährt sie früher, sähe man die echte darüber). */
+        private const val AWAY_LAG_MS = 8.0
+        /** Echte schon aus der Oberfläche (Wegfahren fertig): unsere beginnt so weit in der Kurve (holt rasch auf). */
+        private const val AWAY_LATE_PHASE_MS = 60L
+        /** Hochgescrollt ohne Messung (keine Berührung bekannt): unsere beginnt so weit in der Kurve. */
+        private const val RISE_NO_PROBE_PHASE_MS = 60L
+        /** Nach unserem frühen Wegfahren so lange "echte steht noch" nicht als Rückkehr werten (ihre Animation läuft). */
+        private const val EARLY_GRACE_MS = 260L
+        /** Früh-Messung (unsere steht): ohne Bewegung der Liste nach so vielen ms aufhören (Tipp, kein Wischen). */
+        private const val EARLY_IDLE_MS = 160L
+        private const val EARLY_STEP_MS = 8L
+        /** Liste bewegt sich: so lange danach keine volle Suche (hielte unsere Animation an). */
+        private const val SCAN_HOLD_SCROLL_MS = 220L
+        /** Runterwischen mindestens so schnell (dp/ms), dann fährt unsere von selbst weg. YouTube: ab 23 px pro Bild = 1,38 px/ms
+         * = 0,48 dp/ms. Unsere Messung schwankt um ~20 % (bei 1,2 px/ms einmal 1,44 gemessen, unsere fuhr zu früh: 15 Bilder echte),
+         * darum deutlich darüber (1,8 px/ms). Dazwischen fährt unsere mit, sobald die echte sichtbar rausfährt (Abfrage). */
+        private const val HIDE_SPEED_DP_MS = 0.63f
+        /** Hochwischen: YouTubes Auslöser lag höchstens so lange vor unserer Erkennung (geschätzt). */
+        private const val RISE_TRIG_BACK_MS = 100L
+        /** Fingerauflegen, wo unsere mitfährt: so lange keine volle Suche (sie hielte die Animation an, gemessen 19.11.: 320 ms). */
+        private const val TOUCH_SCAN_HOLD_MS = 100L
 
         private const val DIR_PROBE_MS = 450L
         private const val DIR_PROBE_DP = 6f
         private const val DIR_PROBE_STEP_MS = 8L
-        /** Hochwischen mindestens so schnell (dp/ms), dann kommt unsere. YouTube: zwischen 1,0 und 1,2 px/ms (0,35–0,42 dp/ms). */
-        private const val DIR_SPEED_DP_MS = 0.29f
+        /**
+         * Hochwischen mindestens so schnell (dp/ms), dann kommt unsere. YouTube: ab 23 px pro Bild (1,38 px/ms); bei
+         * ungleichmässigem Wischen schon ab ~1,2 px/ms. Etwas darunter (lieber zu früh als die echte sehen).
+         */
+        private const val DIR_SPEED_DP_MS = 0.435f
         private const val DIR_SPEED_WINDOW_MS = 50L
-        private const val DIR_SPEED_MIN_DT_MS = 24L
+        private const val DIR_SPEED_MIN_DT_MS = 30L
         private const val DIR_SAMPLES = 16
         /** Messung endet, wenn sich die Liste so lange nicht bewegt hat (nach DIR_PROBE_MS), spätestens nach DIR_MAX_MS. */
         private const val DIR_STILL_MS = 220L
@@ -3878,8 +4097,6 @@ class FuckShortsService : AccessibilityService() {
         private const val DIR_CONFIRM_AFTER_MS = 120L
         /** Schwung in die falsche Richtung: so selten nachsehen, bis die Liste steht. */
         private const val DIR_PASSIVE_STEP_MS = 40L
-        /** Hochwischen erst so lange nach Beginn der Bewegung erkannt: unsere beginnt weiter oben (die echte ist schon unterwegs). */
-        private const val RISE_LATE_MS = 90L
         /** Ohne Messung: eine Scroll-Meldung mit so viel Weg nach oben gilt als schnelles Hochwischen. */
         private const val SCROLL_EVENT_FAST_DP = 60f
         private const val PRESENCE_STEP_MS = 25L
