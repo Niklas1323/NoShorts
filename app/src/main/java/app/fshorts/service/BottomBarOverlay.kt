@@ -276,8 +276,11 @@ class BottomBarOverlay(
     fun scrollAway(phaseMs: Long = 0L) {
         val h = target.height().toFloat()
         if (!isShowing || scrollTarget >= h) return
-        // Kommt sie gerade herein: an der Stelle der Kurve weiterfahren, an der sie steht (nie zurückspringen).
-        val from = if (scrollPx > 0f) AWAY_MS * Math.pow((scrollPx / h).toDouble(), 1.0 / AWAY_POW).toFloat() else 0f
+        cancelPendingRise()
+        // Kommt sie gerade herein und sind die Knöpfe schon zu sehen: YouTube springt dann sofort in die Ruhelage und fährt
+        // von dort weg (gemessen 19.11.). Sonst an der Stelle der Kurve weiterfahren, an der sie steht.
+        val risingVisible = scroller != null && scrollTarget == 0f && scrollPop > 0f
+        val from = if (scrollPx > 0f && !risingVisible) AWAY_MS * Math.pow((scrollPx / h).toDouble(), 1.0 / AWAY_POW).toFloat() else 0f
         runScroll(rise = false, start = maxOf(phaseMs.toFloat(), from), end = AWAY_MS)
     }
 
@@ -290,6 +293,18 @@ class BottomBarOverlay(
     fun scrollRise(phaseMs: Long) {
         if (scrollTarget == 0f && scroller == null) return
         val h = target.height().toFloat()
+        cancelPendingRise()
+        // Fährt sie gerade weg und beginnt YouTubes Hereinfahren erst später: erst fertig wegfahren, dann von ganz unten
+        // kommen (YouTube bricht sein Wegfahren nicht ab, gemessen 19.11.).
+        if (scroller != null && scrollTarget > 0f && phaseMs < 0L) {
+            val v = view
+            if (v != null) {
+                val r = Runnable { pendingRise = null; scrollRise(0L) }
+                pendingRise = r
+                v.postDelayed(r, -phaseMs)
+                return
+            }
+        }
         val from = when {
             scrollPx >= h -> Float.NEGATIVE_INFINITY
             scrollPx <= 0.5f -> RISE_END_MS
@@ -298,8 +313,16 @@ class BottomBarOverlay(
         runScroll(rise = true, start = maxOf(phaseMs.toFloat(), from), end = RISE_END_MS)
     }
 
+    private var pendingRise: Runnable? = null
+
+    private fun cancelPendingRise() {
+        pendingRise?.let { view?.removeCallbacks(it) }
+        pendingRise = null
+    }
+
     /** Die echte steht schon ganz da (z. B. Zurück-Taste, Seitenwechsel): unsere sofort ganz da. */
     fun scrollBackNow() {
+        cancelPendingRise()
         if (scrollTarget == 0f && scroller == null) return
         scroller?.cancel()
         scroller = null
@@ -752,6 +775,7 @@ class BottomBarOverlay(
         stopSlide()
         stopRise()
         // Versteckt: beim nächsten Zeigen ganz da (nicht weggescrollt).
+        cancelPendingRise()
         scroller?.cancel()
         scroller = null
         scrollTarget = 0f
@@ -1621,23 +1645,32 @@ private fun TabSlot(
     icon: @Composable () -> Unit,
 ) {
     val labelTop = state.labelTopPx
+    val center = state.iconCenterPx
+    if (center != null && labelTop != null) {
+        // Gleiche Höhe wie bei YouTube: Icon-Mitte und Schrift-Oberkante aus der echten Leiste.
+        // Symbol und Schrift getrennt: Beim Profilbild wird nur das Bild oben abgedeckt, die Schrift schrumpft wie bei den
+        // anderen Knöpfen (sonst stand beim Wegfahren kurz "Mein YouTube" allein da).
+        Box(modifier = modifier.fillMaxHeight()) {
+            Box(Modifier.matchParentSize().popIn(avatarTop = avatarTop, originPx = center.toFloat())) { IconArea(center) { icon() } }
+            Box(Modifier.matchParentSize().popIn(originPx = center.toFloat())) {
+                Label(
+                    text = label,
+                    color = state.style.content,
+                    tablet = state.style.tablet,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset { IntOffset(0, labelTop) },
+                )
+            }
+        }
+        return
+    }
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .popIn(avatarTop = avatarTop, originPx = state.iconCenterPx?.toFloat()),
+            .popIn(),
     ) {
-        if (state.iconCenterPx != null && labelTop != null) {
-            // Gleiche Höhe wie bei YouTube: Icon-Mitte und Schrift-Oberkante aus der echten Leiste.
-            IconArea(state.iconCenterPx) { icon() }
-            Label(
-                text = label,
-                color = state.style.content,
-                tablet = state.style.tablet,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset { IntOffset(0, labelTop) },
-            )
-        } else {
+        run {
             Column(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
