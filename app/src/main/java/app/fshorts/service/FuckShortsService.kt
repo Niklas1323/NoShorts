@@ -193,6 +193,7 @@ class FuckShortsService : AccessibilityService() {
     private var foregroundNullSince = 0L
     /** Nur fürs Test-Protokoll: zuletzt gemeldetes vorderes Fenster. */
     private var loggedForeground = -2
+    @Volatile
     private var miniPlayerOpen = false
     private var lastMiniCheckAt = 0L
     private var lastMiniWalkAt = 0L
@@ -1077,7 +1078,9 @@ class FuckShortsService : AccessibilityService() {
             // Hier blendet YouTube beim Scrollen aus (schon gesehen): unsere fährt beim schnellen Runterwischen gleich mit.
             // Sonst (noch nicht gesehen, Mein YouTube, Suchergebnisse) nur beobachten: Bewegt sich die Liste, keine volle
             // Suche (sie hielte das Mitfahren nach der Abfrage der echten an).
-            val early = hidesFeed != null && lastUiState?.selected != TabKind.YOU
+            // Mit Mini-Player beginnt YouTubes Wegfahren erst ~150 ms nach der Listenbewegung (gemessen 21.11.): dann nicht
+            // selbst früh wegfahren (unsere wäre voraus, 7 Bilder echte Leiste), sondern der beobachteten echten folgen.
+            val early = hidesFeed != null && lastUiState?.selected != TabKind.YOU && !miniPlayerOpen
             startDirectionProbe(if (early) PROBE_DOWN_EARLY else PROBE_OBSERVE)
             // Gleich keine volle Suche starten: Wird gewischt, hielte sie unsere Animation an. Bewegt sich die Liste nach
             // TAP_RELEASE_MS nicht (Tipp), gibt die Messung das wieder frei.
@@ -1396,12 +1399,14 @@ class FuckShortsService : AccessibilityService() {
                     // letzten Messung, bei der die Liste noch stand, spätestens am Anfang des Messfensters.
                     // Vorsichtig früh schätzen (Messung der Liste ist um 1–2 Bilder unsicher): eher zu früh als zu spät.
                     val trig = maxOf(stillAt, t - RISE_TRIG_BACK_MS)
+                    // Mit Mini-Player kommt YouTubes Leiste später (gemessen 21.11.: +120 bis +260 ms).
+                    val mini = if (miniPlayerOpen) MINI_RISE_EXTRA_MS else 0L
                     post("Hochwischen schnell (${"%.2f".format(v)} px/ms, $pos px), unsere kommt", rise = true,
-                        t - trig - RISE_START_MS + RISE_LEAD_MS, t)
+                        t - trig - RISE_START_MS - mini + RISE_LEAD_MS, t)
                     // Richtungswechsel in derselben Berührung: Läuft die Liste danach schnell runter, springt YouTubes Leiste in die
                     // Ruhelage und fährt weg (gemessen 19.11.). Während unserer Animation fragt sonst niemand die echte ab: weiter
                     // messen, aber nur auf Seiten, wo YouTube beim Scrollen ausblendet.
-                    if (hidesFeed == null || lastUiState?.selected == TabKind.YOU) return null
+                    if (hidesFeed == null || lastUiState?.selected == TabKind.YOU || miniPlayerOpen) return null
                     rose = true
                     n = 0
                     pos = 0
@@ -4082,6 +4087,8 @@ class FuckShortsService : AccessibilityService() {
         private const val TAP_RELEASE_MS = 50L
         /** Wegfahren: erkannt höchstens so lange nach der ersten Bewegung = von Anfang an schnell (YouTube löste sofort aus). */
         private const val HIDE_FAST_START_MS = 45L
+        /** Mini-Player offen: YouTubes Leiste kommt beim Hochwischen so viel später (vorsichtig, gemessen +120 bis +260 ms). */
+        private const val MINI_RISE_EXTRA_MS = 100L
         /** ... und unsere beginnt so viel nach dieser ersten Bewegung (lieber etwas später als die echte). */
         private const val HIDE_START_SLACK_MS = 16L
         /** YouTubes Hereinfahren beginnt so viele ms nach dem auslösenden Bild (Liste springt > Touch-Slop). */

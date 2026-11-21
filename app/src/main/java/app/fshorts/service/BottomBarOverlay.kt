@@ -1208,7 +1208,7 @@ class BottomBarOverlay(
         private const val RISE_POP_DELAY_MS = 40f
         private const val RISE_POP_MS = 70f
         /** Beginnt YouTubes Animation erst später: höchstens so lange warten (sonst sofort beginnen). */
-        private const val RISE_WAIT_MAX_MS = 120f
+        private const val RISE_WAIT_MAX_MS = 200f
         private const val AWAY_MS = 125f
         private const val AWAY_POW = 2.9
         private const val AWAY_POP_DELAY_MS = 58f
